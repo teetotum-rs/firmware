@@ -42,10 +42,10 @@ use esp_hal::delay::Delay;
 use esp_hal::gpio::{DriveMode, Level, Output, OutputConfig};
 use esp_hal::i2c::master::{Config as I2cConfig, I2c};
 use esp_hal::time::Rate;
+use log::{error, info, warn};
 use teetotum::haptic::{
     ADDRESS, ADDRESS_AS_FOUND, Actuator, CalTime, Calibration, Haptic, Library,
 };
-use log::{error, info, warn};
 
 /// Whether this run is allowed to write to the driver at all.
 const WRITES_ALLOWED: bool = true;
@@ -143,7 +143,9 @@ fn main() -> ! {
     let mut haptic = if answers(&mut i2c, ADDRESS) {
         Haptic::at(ADDRESS).with_enable(enable, &delay)
     } else if answers(&mut i2c, ADDRESS_AS_FOUND) {
-        warn!("Haptic: not at {ADDRESS:#04x}, but something with its register map is at {ADDRESS_AS_FOUND:#04x}");
+        warn!(
+            "Haptic: not at {ADDRESS:#04x}, but something with its register map is at {ADDRESS_AS_FOUND:#04x}"
+        );
         Haptic::at(ADDRESS_AS_FOUND).with_enable(enable, &delay)
     } else {
         Haptic::at(ADDRESS).with_enable(enable, &delay)
@@ -262,10 +264,22 @@ fn main() -> ! {
     let passed_erm = erm.map(|c| c.passed).unwrap_or(false);
     let passed_lra = lra.map(|c| c.passed).unwrap_or(false);
     let (actuator, library, verdict) = match (passed_erm, passed_lra, period) {
-        (_, true, Some(_)) => (Actuator::Lra, Library::Lra, "an LRA, and it named its frequency"),
-        (false, true, None) => (Actuator::Lra, Library::Lra, "an LRA, on the calibration alone"),
+        (_, true, Some(_)) => (
+            Actuator::Lra,
+            Library::Lra,
+            "an LRA, and it named its frequency",
+        ),
+        (false, true, None) => (
+            Actuator::Lra,
+            Library::Lra,
+            "an LRA, on the calibration alone",
+        ),
         (true, false, _) => (Actuator::Erm, Library::ErmB, "an ERM"),
-        (true, true, None) => (Actuator::Erm, Library::ErmB, "ambiguous: both passed, no period"),
+        (true, true, None) => (
+            Actuator::Erm,
+            Library::ErmB,
+            "ambiguous: both passed, no period",
+        ),
         (false, false, _) => (
             Actuator::Lra,
             Library::Lra,
@@ -296,10 +310,25 @@ fn main() -> ! {
         // open loop does not ask. If nothing at all is felt in the open-loop passes, the drive
         // is not the reason, and the actuator is not on these pins.
         for &(actuator, open, amplitude, what) in &[
-            (Actuator::Erm, false, 0x7Fu8, "ERM, closed loop, half amplitude"),
+            (
+                Actuator::Erm,
+                false,
+                0x7Fu8,
+                "ERM, closed loop, half amplitude",
+            ),
             (Actuator::Erm, true, 0xFF, "ERM, OPEN loop, full amplitude"),
-            (Actuator::Lra, false, 0xFF, "LRA, closed loop, full amplitude"),
-            (Actuator::Lra, true, 0xFF, "LRA, OPEN loop, full amplitude, 5 ms period"),
+            (
+                Actuator::Lra,
+                false,
+                0xFF,
+                "LRA, closed loop, full amplitude",
+            ),
+            (
+                Actuator::Lra,
+                true,
+                0xFF,
+                "LRA, OPEN loop, full amplitude, 5 ms period",
+            ),
         ] {
             info!("Haptic:   {what}");
             let _ = haptic.set_actuator(&mut i2c, actuator);

@@ -641,7 +641,10 @@ impl Settings {
         self.shape.encode(&mut buf[13..17]);
         let ids = self.removed.ids();
         buf[17] = self.removed.len;
-        for (id, out) in ids.iter().zip(buf[LEN_10..].chunks_exact_mut(PluginId::LEN)) {
+        for (id, out) in ids
+            .iter()
+            .zip(buf[LEN_10..].chunks_exact_mut(PluginId::LEN))
+        {
             out.copy_from_slice(&id.bytes());
         }
         LEN_10 + ids.len() * PluginId::LEN
@@ -658,12 +661,14 @@ impl Settings {
             Some(&VERSION) | Some(&VERSION_10) | Some(&VERSION_9) | Some(&VERSION_8)
             | Some(&VERSION_7) | Some(&VERSION_6)
                 if bytes.len() >= LEN_6 =>
-            (
-                Theme::from_byte(bytes[6]),
-                u16::from(bytes[8]),
-                Brightness::from_byte(bytes[9]),
-                Haptics::from_byte(bytes[10]),
-            ),
+            {
+                (
+                    Theme::from_byte(bytes[6]),
+                    u16::from(bytes[8]),
+                    Brightness::from_byte(bytes[9]),
+                    Haptics::from_byte(bytes[10]),
+                )
+            }
             // Written before the clicks could be made softer, so they were not.
             Some(&VERSION_5) if bytes.len() >= LEN_5 => (
                 Theme::from_byte(bytes[6]),
@@ -686,9 +691,12 @@ impl Settings {
                 Haptics::default(),
             ),
             // Written before there was a theme to choose, so none was chosen.
-            Some(&VERSION_2) if bytes.len() >= LEN_2 => {
-                (Theme::default(), 0, Brightness::default(), Haptics::default())
-            }
+            Some(&VERSION_2) if bytes.len() >= LEN_2 => (
+                Theme::default(),
+                0,
+                Brightness::default(),
+                Haptics::default(),
+            ),
             _ => return Self::default(),
         };
         // Written before the cover's size could be chosen, so it stood as it does by default.

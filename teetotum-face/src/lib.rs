@@ -171,14 +171,13 @@ macro_rules! face {
         // `manifest::SECTION`, spelt out: an attribute takes only a literal.
         #[unsafe(link_section = "teetotum.manifest")]
         #[used]
-        static __TEETOTUM_MANIFEST: [u8; $crate::manifest::LEN] =
-            $crate::manifest::encode(
-                $name,
-                $summary,
-                &$icon,
-                $rights,
-                $crate::manifest::Version::parse(env!("CARGO_PKG_VERSION")),
-            );
+        static __TEETOTUM_MANIFEST: [u8; $crate::manifest::LEN] = $crate::manifest::encode(
+            $name,
+            $summary,
+            &$icon,
+            $rights,
+            $crate::manifest::Version::parse(env!("CARGO_PKG_VERSION")),
+        );
 
         static mut __TEETOTUM_FACE: $face = $init;
 

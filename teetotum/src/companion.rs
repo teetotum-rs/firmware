@@ -269,7 +269,6 @@ impl Status {
 const OWN_BITS: u8 = 0x70;
 
 impl Status {
-
     /// The mode field, or `None` for a value the other chip would have rejected.
     pub fn mode(&self) -> Option<Mode> {
         Mode::from_bits((self.state >> 1) & 0x07)
@@ -284,7 +283,10 @@ struct Text {
 
 impl Text {
     const fn new() -> Self {
-        Self { buf: [0; TEXT_CAPACITY], len: 0 }
+        Self {
+            buf: [0; TEXT_CAPACITY],
+            len: 0,
+        }
     }
 
     /// Takes one NUL-terminated string out of a metadata frame, truncating at the buffer.
@@ -320,7 +322,12 @@ pub struct Metadata {
 
 impl Metadata {
     const fn new() -> Self {
-        Self { title: Text::new(), artist: Text::new(), album: Text::new(), fourth: Text::new() }
+        Self {
+            title: Text::new(),
+            artist: Text::new(),
+            album: Text::new(),
+            fourth: Text::new(),
+        }
     }
 
     pub fn title(&self) -> &str {
@@ -619,12 +626,20 @@ impl<'d> Companion<'d> {
                 return None;
             }
             self.want = HEADER + len;
-            return if self.want == HEADER { self.complete() } else { None };
+            return if self.want == HEADER {
+                self.complete()
+            } else {
+                None
+            };
         }
 
         self.frame[self.seen] = byte;
         self.seen += 1;
-        if self.seen == self.want { self.complete() } else { None }
+        if self.seen == self.want {
+            self.complete()
+        } else {
+            None
+        }
     }
 
     /// One finished frame. `self.want` is left alone so that [`Companion::payload`] still works.
@@ -644,7 +659,10 @@ impl<'d> Companion<'d> {
             EVENT_TURN_CLOCKWISE => Some(Event::Encoder(Direction::Clockwise)),
             EVENT_TURN_ANTICLOCKWISE => Some(Event::Encoder(Direction::Anticlockwise)),
             EVENT_STATUS if len >= 2 => {
-                let status = Status { state: data[0], volume: data[1] };
+                let status = Status {
+                    state: data[0],
+                    volume: data[1],
+                };
                 self.status = Some(status);
                 Some(Event::Status(status))
             }

@@ -114,7 +114,10 @@ fn main() -> ! {
     page = Some(load(face, wasm, page.take().expect("the page"), false));
 
     drop(ballast);
-    info!("{face}: ballast gone, {} bytes free", esp_alloc::HEAP.free());
+    info!(
+        "{face}: ballast gone, {} bytes free",
+        esp_alloc::HEAP.free()
+    );
     let _ = load(face, wasm, page.take().expect("the page"), true);
 
     info!("--- heapguard: done ---");
@@ -135,7 +138,9 @@ fn load(face: &str, wasm: &'static [u8], page: Page, expected: bool) -> Page {
             if expected {
                 info!("{face}: loaded in {took} us, heap +{cost} bytes");
             } else {
-                error!("{face}: loaded in {took} us, heap +{cost} bytes -- should have been refused");
+                error!(
+                    "{face}: loaded in {took} us, heap +{cost} bytes -- should have been refused"
+                );
             }
             plugin.unload()
         }

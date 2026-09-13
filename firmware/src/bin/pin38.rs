@@ -48,6 +48,7 @@
 #![no_main]
 
 use esp_backtrace as _;
+use esp_hal::Blocking;
 use esp_hal::clock::CpuClock;
 use esp_hal::delay::Delay;
 use esp_hal::gpio::{DriveMode, Input, InputConfig, Io, Level, Output, OutputConfig, Pull};
@@ -55,12 +56,11 @@ use esp_hal::i2c::master::{Config as I2cConfig, I2c};
 use esp_hal::time::{Duration, Instant, Rate};
 use esp_hal::uart::{Config as UartConfig, Uart};
 use esp_hal::usb_serial_jtag::UsbSerialJtag;
-use esp_hal::Blocking;
+use log::{error, info, warn};
 use teetotum::encoder::Encoder;
 use teetotum::haptic::{ADDRESS, ADDRESS_AS_FOUND, Actuator, CalTime, Haptic, Library, Mode};
 use teetotum::step::Prompt;
 use teetotum::touch::Touch;
-use log::{error, info, warn};
 
 /// The baud rate the factory firmware's `UART1` task is configured for, and the rate at which
 /// a low bit is shortest -- the friendliest case for an enable line and the honest one to try
@@ -135,10 +135,18 @@ fn main() -> ! {
             Input::new(peripherals.GPIO7, pull_up),
         ))
         .with_touch(Touch::attached(
-            Output::new(peripherals.GPIO10.reborrow(), Level::High, OutputConfig::default()),
+            Output::new(
+                peripherals.GPIO10.reborrow(),
+                Level::High,
+                OutputConfig::default(),
+            ),
             Input::new(peripherals.GPIO9.reborrow(), pull_up),
         ))
-        .with_keys(UsbSerialJtag::new(peripherals.USB_DEVICE.reborrow()).split().0);
+        .with_keys(
+            UsbSerialJtag::new(peripherals.USB_DEVICE.reborrow())
+                .split()
+                .0,
+        );
 
     // Which address the driver answers on today. Both are measurements; the datasheet's first.
     let address = if answers(&mut i2c, ADDRESS) {
@@ -177,7 +185,9 @@ fn main() -> ! {
         Some(0xE9) => info!(
             "  0xE9 with nobody driving the pin: the output stage is off until something raises it"
         ),
-        Some(other) => warn!("  {other:#04x}: neither of the two answers this test was written for"),
+        Some(other) => {
+            warn!("  {other:#04x}: neither of the two answers this test was written for")
+        }
         None => error!("  the chip did not answer at all"),
     }
 
@@ -210,7 +220,9 @@ fn main() -> ! {
             (Level::Low, Level::High) => {
                 info!("  it follows the pull, so nothing on the board drives it -- the pin is ours")
             }
-            (Level::High, Level::Low) => warn!("  inverted readings; something is wrong with this test"),
+            (Level::High, Level::Low) => {
+                warn!("  inverted readings; something is wrong with this test")
+            }
         }
     }
 
@@ -287,10 +299,7 @@ fn main() -> ! {
     // high whenever nothing is being sent, and chopped into bit times whenever something is.
     info!("--- 4. GPIO38 as UART1 TX at {BAUD} baud, GPIO48 listening ---");
     drop(enable);
-    let uart = match Uart::new(
-        peripherals.UART1,
-        UartConfig::default().with_baudrate(BAUD),
-    ) {
+    let uart = match Uart::new(peripherals.UART1, UartConfig::default().with_baudrate(BAUD)) {
         Ok(uart) => uart
             .with_tx(peripherals.GPIO38.reborrow())
             .with_rx(peripherals.GPIO48.reborrow()),
@@ -335,9 +344,9 @@ fn main() -> ! {
         (Some(0xE0), 3) => info!(
             "  the driver does not notice the traffic: GPIO38 can be the serial line and the enable at once"
         ),
-        (Some(0xE0), 0) => warn!(
-            "  idle is fine and traffic is not: the two uses of this pin do not fit together"
-        ),
+        (Some(0xE0), 0) => {
+            warn!("  idle is fine and traffic is not: the two uses of this pin do not fit together")
+        }
         (Some(0xE0), passed) => warn!(
             "  {passed} of 3 diagnostics passed under traffic: it works, but not every time -- and a\n               diagnostic that runs while the line is being chopped up is measuring the chopping too"
         ),
@@ -355,7 +364,10 @@ fn main() -> ! {
             info!("  click sent under {sent} bytes of traffic");
             delay.delay_millis(400);
         }
-        if !prompt.again(&mut i2c, "the same hand: weaker than the reference, or the same?") {
+        if !prompt.again(
+            &mut i2c,
+            "the same hand: weaker than the reference, or the same?",
+        ) {
             break;
         }
     }
@@ -365,9 +377,13 @@ fn main() -> ! {
     // the link than a chip that answers nothing.
     let mut buf = [0u8; 64];
     match rx.read_buffered(&mut buf) {
-        Ok(0) => info!("GPIO48: nothing came back, which is what a chip that ignores nonsense does"),
+        Ok(0) => {
+            info!("GPIO48: nothing came back, which is what a chip that ignores nonsense does")
+        }
         Ok(n) => info!("GPIO48: {n} bytes came back: {:02x?}", &buf[..n]),
-        Err(err) => info!("GPIO48: {err:?} -- a framing complaint means edges arrived from somewhere"),
+        Err(err) => {
+            info!("GPIO48: {err:?} -- a framing complaint means edges arrived from somewhere")
+        }
     }
 
     info!("--- done. The pin stays in UART hands; reset to start over. ---");

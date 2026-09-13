@@ -122,10 +122,18 @@ fn main() -> ! {
             Input::new(peripherals.GPIO7, pull_up),
         ))
         .with_touch(Touch::attached(
-            Output::new(peripherals.GPIO10.reborrow(), Level::High, OutputConfig::default()),
+            Output::new(
+                peripherals.GPIO10.reborrow(),
+                Level::High,
+                OutputConfig::default(),
+            ),
             Input::new(peripherals.GPIO9.reborrow(), pull_up),
         ))
-        .with_keys(UsbSerialJtag::new(peripherals.USB_DEVICE.reborrow()).split().0);
+        .with_keys(
+            UsbSerialJtag::new(peripherals.USB_DEVICE.reborrow())
+                .split()
+                .0,
+        );
 
     // Whatever the other chip was in the middle of saying when we booted.
     drain_for(&mut link, Duration::from_millis(300));
@@ -144,7 +152,13 @@ fn main() -> ! {
         let (key, name) = KEYS[n];
         if shown != Some(n) {
             info!("");
-            info!("--- {}/{}: {name} ({:#04x}), sent {} so far ---", n + 1, KEYS.len(), key as u8, sent[n]);
+            info!(
+                "--- {}/{}: {name} ({:#04x}), sent {} so far ---",
+                n + 1,
+                KEYS.len(),
+                key as u8,
+                sent[n]
+            );
             shown = Some(n);
         }
         let what = if key == MediaKey::Power {

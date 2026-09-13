@@ -144,7 +144,10 @@ fn main() -> ! {
         if after == before {
             info!("{name}: everything dropped, heap back where it was");
         } else {
-            error!("{name}: {} bytes still held after dropping", after as isize - before as isize);
+            error!(
+                "{name}: {} bytes still held after dropping",
+                after as isize - before as isize
+            );
         }
     }
     info!("--- wasm: done ---");
@@ -195,11 +198,15 @@ fn run(wasm: &[u8], page: Option<&'static mut [u8]>) -> Result<(), Error> {
     store.set_fuel(PLENTY)?;
 
     let mut linker = <Linker<Host>>::new(&engine);
-    linker.func_wrap("teetotum", "send_usage", |mut c: Caller<'_, Host>, id: u32| {
-        let host = c.data_mut();
-        host.usages += 1;
-        host.last_usage = id;
-    })?;
+    linker.func_wrap(
+        "teetotum",
+        "send_usage",
+        |mut c: Caller<'_, Host>, id: u32| {
+            let host = c.data_mut();
+            host.usages += 1;
+            host.last_usage = id;
+        },
+    )?;
     linker.func_wrap(
         "teetotum",
         "text",

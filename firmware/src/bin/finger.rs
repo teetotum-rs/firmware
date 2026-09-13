@@ -54,12 +54,12 @@ use esp_hal::gpio::{Input, InputConfig, Io, Level, Output, OutputConfig, Pull};
 use esp_hal::i2c::master::{Config as I2cConfig, I2c};
 use esp_hal::time::{Duration, Instant, Rate};
 use esp_hal::usb_serial_jtag::UsbSerialJtag;
+use log::{error, info, warn};
 use teetotum::encoder::Encoder;
 use teetotum::framebuffer::{Framebuffer, HEIGHT, WIDTH};
 use teetotum::rotate::STEPS;
 use teetotum::screen::{Screen, ScreenPins};
 use teetotum::touch::{Event, Gesture, Touch};
-use log::{error, info, warn};
 
 /// How often the glass is asked. The controller has nothing to say most of the time, and a
 /// finger crossing the glass in half a second wants more samples than that.
@@ -116,7 +116,11 @@ fn main() -> ! {
     .with_scl(peripherals.GPIO12.reborrow());
 
     let mut touch = Touch::new(
-        Output::new(peripherals.GPIO10.reborrow(), Level::High, OutputConfig::default()),
+        Output::new(
+            peripherals.GPIO10.reborrow(),
+            Level::High,
+            OutputConfig::default(),
+        ),
         Input::new(
             peripherals.GPIO9.reborrow(),
             InputConfig::default().with_pull(Pull::Up),
@@ -226,9 +230,7 @@ fn main() -> ! {
             }
         }
 
-        if changed
-            && let Err(err) = screen.present()
-        {
+        if changed && let Err(err) = screen.present() {
             error!("sending the picture failed: {err:?}");
         }
     }
@@ -256,8 +258,12 @@ fn draw_scene(frame: &mut Framebuffer) {
     let white = PrimitiveStyle::with_stroke(Rgb565::WHITE, 1);
     let dim = PrimitiveStyle::with_stroke(Rgb565::CSS_DIM_GRAY, 1);
 
-    let _ = Circle::with_center(centre, 356).into_styled(dim).draw(frame);
-    let _ = Circle::with_center(centre, 240).into_styled(dim).draw(frame);
+    let _ = Circle::with_center(centre, 356)
+        .into_styled(dim)
+        .draw(frame);
+    let _ = Circle::with_center(centre, 240)
+        .into_styled(dim)
+        .draw(frame);
 
     const MARKS: [(i32, i32); STEPS] = [
         (0, -1000),

@@ -14,6 +14,6 @@ pub mod panel;
 pub mod rotate;
 pub mod screen;
 pub mod sd;
-pub mod store;
 pub mod step;
+pub mod store;
 pub mod touch;

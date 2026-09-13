@@ -26,8 +26,8 @@ use esp_hal::delay::Delay;
 use esp_hal::gpio::{Input, InputConfig, Io, Level, Output, OutputConfig, Pull};
 use esp_hal::i2c::master::{Config as I2cConfig, I2c};
 use esp_hal::time::Rate;
-use teetotum::encoder::Encoder;
 use log::{info, warn};
+use teetotum::encoder::Encoder;
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
@@ -59,8 +59,7 @@ fn main() -> ! {
     // The library's display module pulls in a crate that allocates; nothing here does.
     esp_alloc::heap_allocator!(size: 8 * 1024);
 
-    let mut peripherals =
-        esp_hal::init(esp_hal::Config::default().with_cpu_clock(CpuClock::max()));
+    let mut peripherals = esp_hal::init(esp_hal::Config::default().with_cpu_clock(CpuClock::max()));
     let delay = Delay::new();
 
     // The touch controller holds its bus lines quiet until reset is released, so a scan that

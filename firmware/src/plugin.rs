@@ -31,11 +31,11 @@ use alloc::vec::Vec;
 use core::fmt;
 use core::ptr::NonNull;
 
+use ed25519_compact::{PublicKey, Signature, sha512};
 use embedded_graphics::pixelcolor::Rgb565;
 use embedded_graphics::pixelcolor::raw::RawU16;
 use embedded_graphics::prelude::*;
 use embedded_graphics::primitives::{Arc, PrimitiveStyle};
-use ed25519_compact::{PublicKey, Signature, sha512};
 use esp_hal::rng::{Rng, Trng};
 use esp_hal::time::Instant;
 use log::{error, info, warn};
@@ -43,8 +43,8 @@ use teetotum::menu::{Palette, draw_packed, fonts, text};
 use teetotum_face::manifest::{self, Manifest, Signed};
 use teetotum_face::{Colour, Event, Icon, Paint, Radio, Rights, Role, Size, Usage, abi};
 use wasmi::{
-    Caller, CompilationMode, Config, Engine, Error, ExternType, Linker, Memory, MemoryType,
-    Module, Store, StoreLimits, StoreLimitsBuilder, TypedFunc,
+    Caller, CompilationMode, Config, Engine, Error, ExternType, Linker, Memory, MemoryType, Module,
+    Store, StoreLimits, StoreLimitsBuilder, TypedFunc,
 };
 
 /// One wasm page: all the memory a face gets.
@@ -230,7 +230,10 @@ impl Plugin {
     /// How often the face wants the motor to pulse, in milliseconds, if it does and is running.
     /// The firmware keeps the time; see `teetotum_face::pulse`.
     pub fn pulse(&self) -> Option<u32> {
-        self.fault.is_none().then(|| self.store.data().pulse).flatten()
+        self.fault
+            .is_none()
+            .then(|| self.store.data().pulse)
+            .flatten()
     }
 
     /// Hands an event to the face. A turn of the knob reaches it only with `Rights::KNOB`, a new
@@ -388,7 +391,10 @@ pub enum LoadError {
         right: Rights,
     },
     /// It is expected to need more heap than is free; see [`heap_needed`].
-    Heap { need: usize, free: usize },
+    Heap {
+        need: usize,
+        free: usize,
+    },
     /// wasmi refused it: not valid, not linkable, or without the two exports.
     Wasm(Error),
 }
@@ -408,7 +414,10 @@ impl fmt::Display for LoadError {
             Self::Pages(n) => write!(f, "asks for {n} pages of memory, a face gets 1"),
             Self::Import(name) => write!(f, "imports {name}, which the firmware does not offer"),
             Self::NotGranted { import, right } => {
-                write!(f, "imports {import} without the right {right} in its manifest")
+                write!(
+                    f,
+                    "imports {import} without the right {right} in its manifest"
+                )
             }
             Self::Heap { need, free } => {
                 write!(f, "needs about {need} bytes of heap, {free} free")
@@ -566,7 +575,11 @@ fn check_imports(module: &Module, rights: Rights) -> Result<(), LoadError> {
             (module, name, _) => return Err(LoadError::Import(format!("{module}.{name}"))),
         }
     }
-    if memory { Ok(()) } else { Err(LoadError::OwnMemory) }
+    if memory {
+        Ok(())
+    } else {
+        Err(LoadError::OwnMemory)
+    }
 }
 
 /// The functions a face may call, those behind a right only when its manifest has it.
@@ -577,8 +590,8 @@ fn linker(engine: &Engine, rights: Rights) -> Result<Linker<Host>, Error> {
             abi::MODULE,
             abi::SEND_USAGE,
             |mut c: Caller<'_, Host>, usage: u32| -> Result<(), Error> {
-                let usage =
-                    Usage::from_u32(usage).ok_or_else(|| trap("not a usage the other chip maps"))?;
+                let usage = Usage::from_u32(usage)
+                    .ok_or_else(|| trap("not a usage the other chip maps"))?;
                 let host = c.data_mut();
                 if host.drawing {
                     return Err(trap("send_usage from draw"));
@@ -751,7 +764,9 @@ fn trap(message: &str) -> Error {
 fn bytes<'a>(c: &'a Caller<'_, Host>, at: u32, len: usize) -> Result<&'a [u8], Error> {
     let memory = c.data().memory.ok_or_else(|| trap("no memory"))?;
     let start = at as usize;
-    let end = start.checked_add(len).ok_or_else(|| trap("span overflows"))?;
+    let end = start
+        .checked_add(len)
+        .ok_or_else(|| trap("span overflows"))?;
     memory
         .data(c)
         .get(start..end)
@@ -812,9 +827,14 @@ where
             sweep,
             width,
             paint,
-        } => Arc::with_center(centre, 2 * radius, (start as f32).deg(), (sweep as f32).deg())
-            .into_styled(PrimitiveStyle::with_stroke(colour(paint, palette), width))
-            .draw(target),
+        } => Arc::with_center(
+            centre,
+            2 * radius,
+            (start as f32).deg(),
+            (sweep as f32).deg(),
+        )
+        .into_styled(PrimitiveStyle::with_stroke(colour(paint, palette), width))
+        .draw(target),
         Draw::Icon { at, centre, paint } => {
             let Some(rows) = memory.get(at..at + ICON_BYTES) else {
                 return;

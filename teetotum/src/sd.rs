@@ -133,11 +133,7 @@ impl<'d> SdCard<'d> {
     ///
     /// The SPI peripheral must arrive configured at [`INIT_RATE`]; this raises it to
     /// [`FAST_RATE`] once the card has finished its handshake.
-    pub fn new(
-        spi: Spi<'d, Blocking>,
-        cs: Output<'d>,
-        delay: Delay,
-    ) -> Result<SdCard<'d>, Error> {
+    pub fn new(spi: Spi<'d, Blocking>, cs: Output<'d>, delay: Delay) -> Result<SdCard<'d>, Error> {
         // `kind` is a placeholder until the handshake says otherwise; nothing reads it before.
         let mut card = SdCard {
             spi,
@@ -340,9 +336,8 @@ impl<'d> SdCard<'d> {
                 Ok((size + 1) << (multiplier + 2 + block_len - 9))
             }
             1 => {
-                let size = (u32::from(csd[7] & 0x3F) << 16)
-                    | (u32::from(csd[8]) << 8)
-                    | u32::from(csd[9]);
+                let size =
+                    (u32::from(csd[7] & 0x3F) << 16) | (u32::from(csd[8]) << 8) | u32::from(csd[9]);
                 Ok((size + 1) * 1024)
             }
             _ => Err(Error::Unsupported),

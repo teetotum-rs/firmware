@@ -114,7 +114,11 @@ pub fn rotate_rows(
     out: &mut [u8],
 ) {
     assert!(step < STEPS, "there are only twelve orientations");
-    assert_eq!(out.len(), rows * WIDTH * 2, "the staging buffer is misshapen");
+    assert_eq!(
+        out.len(),
+        rows * WIDTH * 2,
+        "the staging buffer is misshapen"
+    );
 
     let (cos, sin) = TURN[step];
 

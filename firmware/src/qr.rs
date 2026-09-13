@@ -78,7 +78,14 @@ pub fn draw(frame: &mut Framebuffer, n: usize) {
             while x < size && code.dark(x as usize, y as usize) {
                 x += 1;
             }
-            fill(frame, left + start * scale, top + y * scale, (x - start) * scale, scale, Rgb565::BLACK);
+            fill(
+                frame,
+                left + start * scale,
+                top + y * scale,
+                (x - start) * scale,
+                scale,
+                Rgb565::BLACK,
+            );
         }
     }
 

@@ -65,9 +65,9 @@ use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
 use esp_hal::delay::Delay;
 use esp_hal::time::Instant;
+use esp_hal::time::Rate;
 use log::{error, info};
 use teetotum::framebuffer::{BYTES, Framebuffer, HEIGHT, WIDTH};
-use esp_hal::time::Rate;
 use teetotum::screen::{CLOCK, Path, Screen, ScreenPins};
 
 /// Frames per measurement. Enough that the mean is not one outlier, short enough that the whole
@@ -175,7 +175,11 @@ fn main() -> ! {
 
     info!("---");
     info!("now the eye: the direct path swaps clock every two seconds");
-    info!("clean at {} MHz and striped at {} MHz means the bus outruns the memory", SLOW.as_mhz(), CLOCK.as_mhz());
+    info!(
+        "clean at {} MHz and striped at {} MHz means the bus outruns the memory",
+        SLOW.as_mhz(),
+        CLOCK.as_mhz()
+    );
     screen.set_orientation(0);
 
     let mut frames: u32 = 0;
@@ -261,8 +265,12 @@ fn draw_scene(frame: &mut Framebuffer, n: u32) {
     let white = PrimitiveStyle::with_stroke(Rgb565::WHITE, 1);
     let dim = PrimitiveStyle::with_stroke(Rgb565::CSS_DIM_GRAY, 1);
 
-    let _ = Circle::with_center(centre, 356).into_styled(dim).draw(frame);
-    let _ = Circle::with_center(centre, 240).into_styled(white).draw(frame);
+    let _ = Circle::with_center(centre, 356)
+        .into_styled(dim)
+        .draw(frame);
+    let _ = Circle::with_center(centre, 240)
+        .into_styled(white)
+        .draw(frame);
 
     // A hand, one step of twelve per frame, drawn from a small table because this chip has no
     // floating point worth calling for twelve values.
@@ -297,8 +305,13 @@ fn draw_scene(frame: &mut Framebuffer, n: u32) {
     let small = MonoTextStyle::new(&FONT_6X10, Rgb565::CSS_LIGHT_GRAY);
     let mut number = [0u8; 12];
     let text = format_u32(&mut number, n);
-    let _ = Text::with_alignment(text, Point::new(centre.x, centre.y - 6), big, Alignment::Center)
-        .draw(frame);
+    let _ = Text::with_alignment(
+        text,
+        Point::new(centre.x, centre.y - 6),
+        big,
+        Alignment::Center,
+    )
+    .draw(frame);
     let _ = Text::with_alignment(
         "psram dma",
         Point::new(centre.x, centre.y + 14),

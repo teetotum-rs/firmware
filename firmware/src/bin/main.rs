@@ -18,25 +18,33 @@ use bt_hci::param::LeAdvReportsIter;
 use critical_section::Mutex;
 use embassy_executor::Spawner;
 use embassy_futures::join::join4;
-use embassy_futures::yield_now;
 use embassy_futures::select::{Either, select};
+use embassy_futures::yield_now;
 use embassy_time::{Duration, Instant, Timer};
 use embedded_graphics::pixelcolor::Rgb565;
 use embedded_graphics::prelude::*;
 use embedded_graphics::primitives::{Arc, PrimitiveStyle, Rectangle};
 use embedded_storage::nor_flash::NorFlash;
 use esp_backtrace as _;
-use static_cell::StaticCell;
+use esp_hal::Blocking;
 use esp_hal::clock::CpuClock;
 use esp_hal::delay::Delay;
-use esp_hal::system::software_reset;
 use esp_hal::gpio::{Input, InputConfig, Io, Level, Output, OutputConfig, Pull};
-use esp_hal::Blocking;
 use esp_hal::i2c::master::{Config as I2cConfig, I2c};
 use esp_hal::spi::master::{Config as SpiConfig, Spi};
+use esp_hal::system::software_reset;
 use esp_hal::time::Duration as HalDuration;
 use esp_hal::time::Rate;
+use esp_hal::timer::timg::TimerGroup;
 use esp_hal::uart::{Config as UartConfig, Uart};
+use esp_hal::usb_serial_jtag::UsbSerialJtag;
+use esp_radio::ble::controller::BleConnector;
+use esp_radio::wifi::scan::{ScanConfig, ScanTypeConfig};
+use esp_radio::wifi::sta::StationConfig;
+use esp_radio::wifi::{Config as WifiConfig, WifiController};
+use esp_storage::FlashStorage;
+use log::{error, info, warn};
+use static_cell::StaticCell;
 use teetotum::cloud::Cloud;
 use teetotum::companion::{
     BAUD, COVER_MAX_BYTES, Companion, Direction, Event as CompanionEvent, MediaKey, QueueKey,
@@ -46,38 +54,30 @@ use teetotum::encoder::Encoder;
 use teetotum::fat::Volume;
 use teetotum::framebuffer::{BYTES as SCREEN_BYTES, Framebuffer, HEIGHT, WIDTH};
 use teetotum::haptic::{Actuator, CalTime, Haptic, Library, Mode as HapticMode};
-use teetotum::rotate::STEPS;
-use teetotum::store::Store;
-use teetotum::screen::{Path, Screen, ScreenPins};
-use teetotum::sd::{self, SdCard};
 use teetotum::menu::{
     BODY, Buttons, Entry, FIRMWARE_SLOT, Icon, Id, Kind, MAX_PAGES, Menu, Navigator, Outcome,
-    Owner, RING_BYTES, Ring, SLOTS, fonts, icons, shade,
-    shortened, text as menu_text, width as menu_width,
+    Owner, RING_BYTES, Ring, SLOTS, fonts, icons, shade, shortened, text as menu_text,
+    width as menu_width,
 };
+use teetotum::rotate::STEPS;
+use teetotum::screen::{Path, Screen, ScreenPins};
+use teetotum::sd::{self, SdCard};
+use teetotum::store::Store;
 use teetotum::touch::{Gesture, Press, Taps, Touch};
-use esp_hal::timer::timg::TimerGroup;
-use esp_storage::FlashStorage;
-use teetotum_firmware::flash::{self, Region, TABLE_SCRATCH};
-use teetotum_firmware::slots::{self, Slots};
 use teetotum_face::manifest::{Manifest, Signed, Version};
 use teetotum_face::{Event as FaceEvent, HINT, Radio, Rights, Usage};
+use teetotum_firmware::backlight::Backlight;
+use teetotum_firmware::flash::{self, Region, TABLE_SCRATCH};
 use teetotum_firmware::nearby::{self, Heard};
 use teetotum_firmware::plugin::{self, Page, Plugin, PluginId};
-use teetotum_firmware::backlight::Backlight;
-use esp_hal::usb_serial_jtag::UsbSerialJtag;
-use teetotum_firmware::shot;
 use teetotum_firmware::qr::{self, LINKS};
 use teetotum_firmware::settings::{
     self, Brightness, CloudShape, CoverStyle, Haptics, Motion, Part, Settings, Theme,
 };
-use esp_radio::ble::controller::BleConnector;
-use esp_radio::wifi::scan::{ScanConfig, ScanTypeConfig};
-use esp_radio::wifi::sta::StationConfig;
-use esp_radio::wifi::{Config as WifiConfig, WifiController};
-use log::{error, info, warn};
-use trouble_host::prelude::*;
+use teetotum_firmware::shot;
+use teetotum_firmware::slots::{self, Slots};
 use trouble_host::connection::ScanConfig as BleScanConfig;
+use trouble_host::prelude::*;
 use trouble_host::scan::Scanner;
 
 extern crate alloc;
@@ -367,12 +367,14 @@ const SETTINGS: Menu = Menu::new(
 )
 .with(
     4,
-    Entry::setting("Haptics", &icons::HAPTICS, SETTING_HAPTICS, Buttons::OkCancel),
+    Entry::setting(
+        "Haptics",
+        &icons::HAPTICS,
+        SETTING_HAPTICS,
+        Buttons::OkCancel,
+    ),
 )
-.with(
-    5,
-    Entry::menu("Background", &icons::CLOUD, &BACKGROUND),
-)
+.with(5, Entry::menu("Background", &icons::CLOUD, &BACKGROUND))
 .with(
     SETTINGS_PLAYER_SLOT,
     Entry::menu("Music Player", &icons::MUSIC, &PLAYER),
@@ -396,13 +398,48 @@ const PLAYER: Menu = Menu::new(
 /// mockup it was chosen at. An ordinary submenu, like the player's.
 const BACKGROUND: Menu = Menu::new(
     "Background",
-    Entry::setting("About", &icons::ABOUT, SETTING_BACKGROUND_ABOUT, Buttons::Ok),
+    Entry::setting(
+        "About",
+        &icons::ABOUT,
+        SETTING_BACKGROUND_ABOUT,
+        Buttons::Ok,
+    ),
 )
-.with(1, Entry::setting("Motion", &icons::MOTION, SETTING_MOTION, Buttons::OkCancel))
-.with(2, Entry::setting("Points", &icons::POINTS, SETTING_POINTS, Buttons::OkCancel))
-.with(3, Entry::setting("Brightest", &icons::BRIGHTEST, SETTING_BRIGHTEST, Buttons::OkCancel))
-.with(4, Entry::setting("Dark centre", &icons::CENTRE, SETTING_CENTRE, Buttons::OkCancel))
-.with(5, Entry::setting("Icon colour", &icons::ACCENT, SETTING_ACCENT, Buttons::OkCancel));
+.with(
+    1,
+    Entry::setting("Motion", &icons::MOTION, SETTING_MOTION, Buttons::OkCancel),
+)
+.with(
+    2,
+    Entry::setting("Points", &icons::POINTS, SETTING_POINTS, Buttons::OkCancel),
+)
+.with(
+    3,
+    Entry::setting(
+        "Brightest",
+        &icons::BRIGHTEST,
+        SETTING_BRIGHTEST,
+        Buttons::OkCancel,
+    ),
+)
+.with(
+    4,
+    Entry::setting(
+        "Dark centre",
+        &icons::CENTRE,
+        SETTING_CENTRE,
+        Buttons::OkCancel,
+    ),
+)
+.with(
+    5,
+    Entry::setting(
+        "Icon colour",
+        &icons::ACCENT,
+        SETTING_ACCENT,
+        Buttons::OkCancel,
+    ),
+);
 
 /// What the firmware's dialogs are called when the menu reports on them.
 const SETTING_ABOUT: Id = Id(0);
@@ -426,7 +463,12 @@ const SETTING_INSTALL: Id = Id(SETTING_QR + LINKS.len() as u16);
 /// Where the install dialog stands: a menu of one entry, left by its buttons or a long press.
 static INSTALL_MENU: Menu = Menu::new(
     "Install",
-    Entry::setting("Install", &icons::PLUGIN, SETTING_INSTALL, Buttons::OkCancel),
+    Entry::setting(
+        "Install",
+        &icons::PLUGIN,
+        SETTING_INSTALL,
+        Buttons::OkCancel,
+    ),
 );
 
 /// What a long press opens at home, said under the ring there.
@@ -449,7 +491,10 @@ const QR_ICONS: [&Icon; LINKS.len()] = [
 ];
 
 const fn qr_menu() -> Menu {
-    assert!(LINKS[0].slot == 0, "the first link stands at twelve o'clock");
+    assert!(
+        LINKS[0].slot == 0,
+        "the first link stands at twelve o'clock"
+    );
     let mut menu = Menu::new("QR codes", qr_entry(0));
     let mut n = 1;
     while n < LINKS.len() {
@@ -460,12 +505,19 @@ const fn qr_menu() -> Menu {
 }
 
 const fn qr_entry(n: usize) -> Entry {
-    Entry::setting(LINKS[n].name, QR_ICONS[n], Id(SETTING_QR + n as u16), Buttons::None)
+    Entry::setting(
+        LINKS[n].name,
+        QR_ICONS[n],
+        Id(SETTING_QR + n as u16),
+        Buttons::None,
+    )
 }
 
 /// Which link a dialog id shows, if it is a QR code's.
 fn qr_index(id: Id) -> Option<usize> {
-    (id.0 as usize).checked_sub(SETTING_QR as usize).filter(|&n| n < LINKS.len())
+    (id.0 as usize)
+        .checked_sub(SETTING_QR as usize)
+        .filter(|&n| n < LINKS.len())
 }
 
 /// Whether the menu on the glass is home itself, with nothing open over it.
@@ -631,7 +683,13 @@ type WaitingSlots = [Option<Waiting>; PLUGINS_MAX];
 fn gather_modules(
     region: Option<Region<'_, '_>>,
     spare: Option<&'static mut [u8]>,
-) -> (Modules, usize, WaitingSlots, FromSlot, Option<&'static mut [u8]>) {
+) -> (
+    Modules,
+    usize,
+    WaitingSlots,
+    FromSlot,
+    Option<&'static mut [u8]>,
+) {
     let mut modules: Modules = [None; PLUGINS_MAX];
     let mut from_slot: FromSlot = [None; PLUGINS_MAX];
     let mut ids = [None; PLUGINS_MAX];
@@ -693,7 +751,10 @@ fn gather_modules(
                 let Some(at) = at else {
                     match plugin::verify(module) {
                         Ok(()) => {
-                            waiting[waits] = Some(Waiting { slot: n, wasm: module });
+                            waiting[waits] = Some(Waiting {
+                                slot: n,
+                                wasm: module,
+                            });
                             waits += 1;
                             info!(
                                 "Plugin: slot {n}, {} bytes, id {:02x?}, waits to be accepted",
@@ -746,7 +807,11 @@ impl PluginSetting {
     /// Which bundled plugin a setting in a plugin's menu belongs to, and which of the two it is.
     fn of(id: Id) -> Option<(usize, Self)> {
         let n = usize::from(id.0 / 2);
-        let setting = if id.0 % 2 == 0 { Self::About } else { Self::Installed };
+        let setting = if id.0 % 2 == 0 {
+            Self::About
+        } else {
+            Self::Installed
+        };
         (n < PLUGINS_MAX).then_some((n, setting))
     }
 }
@@ -755,7 +820,12 @@ impl PluginSetting {
 fn plugin_menu(name: &'static str, n: usize) -> Menu {
     Menu::plugin(
         name,
-        Entry::setting("About", &icons::ABOUT, PluginSetting::About.id(n), Buttons::Ok),
+        Entry::setting(
+            "About",
+            &icons::ABOUT,
+            PluginSetting::About.id(n),
+            Buttons::Ok,
+        ),
     )
     .with(
         1,
@@ -870,7 +940,13 @@ impl PlayerLine {
                 let window =
                     Rectangle::new(Point::new(left, 0), Size::new(room as u32, HEIGHT as u32));
                 let at = Point::new(left - offset + width / 2, y);
-                menu_text(&mut frame.clipped(&window), text, at, self.font, self.colour)
+                menu_text(
+                    &mut frame.clipped(&window),
+                    text,
+                    at,
+                    self.font,
+                    self.colour,
+                )
             }
             (None, Some(start)) => {
                 let cut = format!("{start}{ELLIPSIS}");
@@ -910,9 +986,14 @@ impl Run {
         let overflow = match state.title.is_empty() {
             // Without a title the player names the device instead, and that fits.
             true => 0,
-            false => TITLE_LINE.overflow(&state.title).max(ARTIST_LINE.overflow(&state.artist)),
+            false => TITLE_LINE
+                .overflow(&state.title)
+                .max(ARTIST_LINE.overflow(&state.artist)),
         };
-        Self { elapsed: Duration::from_ticks(0), overflow }
+        Self {
+            elapsed: Duration::from_ticks(0),
+            overflow,
+        }
     }
 
     /// How far the lines stand shifted, or `None` when there is no run or it is over. Each line
@@ -1097,7 +1178,10 @@ fn offer_next(
     state.offer = offers.next();
     if let Some(offer) = &state.offer {
         info!("Plugin: slot {} offered for install", offer.slot);
-        state.menu.insert(Navigator::firmware(&INSTALL_MENU)).open_selected();
+        state
+            .menu
+            .insert(Navigator::firmware(&INSTALL_MENU))
+            .open_selected();
     } else if offers.accepted > 0 {
         info!("Plugin: {} accepted -- restarting", offers.accepted);
         software_reset();
@@ -1479,7 +1563,11 @@ async fn main(spawner: Spawner) -> ! {
             }
         }
     };
-    let removed = bundled_ids().iter().flatten().filter(|id| !stored.installed(**id)).count();
+    let removed = bundled_ids()
+        .iter()
+        .flatten()
+        .filter(|id| !stored.installed(**id))
+        .count();
     info!(
         "Settings: colour theme {}, {removed} bundled plugins removed",
         stored.theme.name()
@@ -1558,24 +1646,22 @@ async fn main(spawner: Spawner) -> ! {
 
     // The other chip. It owns the DAC, classic Bluetooth and a second encoder on the same
     // shaft; this link is how we read what it is playing and tell it what to play next.
-    let mut companion = match Uart::new(
-        peripherals.UART1,
-        UartConfig::default().with_baudrate(BAUD),
-    ) {
-        Ok(uart) => {
-            let (rx, tx) = uart
-                .with_tx(peripherals.GPIO40)
-                .with_rx(peripherals.GPIO39)
-                .split();
-            let mut companion = Companion::new(rx, tx);
-            companion.request_status();
-            Some(companion)
-        }
-        Err(err) => {
-            error!("Companion: UART1 could not be configured: {err:?}");
-            None
-        }
-    };
+    let mut companion =
+        match Uart::new(peripherals.UART1, UartConfig::default().with_baudrate(BAUD)) {
+            Ok(uart) => {
+                let (rx, tx) = uart
+                    .with_tx(peripherals.GPIO40)
+                    .with_rx(peripherals.GPIO39)
+                    .split();
+                let mut companion = Companion::new(rx, tx);
+                companion.request_status();
+                Some(companion)
+            }
+            Err(err) => {
+                error!("Companion: UART1 could not be configured: {err:?}");
+                None
+            }
+        };
 
     esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 73744);
     // COEX needs more RAM - so we've added some more
@@ -1591,15 +1677,14 @@ async fn main(spawner: Spawner) -> ! {
     // The plugin's page comes off the end first: 64 KiB of the megabytes behind the pictures,
     // where a face's memory costs the internal heap nothing. One page, because one plugin runs
     // at a time -- see [`start_plugin`].
-    let (spare, mut page): (_, Option<Page>) =
-        match spare {
-            Some(spare) if spare.len() > COVER_MAX_BYTES + plugin::PAGE => {
-                let at = spare.len() - plugin::PAGE;
-                let (rest, tail) = spare.split_at_mut(at);
-                (Some(rest), Page::new(tail))
-            }
-            other => (other, None),
-        };
+    let (spare, mut page): (_, Option<Page>) = match spare {
+        Some(spare) if spare.len() > COVER_MAX_BYTES + plugin::PAGE => {
+            let at = spare.len() - plugin::PAGE;
+            let (rest, tail) = spare.split_at_mut(at);
+            (Some(rest), Page::new(tail))
+        }
+        other => (other, None),
+    };
     // Then the ring's shape, worked out once here so that a menu paints its ring from it instead
     // of working it out again for every frame -- see [`Ring`]. The clock of `embassy_time` is not
     // running yet, so esp-hal's times it.
@@ -1702,9 +1787,8 @@ async fn main(spawner: Spawner) -> ! {
 
     info!("Embassy initialized!");
 
-    let (wifi_controller, _interfaces) =
-        esp_radio::wifi::new(peripherals.WIFI, Default::default())
-            .expect("Failed to initialize Wi-Fi controller");
+    let (wifi_controller, _interfaces) = esp_radio::wifi::new(peripherals.WIFI, Default::default())
+        .expect("Failed to initialize Wi-Fi controller");
     // find more examples https://github.com/embassy-rs/trouble/tree/main/examples/esp32
     let transport = BleConnector::new(peripherals.BT, Default::default()).unwrap();
 
@@ -1789,11 +1873,7 @@ async fn main(spawner: Spawner) -> ! {
                 }),
             );
             let named = devices.iter().filter(|d| d.name.is_some()).count();
-            info!(
-                "BLE: {} advertisers, {} with a name",
-                devices.len(),
-                named
-            );
+            info!("BLE: {} advertisers, {} with a name", devices.len(), named);
             // As for Wi-Fi: forty lines every two seconds would bury the log.
             for device in devices.iter().filter(|_| !nearby::wanted()) {
                 let a = device.addr;
@@ -1814,9 +1894,7 @@ async fn main(spawner: Spawner) -> ! {
         }
     };
 
-    spawner.spawn(
-        wifi_scan(wifi_controller).expect("Failed to create the Wi-Fi scan task"),
-    );
+    spawner.spawn(wifi_scan(wifi_controller).expect("Failed to create the Wi-Fi scan task"));
 
     let server = Server::new_with_config(GapConfig::Peripheral(PeripheralConfig {
         name: BLE_DEVICE_NAME,
@@ -2020,7 +2098,10 @@ async fn main(spawner: Spawner) -> ! {
     };
     // The plugin that is loaded, and its place among the gathered ones.
     let mut running: Option<(usize, Plugin)> = None;
-    info!("Plugin: none loaded yet, heap {} bytes free", esp_alloc::HEAP.free());
+    info!(
+        "Plugin: none loaded yet, heap {} bytes free",
+        esp_alloc::HEAP.free()
+    );
 
     // The device itself: the knob, the glass, the motor and the other chip, polled from one
     // place. It borrows peripherals from this frame, which is why it is a future joined here
@@ -2230,7 +2311,11 @@ async fn main(spawner: Spawner) -> ! {
                         // there is the same detent `encoder.poll()` already counted. It is
                         // logged and deliberately not added to anything.
                         CompanionEvent::Encoder(direction) => {
-                            turn_theirs += if direction == Direction::Clockwise { 1 } else { -1 };
+                            turn_theirs += if direction == Direction::Clockwise {
+                                1
+                            } else {
+                                -1
+                            };
                         }
                         other => info!("Companion: {other:?}"),
                     }
@@ -2319,7 +2404,8 @@ async fn main(spawner: Spawner) -> ! {
                             detents,
                         } => {
                             let step = (settings.orientation as i32 + detents)
-                                .rem_euclid(STEPS as i32) as u8;
+                                .rem_euclid(STEPS as i32)
+                                as u8;
                             settings.orientation = step;
                             state.orientation = step as usize;
                             if let Some(screen) = screen.as_mut() {
@@ -2435,7 +2521,8 @@ async fn main(spawner: Spawner) -> ! {
                         Outcome::Nothing => felt = false,
                         _ => {}
                     }
-                } else if shown_view(&state).is_some_and(|view| view.rights.contains(Rights::KNOB)) {
+                } else if shown_view(&state).is_some_and(|view| view.rights.contains(Rights::KNOB))
+                {
                     // A face with the knob right gets the detents as events, and the other chip
                     // has been told to keep its volume out of it -- see [`companion_state`].
                     let event = if detents > 0 {
@@ -2470,7 +2557,13 @@ async fn main(spawner: Spawner) -> ! {
                     }
                 }
                 if felt {
-                    click_ends = Some(click(&mut haptic, &mut i2c, settings.haptics, CLICK_DETENT, state.menu.is_some()));
+                    click_ends = Some(click(
+                        &mut haptic,
+                        &mut i2c,
+                        settings.haptics,
+                        CLICK_DETENT,
+                        state.menu.is_some(),
+                    ));
                 }
             }
 
@@ -2518,10 +2611,19 @@ async fn main(spawner: Spawner) -> ! {
                             // its slot, and the next boot asks again.
                             Some(Press::Hold(_)) if state.offer.is_some() => {
                                 if let Some(offer) = &state.offer {
-                                    info!("Plugin: slot {} not accepted, asked again at boot", offer.slot);
+                                    info!(
+                                        "Plugin: slot {} not accepted, asked again at boot",
+                                        offer.slot
+                                    );
                                 }
                                 offer_next(&mut state, &mut offers, home_menu, settings_menu);
-                                click_ends = Some(click(&mut haptic, &mut i2c, settings.haptics, CLICK_TAP, true));
+                                click_ends = Some(click(
+                                    &mut haptic,
+                                    &mut i2c,
+                                    settings.haptics,
+                                    CLICK_TAP,
+                                    true,
+                                ));
                             }
                             // **A long press goes home, whatever is on the glass.** It is
                             // answered here, before any screen sees the finger, so that no
@@ -2535,11 +2637,19 @@ async fn main(spawner: Spawner) -> ! {
                                 if let Some(nav) = state.menu.as_mut() {
                                     nav.enter(&QR_MENU);
                                 }
-                                click_ends = Some(click(&mut haptic, &mut i2c, settings.haptics, CLICK_TAP, true));
+                                click_ends = Some(click(
+                                    &mut haptic,
+                                    &mut i2c,
+                                    settings.haptics,
+                                    CLICK_TAP,
+                                    true,
+                                ));
                                 info!("Touch: held -- QR codes");
                             }
                             Some(Press::Hold(_)) => {
-                                if let Some((id, _)) = state.menu.as_ref().and_then(Navigator::opened) {
+                                if let Some((id, _)) =
+                                    state.menu.as_ref().and_then(Navigator::opened)
+                                {
                                     settings = before;
                                     take_back(
                                         &settings,
@@ -2555,7 +2665,13 @@ async fn main(spawner: Spawner) -> ! {
                                 // The menu first, so the click that opens it is already one of
                                 // its own and as short as the rest.
                                 state.menu = Some(home(home_menu, settings_menu));
-                                click_ends = Some(click(&mut haptic, &mut i2c, settings.haptics, CLICK_TAP, true));
+                                click_ends = Some(click(
+                                    &mut haptic,
+                                    &mut i2c,
+                                    settings.haptics,
+                                    CLICK_TAP,
+                                    true,
+                                ));
                                 // The knob changes hands with the settings. Asking for it here
                                 // rather than waiting for the next status report is what keeps
                                 // a detent from reaching the phone's volume after the menu is up.
@@ -2580,7 +2696,13 @@ async fn main(spawner: Spawner) -> ! {
                                     .as_mut()
                                     .map_or(Outcome::Nothing, |menu| menu.tap(Point::new(x, y)));
                                 if outcome != Outcome::Nothing {
-                                    click_ends = Some(click(&mut haptic, &mut i2c, settings.haptics, CLICK_TAP, state.menu.is_some()));
+                                    click_ends = Some(click(
+                                        &mut haptic,
+                                        &mut i2c,
+                                        settings.haptics,
+                                        CLICK_TAP,
+                                        state.menu.is_some(),
+                                    ));
                                 }
                                 match outcome {
                                     Outcome::Open { id, .. } => {
@@ -2591,28 +2713,50 @@ async fn main(spawner: Spawner) -> ! {
                                     // written -- and only when it differs from what is kept.
                                     // Accepting writes one byte into the slot; the restart that
                                     // gives the plugin its place comes after the last offer.
-                                    Outcome::Ok { id: SETTING_INSTALL, owner: Owner::Firmware } => {
+                                    Outcome::Ok {
+                                        id: SETTING_INSTALL,
+                                        owner: Owner::Firmware,
+                                    } => {
                                         if let Some(offer) = &state.offer
                                             && accept_slot(store.as_mut(), table, offer.slot)
                                         {
                                             offers.accepted += 1;
                                         }
-                                        offer_next(&mut state, &mut offers, home_menu, settings_menu);
+                                        offer_next(
+                                            &mut state,
+                                            &mut offers,
+                                            home_menu,
+                                            settings_menu,
+                                        );
                                     }
-                                    Outcome::Cancel { id: SETTING_INSTALL, owner: Owner::Firmware, .. } => {
+                                    Outcome::Cancel {
+                                        id: SETTING_INSTALL,
+                                        owner: Owner::Firmware,
+                                        ..
+                                    } => {
                                         if let Some(offer) = &state.offer {
-                                            info!("Plugin: slot {} not accepted, asked again at boot", offer.slot);
+                                            info!(
+                                                "Plugin: slot {} not accepted, asked again at boot",
+                                                offer.slot
+                                            );
                                         }
-                                        offer_next(&mut state, &mut offers, home_menu, settings_menu);
+                                        offer_next(
+                                            &mut state,
+                                            &mut offers,
+                                            home_menu,
+                                            settings_menu,
+                                        );
                                     }
                                     Outcome::Ok { id, .. } => {
                                         // Installing and removing happen here and nowhere
                                         // earlier, so Cancel has nothing to undo. The rings are
                                         // laid out at boot without gaps, so a plugin that comes
                                         // or goes is written first and then takes a restart.
-                                        let rings_change = state.plugins.iter().flatten().any(|view| {
-                                            settings.installed(view.id) != stored.installed(view.id)
-                                        });
+                                        let rings_change =
+                                            state.plugins.iter().flatten().any(|view| {
+                                                settings.installed(view.id)
+                                                    != stored.installed(view.id)
+                                            });
                                         // The last cover's bytes are still there, so a new size
                                         // is one more decode rather than a wait for the next track.
                                         if settings.cover != stored.cover {
@@ -2626,7 +2770,9 @@ async fn main(spawner: Spawner) -> ! {
                                         }
                                         info!("Settings: {id:?} kept");
                                         if rings_change {
-                                            info!("Plugin: installed plugins changed -- restarting");
+                                            info!(
+                                                "Plugin: installed plugins changed -- restarting"
+                                            );
                                             software_reset();
                                         }
                                     }
@@ -2660,9 +2806,11 @@ async fn main(spawner: Spawner) -> ! {
                                     // menu is home, which has none.
                                     Outcome::Close => state.menu = None,
                                     // A QR code has no buttons; a tap anywhere on it closes it.
-                                    Outcome::Touch { id, owner: Owner::Firmware, .. }
-                                        if qr_index(id).is_some() =>
-                                    {
+                                    Outcome::Touch {
+                                        id,
+                                        owner: Owner::Firmware,
+                                        ..
+                                    } if qr_index(id).is_some() => {
                                         if let Some(nav) = state.menu.as_mut() {
                                             nav.dismiss();
                                         }
@@ -2683,13 +2831,25 @@ async fn main(spawner: Spawner) -> ! {
                             }
                             // A face's glass is the face's: the tap goes to it, not to the player.
                             Some(Press::Tap(_)) if state.face != Face::Player => {
-                                click_ends = Some(click(&mut haptic, &mut i2c, settings.haptics, CLICK_TAP, false));
+                                click_ends = Some(click(
+                                    &mut haptic,
+                                    &mut i2c,
+                                    settings.haptics,
+                                    CLICK_TAP,
+                                    false,
+                                ));
                                 if let Some(face) = shown_plugin(&mut running, state.face) {
                                     deliver(face, FaceEvent::Tap, companion.as_mut(), &mut state);
                                 }
                             }
                             Some(Press::Tap(_)) => {
-                                click_ends = Some(click(&mut haptic, &mut i2c, settings.haptics, CLICK_TAP, state.menu.is_some()));
+                                click_ends = Some(click(
+                                    &mut haptic,
+                                    &mut i2c,
+                                    settings.haptics,
+                                    CLICK_TAP,
+                                    state.menu.is_some(),
+                                ));
                                 if let Some(companion) = companion.as_mut() {
                                     companion.toggle_playback();
                                 }
@@ -2714,7 +2874,13 @@ async fn main(spawner: Spawner) -> ! {
                                 if let (Some(event), Some(face)) =
                                     (event, shown_plugin(&mut running, state.face))
                                 {
-                                    click_ends = Some(click(&mut haptic, &mut i2c, settings.haptics, CLICK_TAP, false));
+                                    click_ends = Some(click(
+                                        &mut haptic,
+                                        &mut i2c,
+                                        settings.haptics,
+                                        CLICK_TAP,
+                                        false,
+                                    ));
                                     deliver(face, event, companion.as_mut(), &mut state);
                                 }
                             }
@@ -2734,14 +2900,26 @@ async fn main(spawner: Spawner) -> ! {
                                     // HID instead, to whoever is paired with `TAIJI_KNOB_HID` --
                                     // which is nobody.
                                     Gesture::SlideLeft if state.menu.is_none() => {
-                                        click_ends = Some(click(&mut haptic, &mut i2c, settings.haptics, CLICK_TAP, state.menu.is_some()));
+                                        click_ends = Some(click(
+                                            &mut haptic,
+                                            &mut i2c,
+                                            settings.haptics,
+                                            CLICK_TAP,
+                                            state.menu.is_some(),
+                                        ));
                                         if let Some(companion) = companion.as_mut() {
                                             companion.queue_key(QueueKey::Previous);
                                         }
                                         info!("Touch: swiped left -- previous track");
                                     }
                                     Gesture::SlideRight if state.menu.is_none() => {
-                                        click_ends = Some(click(&mut haptic, &mut i2c, settings.haptics, CLICK_TAP, state.menu.is_some()));
+                                        click_ends = Some(click(
+                                            &mut haptic,
+                                            &mut i2c,
+                                            settings.haptics,
+                                            CLICK_TAP,
+                                            state.menu.is_some(),
+                                        ));
                                         if let Some(companion) = companion.as_mut() {
                                             companion.queue_key(QueueKey::Next);
                                         }
@@ -2785,7 +2963,11 @@ async fn main(spawner: Spawner) -> ! {
                 if handed_link != Some(linked)
                     && let Some(face) = shown_plugin(&mut running, state.face)
                 {
-                    let event = if linked { FaceEvent::Linked } else { FaceEvent::Unlinked };
+                    let event = if linked {
+                        FaceEvent::Linked
+                    } else {
+                        FaceEvent::Unlinked
+                    };
                     deliver(face, event, companion.as_mut(), &mut state);
                     handed_link = Some(linked);
                 }
@@ -2805,7 +2987,13 @@ async fn main(spawner: Spawner) -> ! {
                     let now = Instant::now();
                     let every = Duration::from_millis(u64::from(every));
                     if last_pulse.is_none_or(|last| now >= last + every) {
-                        click_ends = Some(click(&mut haptic, &mut i2c, settings.haptics, CLICK_PULSE, false));
+                        click_ends = Some(click(
+                            &mut haptic,
+                            &mut i2c,
+                            settings.haptics,
+                            CLICK_PULSE,
+                            false,
+                        ));
                         last_pulse = Some(now);
                     }
                 }
@@ -2827,8 +3015,8 @@ async fn main(spawner: Spawner) -> ! {
             // The cloud moves wherever it is the ground: in the menus, and on the player
             // until a cover arrives. A transfer holds it still, because a pass with a transfer
             // in it ends above.
-            let on_cloud = state.menu.is_some()
-                || (state.face == Face::Player && state.backdrop.is_none());
+            let on_cloud =
+                state.menu.is_some() || (state.face == Face::Player && state.backdrop.is_none());
             state.cloud = match state.motion == Motion::Moving && on_cloud {
                 true => (now.as_millis() / CLOUD_FRAME.as_millis()) as u32 + 1,
                 false => 0,
@@ -2914,12 +3102,15 @@ async fn main(spawner: Spawner) -> ! {
                         let bytes = screen.frame().bytes();
                         let at = bytes.as_ptr();
                         let len = bytes.len();
-                        if let Some((cached, external)) = teetotum::display::external_probe(bytes)
-                        {
+                        if let Some((cached, external)) = teetotum::display::external_probe(bytes) {
                             info!(
                                 "Screen: picture at {at:p}, {len} bytes -- cached {cached:#010x}, \
                                  external {external:#010x}, the external RAM {}",
-                                if cached == external { "holds it" } else { "does not hold it" }
+                                if cached == external {
+                                    "holds it"
+                                } else {
+                                    "does not hold it"
+                                }
                             );
                         }
                     }
@@ -2955,7 +3146,11 @@ async fn main(spawner: Spawner) -> ! {
                     );
                     if lit && qr_shown != qr_lit {
                         if let Some(backlight) = backlight.as_ref() {
-                            backlight.set(if qr_shown { Brightness::MAX } else { state.brightness });
+                            backlight.set(if qr_shown {
+                                Brightness::MAX
+                            } else {
+                                state.brightness
+                            });
                         }
                         qr_lit = qr_shown;
                     }
@@ -3049,7 +3244,12 @@ fn click(
         let _ = haptic.set_sequence(i2c, &[effect]);
         let _ = haptic.go(i2c);
     }
-    Instant::now() + if in_menu { CLICK_LENGTH_MENU } else { CLICK_LENGTH }
+    Instant::now()
+        + if in_menu {
+            CLICK_LENGTH_MENU
+        } else {
+            CLICK_LENGTH
+        }
 }
 
 /// Sets the drive the next clicks get, from [`DRIVE`]. Off leaves it where it was, because
@@ -3121,11 +3321,7 @@ fn header_bytes(size: u32) -> Option<usize> {
 /// The pixels go from the card straight into external RAM: the demo's files are RGB565 with the
 /// high byte first, which is the panel's order and this firmware's, so there is no pass over
 /// them. It costs about 130 ms, which is why it happens on a swipe and not on a frame.
-fn load_background(
-    volume: &mut Volume<'_>,
-    screen: &mut Screen<'_>,
-    name: &str,
-) -> Option<String> {
+fn load_background(volume: &mut Volume<'_>, screen: &mut Screen<'_>, name: &str) -> Option<String> {
     let backdrop = screen.backdrop_mut()?;
     let path = format!("{BACKGROUND_FOLDER}/{name}");
 
@@ -3137,7 +3333,9 @@ fn load_background(
         }
     };
     let header = header_bytes(file.size())?;
-    if header > 0 && let Err(err) = file.seek(volume, header as u32) {
+    if header > 0
+        && let Err(err) = file.seek(volume, header as u32)
+    {
         error!("Card: {path} could not be stepped past its header: {err:?}");
         return None;
     }
@@ -3226,7 +3424,10 @@ fn stop_plugin(
         view.loaded = None;
         view.fault = None;
     }
-    info!("Plugin: {n} unloaded, heap {} bytes free", esp_alloc::HEAP.free());
+    info!(
+        "Plugin: {n} unloaded, heap {} bytes free",
+        esp_alloc::HEAP.free()
+    );
 }
 
 /// Loads a plugin into the page, if the page is free, and says what that cost:
@@ -3348,9 +3549,21 @@ fn stopped_screen(frame: &mut Framebuffer, state: &Overview) {
     let (name, why) = shown_view(state).map_or(("Plugin", ""), |view| {
         (view.name, view.fault.as_deref().unwrap_or(""))
     });
-    let _ = menu_text(frame, name, centre + Point::new(0, -34), &fonts::LARGE, Rgb565::WHITE);
+    let _ = menu_text(
+        frame,
+        name,
+        centre + Point::new(0, -34),
+        &fonts::LARGE,
+        Rgb565::WHITE,
+    );
     let _ = menu_text(frame, "stopped", centre, &fonts::BODY, palette.value);
-    let _ = menu_text(frame, why, centre + Point::new(0, 28), &fonts::SMALL_LATIN1, palette.quiet);
+    let _ = menu_text(
+        frame,
+        why,
+        centre + Point::new(0, 28),
+        &fonts::SMALL_LATIN1,
+        palette.quiet,
+    );
 }
 
 /// The way out, on every face: written after the face has drawn, so no face can cover it. The
@@ -3362,7 +3575,13 @@ fn stopped_screen(frame: &mut Framebuffer, state: &Overview) {
 fn home_hint(frame: &mut Framebuffer, state: &Overview) {
     let centre = Point::new((HINT.left + HINT.right) / 2, (HINT.top + HINT.bottom) / 2);
     let colour = state.theme.palette().selected;
-    let _ = menu_text(frame, teetotum::menu::HOLD_FOR_HOME, centre, &fonts::SMALL, colour);
+    let _ = menu_text(
+        frame,
+        teetotum::menu::HOLD_FOR_HOME,
+        centre,
+        &fonts::SMALL,
+        colour,
+    );
 }
 
 /// Brings everything that follows a setting live back in line with `settings`: what Cancel does
@@ -3408,7 +3627,6 @@ fn save_settings<F: NorFlash>(store: &mut Store<F>, wanted: &Settings) {
         Err(e) => error!("Settings: could not be written: {e:?}"),
     }
 }
-
 
 /// Where the cloud's scattering starts, chosen by eye from a mockup of the backdrop.
 const CLOUD_SEED: u32 = 0x7EE7_0701;
@@ -3464,7 +3682,8 @@ fn cloud_ground(frame: &mut Framebuffer, state: &Overview, ring: bool, clean: bo
             WIDTH as i32 / 2
         }
     };
-    let moment = (state.cloud != 0).then(|| state.cloud.wrapping_mul(CLOUD_FRAME.as_millis() as u32));
+    let moment =
+        (state.cloud != 0).then(|| state.cloud.wrapping_mul(CLOUD_FRAME.as_millis() as u32));
     let _ = cloud_of(state.shape).draw_within(frame, &state.theme.palette(), moment, reach);
     let spent = started.elapsed();
     CLOUD_GROUND_US.store(spent.as_micros() as u32, Ordering::Relaxed);
@@ -3587,7 +3806,10 @@ fn status_screen(frame: &mut Framebuffer, state: &Overview, over_picture: bool) 
     if over_picture {
         let (first, last) = match playing {
             true => (centre.y + TITLE_LINE.below, centre.y + ARTIST_LINE.below),
-            false => (lines.first().map_or(0, |line| line.0), lines.last().map_or(0, |line| line.0)),
+            false => (
+                lines.first().map_or(0, |line| line.0),
+                lines.last().map_or(0, |line| line.0),
+            ),
         };
         let (top, foot) = (first - 16, last + 10);
         frame.dim_rows(top.max(0) as usize, foot.max(0) as usize);
@@ -3695,7 +3917,12 @@ const REPO: &str = "look at github.com:\nteetotum-rs/firmware";
 /// **The orientation needs no mark of its own any more.** Until the ring, a green dot at twelve
 /// o'clock was what made 180 degrees distinguishable from 0 on round glass. About is the top
 /// segment of every menu and turns with the picture, so it is that mark now.
-fn settings_screen(frame: &mut Framebuffer, state: &Overview, nav: &Navigator, ring: Option<&Ring>) {
+fn settings_screen(
+    frame: &mut Framebuffer,
+    state: &Overview,
+    nav: &Navigator,
+    ring: Option<&Ring>,
+) {
     const VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"));
 
     let orientation = format!("{} deg", state.orientation * 30);
@@ -3778,7 +4005,11 @@ fn settings_screen(frame: &mut Framebuffer, state: &Overview, nav: &Navigator, r
                 12,
                 &format!(
                     "ble {}  knob {:+}",
-                    if state.peer { "connected" } else { "advertising" },
+                    if state.peer {
+                        "connected"
+                    } else {
+                        "advertising"
+                    },
                     state.detents
                 ),
                 detail,
@@ -3801,8 +4032,16 @@ fn settings_screen(frame: &mut Framebuffer, state: &Overview, nav: &Navigator, r
                 ),
                 None => String::from("other chip silent"),
             };
-            let stream = if state.streaming { "audio streaming" } else { "no audio stream" };
-            let hid = if state.hid { "hid connected" } else { "hid not connected" };
+            let stream = if state.streaming {
+                "audio streaming"
+            } else {
+                "no audio stream"
+            };
+            let hid = if state.hid {
+                "hid connected"
+            } else {
+                "hid not connected"
+            };
             line(-42, "Music Player", (&fonts::BODY, palette.name));
             line(-22, "through the other chip", quiet);
             line(-4, &backdrop, detail);
@@ -3819,9 +4058,25 @@ fn settings_screen(frame: &mut Framebuffer, state: &Overview, nav: &Navigator, r
             };
             line(-42, "Background", (&fonts::BODY, palette.name));
             line(-22, "a cloud of points", quiet);
-            line(-4, &format!("{} points, {} % bright", shape.points, shape.brightest), detail);
-            line(12, &format!("centre {} px, {} % icon colour", shape.centre, shape.accent), detail);
-            line(28, &format!("{motion}, ground {}.{} ms", ground / 1000, ground % 1000 / 100), detail);
+            line(
+                -4,
+                &format!("{} points, {} % bright", shape.points, shape.brightest),
+                detail,
+            );
+            line(
+                12,
+                &format!("centre {} px, {} % icon colour", shape.centre, shape.accent),
+                detail,
+            );
+            line(
+                28,
+                &format!(
+                    "{motion}, ground {}.{} ms",
+                    ground / 1000,
+                    ground % 1000 / 100
+                ),
+                detail,
+            );
         }
         Some((SETTING_MOTION, Owner::Firmware)) => {
             line(-14, state.motion.name(), reading);
@@ -3893,7 +4148,11 @@ fn settings_screen(frame: &mut Framebuffer, state: &Overview, nav: &Navigator, r
                 line(-20, owner, owner_style);
                 line(-4, &format!("key {key}"), detail);
                 line(12, &format!("rights {}", offer.rights), detail);
-                line(28, &format!("v{}  {} bytes", offer.version, offer.bytes), detail);
+                line(
+                    28,
+                    &format!("v{}  {} bytes", offer.version, offer.bytes),
+                    detail,
+                );
                 line(44, &heap, detail);
             }
         }

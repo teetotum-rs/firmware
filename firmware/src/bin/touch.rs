@@ -45,11 +45,11 @@ use esp_hal::gpio::{Input, InputConfig, Level, Output, OutputConfig, Pull};
 use esp_hal::i2c::master::{Config as I2cConfig, I2c};
 use esp_hal::spi::master::{Config as SpiConfig, Spi};
 use esp_hal::time::Rate;
+use log::{error, info, warn};
+use st77916::{ColorMode, DisplaySize, St77916};
 use teetotum::display::{DisplayBus, DisplayReset};
 use teetotum::panel::{INIT_COMMANDS, POST_INIT_COMMANDS};
 use teetotum::touch::{Event, Touch};
-use log::{error, info, warn};
-use st77916::{ColorMode, DisplaySize, St77916};
 
 /// The panel is 360x360 of visible glass, and the glass is a circle inside it.
 const PANEL_WIDTH: u16 = 360;
@@ -90,7 +90,8 @@ fn main() -> ! {
     let mut delay = Delay::new();
 
     let (rx_buffer, rx_descriptors, tx_buffer, tx_descriptors) = dma_buffers!(1, BUFFER_BYTES);
-    let dma_rx = DmaRxBuf::new(rx_descriptors, rx_buffer).expect("the DMA read buffer is malformed");
+    let dma_rx =
+        DmaRxBuf::new(rx_descriptors, rx_buffer).expect("the DMA read buffer is malformed");
     let dma_tx =
         DmaTxBuf::new(tx_descriptors, tx_buffer).expect("the DMA write buffer is malformed");
 
@@ -111,7 +112,10 @@ fn main() -> ! {
         pin: Output::new(peripherals.GPIO21, Level::High, OutputConfig::default()),
         delay,
     };
-    let bus = DisplayBus::new(spi, Output::new(peripherals.GPIO14, Level::High, OutputConfig::default()));
+    let bus = DisplayBus::new(
+        spi,
+        Output::new(peripherals.GPIO14, Level::High, OutputConfig::default()),
+    );
 
     let mut display = match St77916::builder(bus, reset, DISPLAY_SIZE)
         .with_init_commands(INIT_COMMANDS)
@@ -137,7 +141,15 @@ fn main() -> ! {
     // SAFETY: `main` runs once, and nothing else in this binary touches BUFFER.
     let buffer: &mut [u8; BUFFER_BYTES] = unsafe { &mut *core::ptr::addr_of_mut!(BUFFER) };
 
-    fill_rect(&mut display, buffer, 0, 0, PANEL_WIDTH, PANEL_HEIGHT, BACKGROUND);
+    fill_rect(
+        &mut display,
+        buffer,
+        0,
+        0,
+        PANEL_WIDTH,
+        PANEL_HEIGHT,
+        BACKGROUND,
+    );
     // Twelve o'clock and three o'clock of the picture, which is what a finger aims at.
     fill_rect(&mut display, buffer, 174, 10, 12, 34, NORTH);
     fill_rect(&mut display, buffer, 316, 174, 34, 12, EAST);
@@ -202,7 +214,11 @@ fn main() -> ! {
                         "Touch: gesture {:?} ({:#04x}){}",
                         report.gesture,
                         report.gesture_code,
-                        if report.contact.is_some() { ", finger still down" } else { "" }
+                        if report.contact.is_some() {
+                            ", finger still down"
+                        } else {
+                            ""
+                        }
                     );
                 }
 
@@ -231,7 +247,13 @@ fn main() -> ! {
                             drawn.replace((raw_x, raw_y, turned_x, turned_y))
                         {
                             fill_rect(
-                                &mut display, buffer, old_raw_x, old_raw_y, side, side, BACKGROUND,
+                                &mut display,
+                                buffer,
+                                old_raw_x,
+                                old_raw_y,
+                                side,
+                                side,
+                                BACKGROUND,
                             );
                             fill_rect(
                                 &mut display,
@@ -273,9 +295,7 @@ fn turned(value: u16) -> u16 {
 /// The top left corner of a marker centred on `value`, kept inside the panel.
 fn corner(value: u16) -> u16 {
     let side = MARKER_HALF * 2;
-    value
-        .saturating_sub(MARKER_HALF)
-        .min(PANEL_WIDTH - side)
+    value.saturating_sub(MARKER_HALF).min(PANEL_WIDTH - side)
 }
 
 /// Paints one rectangle in a solid colour, the window set first and CS held down for the whole

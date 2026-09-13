@@ -95,9 +95,13 @@ impl Face for Remote {
         // stood, in the colour it had, until there is a phone to send to.
         match self.linked {
             true => teetotum_face::text("phone connected", 180, 266, Size::Small, Colour::VALUE),
-            false => {
-                teetotum_face::text("pair TAIJI_KNOB_HID", 180, 266, Size::Small, Colour::SELECTED)
-            }
+            false => teetotum_face::text(
+                "pair TAIJI_KNOB_HID",
+                180,
+                266,
+                Size::Small,
+                Colour::SELECTED,
+            ),
         }
     }
 }

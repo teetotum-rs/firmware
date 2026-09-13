@@ -60,6 +60,7 @@ use esp_hal::i2c::master::{Config as I2cConfig, I2c};
 use esp_hal::time::{Duration, Instant, Rate};
 use esp_hal::uart::{Config as UartConfig, Uart};
 use esp_hal::usb_serial_jtag::UsbSerialJtag;
+use log::{error, info};
 use teetotum::companion::{BAUD, COVER_MAX_BYTES, Companion, Event as Frame, MediaKey};
 use teetotum::cover::{self, Art, Cover, NO_ANSWER, Step};
 use teetotum::encoder::Encoder;
@@ -67,7 +68,6 @@ use teetotum::framebuffer::{Framebuffer, HEIGHT, WIDTH};
 use teetotum::image::Scaler;
 use teetotum::screen::{Screen, ScreenPins};
 use teetotum::touch::{Gesture, Taps, Touch};
-use log::{error, info};
 
 /// How often the glass is asked for a finger.
 const TOUCH_PERIOD: Duration = Duration::from_millis(20);
@@ -134,14 +134,20 @@ fn main() -> ! {
     // allocator -- a cover is 48 KiB at most and its pixels are three bytes each, which is
     // more than the internal heap has and less than a hundredth of what is spare. Without it
     // this run has nothing to do, so it says so and stops rather than counting frames.
-    let Some(spare) = screen.take_spare().filter(|spare| spare.len() > COVER_MAX_BYTES) else {
+    let Some(spare) = screen
+        .take_spare()
+        .filter(|spare| spare.len() > COVER_MAX_BYTES)
+    else {
         error!("no external RAM to spare -- a cover could not be decoded, stopping");
         loop {
             delay.delay_millis(1000);
         }
     };
     let (jpeg, pixels) = spare.split_at_mut(COVER_MAX_BYTES);
-    info!("{} KiB of external RAM for the decoded picture", pixels.len() / 1024);
+    info!(
+        "{} KiB of external RAM for the decoded picture",
+        pixels.len() / 1024
+    );
     let mut cover = Cover::new(jpeg);
 
     let mut i2c = I2c::new(
@@ -174,11 +180,8 @@ fn main() -> ! {
         Input::new(peripherals.GPIO7, pull_up),
     );
 
-    let uart = Uart::new(
-        peripherals.UART1,
-        UartConfig::default().with_baudrate(BAUD),
-    )
-    .expect("UART1 could not be configured");
+    let uart = Uart::new(peripherals.UART1, UartConfig::default().with_baudrate(BAUD))
+        .expect("UART1 could not be configured");
     let (rx, tx) = uart
         .with_tx(peripherals.GPIO40)
         .with_rx(peripherals.GPIO39)
@@ -261,7 +264,13 @@ fn main() -> ! {
         if art.is_none()
             && let Some(bytes) = cover.image()
         {
-            art = cover::show(&mut screen, bytes, pixels, cover::CoverSize::Glass, FILTERS[filter]);
+            art = cover::show(
+                &mut screen,
+                bytes,
+                pixels,
+                cover::CoverSize::Glass,
+                FILTERS[filter],
+            );
             last_action = match art.as_ref() {
                 Some(art) => format!(
                     "{}x{} with {} in {} ms",
@@ -363,7 +372,10 @@ struct Doubled<'a>(&'a mut Framebuffer);
 
 impl Dimensions for Doubled<'_> {
     fn bounding_box(&self) -> Rectangle {
-        Rectangle::new(Point::zero(), Size::new(WIDTH as u32 / 2, HEIGHT as u32 / 2))
+        Rectangle::new(
+            Point::zero(),
+            Size::new(WIDTH as u32 / 2, HEIGHT as u32 / 2),
+        )
     }
 }
 
@@ -447,7 +459,11 @@ fn draw(
     let big_lines = if art.is_some() {
         [("", 0); 3]
     } else {
-        [(verdict.as_str(), 56), (detail.as_str(), 78), (counters.as_str(), 116)]
+        [
+            (verdict.as_str(), 56),
+            (detail.as_str(), 78),
+            (counters.as_str(), 116),
+        ]
     };
 
     // What the bytes are, once there are any -- or, once they have been through the decoder,
@@ -576,5 +592,8 @@ fn clip(text: &str, chars: usize) -> String {
     if text.chars().count() <= chars {
         return String::from(text);
     }
-    text.chars().take(chars.saturating_sub(1)).chain(['~']).collect()
+    text.chars()
+        .take(chars.saturating_sub(1))
+        .chain(['~'])
+        .collect()
 }

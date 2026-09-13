@@ -381,7 +381,12 @@ impl Icon {
 
 /// Draws a packed icon centred on `centre`; see [`Icon::packed`]. Public for a firmware that
 /// draws a face's icon out of the face's own memory, which does not live for `'static`.
-pub fn draw_packed<D>(target: &mut D, rows: &[u8], centre: Point, colour: Rgb565) -> Result<(), D::Error>
+pub fn draw_packed<D>(
+    target: &mut D,
+    rows: &[u8],
+    centre: Point,
+    colour: Rgb565,
+) -> Result<(), D::Error>
 where
     D: DrawTarget<Color = Rgb565>,
 {
@@ -970,7 +975,12 @@ pub struct Entry {
 
 impl Entry {
     /// An entry that opens a dialog.
-    pub const fn setting(name: &'static str, icon: &'static Icon, id: Id, buttons: Buttons) -> Self {
+    pub const fn setting(
+        name: &'static str,
+        icon: &'static Icon,
+        id: Id,
+        buttons: Buttons,
+    ) -> Self {
         Self {
             name,
             icon,
@@ -1589,9 +1599,7 @@ impl Navigator {
     /// Whether the menu on the glass lies one level below home, so that its OK would do exactly
     /// what the long press does. There the hint stands instead of OK.
     fn up_is_home(&self) -> bool {
-        self.open.is_none()
-            && self.depth == 2
-            && self.levels[0].is_some_and(|top| top.menu.home)
+        self.open.is_none() && self.depth == 2 && self.levels[0].is_some_and(|top| top.menu.home)
     }
 
     /// The buttons on the glass right now, and where their middles are from the centre.
@@ -1628,7 +1636,12 @@ impl Navigator {
     ///
     /// Works out the ring pixel by pixel, 98 ms with everything over it; [`draw_on`](Self::draw_on)
     /// paints the same pixels from a [`Ring`] in 13.5.
-    pub fn draw<D>(&self, target: &mut D, palette: &Palette, value: Option<&str>) -> Result<(), D::Error>
+    pub fn draw<D>(
+        &self,
+        target: &mut D,
+        palette: &Palette,
+        value: Option<&str>,
+    ) -> Result<(), D::Error>
     where
         D: DrawTarget<Color = Rgb565>,
     {
@@ -1640,14 +1653,26 @@ impl Navigator {
     /// Draws what [`draw`](Self::draw) does, with the ring's segments painted from `ring`.
     ///
     /// The pixels come out the same; the difference is the time, see [`Ring`].
-    pub fn draw_on(&self, frame: &mut Framebuffer, ring: &Ring, palette: &Palette, value: Option<&str>) {
+    pub fn draw_on(
+        &self,
+        frame: &mut Framebuffer,
+        ring: &Ring,
+        palette: &Palette,
+        value: Option<&str>,
+    ) {
         let level = self.level();
         ring.paint(frame, &level, palette);
         let Ok(()) = self.draw_over(frame, &level, palette, value);
     }
 
     /// Everything over the ring's segments: their icons, the names, the buttons.
-    fn draw_over<D>(&self, target: &mut D, level: &Level, palette: &Palette, value: Option<&str>) -> Result<(), D::Error>
+    fn draw_over<D>(
+        &self,
+        target: &mut D,
+        level: &Level,
+        palette: &Palette,
+        value: Option<&str>,
+    ) -> Result<(), D::Error>
     where
         D: DrawTarget<Color = Rgb565>,
     {
@@ -1659,8 +1684,20 @@ impl Navigator {
         match self.open {
             None => {
                 let title = level.menu.title;
-                text(target, title, CENTRE + Point::new(0, -80), &fonts::SMALL, palette.quiet)?;
-                text(target, name, CENTRE + Point::new(0, -48), &fonts::LARGE, palette.name)?;
+                text(
+                    target,
+                    title,
+                    CENTRE + Point::new(0, -80),
+                    &fonts::SMALL,
+                    palette.quiet,
+                )?;
+                text(
+                    target,
+                    name,
+                    CENTRE + Point::new(0, -48),
+                    &fonts::LARGE,
+                    palette.name,
+                )?;
                 let at = CENTRE + Point::new(0, -14);
                 match value {
                     Some(state) if level.menu.home => {
@@ -1670,17 +1707,32 @@ impl Navigator {
                         // line that matters in the state colour.
                         match state.split_once('\n') {
                             Some((lead, line)) => {
-                                text(target, lead, at - Point::new(0, 11), &fonts::SMALL,
-                                     palette.quiet)?;
-                                fitted(target, line, at + Point::new(0, 11),
-                                       state_font(line), STATE_ROOM, palette.value)?;
+                                text(
+                                    target,
+                                    lead,
+                                    at - Point::new(0, 11),
+                                    &fonts::SMALL,
+                                    palette.quiet,
+                                )?;
+                                fitted(
+                                    target,
+                                    line,
+                                    at + Point::new(0, 11),
+                                    state_font(line),
+                                    STATE_ROOM,
+                                    palette.value,
+                                )?;
                             }
                             // A line that will not fit drops to the small face rather than
                             // losing its end: half a URL is worth nothing on the glass.
-                            None => {
-                                fitted(target, state, at, state_font(state), STATE_ROOM,
-                                       palette.value)?
-                            }
+                            None => fitted(
+                                target,
+                                state,
+                                at,
+                                state_font(state),
+                                STATE_ROOM,
+                                palette.value,
+                            )?,
                         }
                     }
                     Some(value) => text(target, value, at, &fonts::LARGE, palette.value)?,
@@ -1692,9 +1744,21 @@ impl Navigator {
                     Some(Kind::Home) => "tap menu entry to choose",
                     _ => "tap menu entry to open",
                 };
-                text(target, hint, CENTRE + Point::new(0, 18), &fonts::SMALL, palette.quiet)?;
+                text(
+                    target,
+                    hint,
+                    CENTRE + Point::new(0, 18),
+                    &fonts::SMALL,
+                    palette.quiet,
+                )?;
             }
-            Some(_) => text(target, name, CENTRE + Point::new(0, -82), &fonts::LARGE, palette.name)?,
+            Some(_) => text(
+                target,
+                name,
+                CENTRE + Point::new(0, -82),
+                &fonts::LARGE,
+                palette.name,
+            )?,
         }
 
         // The buttons carry icons in the icons' colour, as the ring does: a tick and a cross say
@@ -1704,7 +1768,12 @@ impl Navigator {
                 Button::Ok => (&icons::CHECK, palette.selected),
                 Button::Cancel => (&icons::CROSS, palette.ring),
             };
-            draw_key(target, Rectangle::with_center(CENTRE + at, BUTTON), 10, fill)?;
+            draw_key(
+                target,
+                Rectangle::with_center(CENTRE + at, BUTTON),
+                10,
+                fill,
+            )?;
             icon.draw(target, CENTRE + at, palette.icon)?;
         }
         // In the colour the faces write it in, so it reads as the same sentence.
@@ -1714,7 +1783,13 @@ impl Navigator {
             _ => None,
         };
         if let Some(hint) = hold {
-            text(target, hint, CENTRE + MENU_OK, &fonts::SMALL, palette.selected)?;
+            text(
+                target,
+                hint,
+                CENTRE + MENU_OK,
+                &fonts::SMALL,
+                palette.selected,
+            )?;
         }
         Ok(())
     }
@@ -1817,7 +1892,10 @@ where
     D: DrawTarget<Color = Rgb565>,
 {
     let (left, top) = (area.top_left.x, area.top_left.y);
-    let (right, bottom) = (left + area.size.width as i32 - 1, top + area.size.height as i32 - 1);
+    let (right, bottom) = (
+        left + area.size.width as i32 - 1,
+        top + area.size.height as i32 - 1,
+    );
     target.draw_iter((top..=bottom).flat_map(move |y| {
         (left..=right).filter_map(move |x| {
             let (ox, oy) = (
@@ -1829,16 +1907,27 @@ where
                 if distance > radius * radius {
                     return None;
                 }
-                ((radius * radius - distance) / (2 * radius), -(ox + oy) * 724 / radius)
+                (
+                    (radius * radius - distance) / (2 * radius),
+                    -(ox + oy) * 724 / radius,
+                )
             } else {
                 // The nearest straight edge, and which way it faces: left, right, top, bottom.
-                [(x - left, 1024), (right - x, -1024), (y - top, 1024), (bottom - y, -1024)]
-                    .into_iter()
-                    .min_by_key(|&(near, _)| near)
-                    .map(|(near, facing)| (near, facing * 724 / 1024))
-                    .unwrap_or((0, 0))
+                [
+                    (x - left, 1024),
+                    (right - x, -1024),
+                    (y - top, 1024),
+                    (bottom - y, -1024),
+                ]
+                .into_iter()
+                .min_by_key(|&(near, _)| near)
+                .map(|(near, facing)| (near, facing * 724 / 1024))
+                .unwrap_or((0, 0))
             };
-            Some(Pixel(Point::new(x, y), shade(colour, lit(near, BEVEL, facing))))
+            Some(Pixel(
+                Point::new(x, y),
+                shade(colour, lit(near, BEVEL, facing)),
+            ))
         })
     }))
 }
@@ -1850,7 +1939,11 @@ pub fn shade(colour: Rgb565, amount: i32) -> Rgb565 {
         let target = if amount > 0 { i32::from(max) } else { 0 };
         (value + (target - value) * amount.abs() / 256) as u8
     };
-    Rgb565::new(towards(colour.r(), 31), towards(colour.g(), 63), towards(colour.b(), 31))
+    Rgb565::new(
+        towards(colour.r(), 31),
+        towards(colour.g(), 63),
+        towards(colour.b(), 31),
+    )
 }
 
 /// The middle of segment `slot`, halfway through the ring, in picture coordinates.
@@ -1870,7 +1963,8 @@ fn icon_centre(slot: usize) -> Point {
 /// A hidden entry counts as nothing.
 fn segment_colours(level: &Level, palette: &Palette) -> ([Rgb565; SLOTS], [bool; SLOTS]) {
     let selected = level.selected;
-    let raised: [bool; SLOTS] = core::array::from_fn(|slot| slot == selected || level.entry(slot).is_some());
+    let raised: [bool; SLOTS] =
+        core::array::from_fn(|slot| slot == selected || level.entry(slot).is_some());
     let colours = core::array::from_fn(|slot| match (slot == selected, raised[slot]) {
         (true, _) => palette.selected,
         (false, true) => palette.ring,
@@ -1905,7 +1999,10 @@ where
                 return Some(Pixel(point, Rgb565::BLACK));
             }
             let colour = match raised[slot] {
-                true => shade(colours[slot], bevel(slot, neighbour, margin, dx, dy, distance)),
+                true => shade(
+                    colours[slot],
+                    bevel(slot, neighbour, margin, dx, dy, distance),
+                ),
                 false => colours[slot],
             };
             Some(Pixel(point, colour))
@@ -1940,7 +2037,11 @@ where
     let left = CENTRE.x - (pages as i32 - 1) * DOT_PITCH / 2;
     for page in 0..pages {
         let at = Point::new(left + page as i32 * DOT_PITCH, CENTRE.y - DOTS_ABOVE);
-        let colour = if page == level.page { palette.icon } else { dim };
+        let colour = if page == level.page {
+            palette.icon
+        } else {
+            dim
+        };
         Circle::with_center(at, DOT)
             .into_styled(PrimitiveStyle::with_fill(colour))
             .draw(target)?;
@@ -1984,7 +2085,10 @@ const fn runs(y: usize) -> [(usize, usize); 2] {
     let last = WIDTH as i32 - 1;
     [
         (((last - outer) / 2) as usize, ((last - inner) / 2) as usize),
-        (((last + 2 + inner) / 2) as usize, ((last + 2 + outer) / 2) as usize),
+        (
+            ((last + 2 + inner) / 2) as usize,
+            ((last + 2 + outer) / 2) as usize,
+        ),
     ]
 }
 
@@ -2065,17 +2169,15 @@ impl Ring {
             core::array::from_fn(|i| bytes(shade(palette.selected, i as i32 - SHADE_ZERO)));
         let ring: [[u8; 2]; 256] =
             core::array::from_fn(|i| bytes(shade(palette.ring, i as i32 - SHADE_ZERO)));
-        let shades: [Option<&[[u8; 2]; 256]>; SLOTS] = core::array::from_fn(|slot| {
-            match (raised[slot], slot == level.selected) {
+        let shades: [Option<&[[u8; 2]; 256]>; SLOTS] =
+            core::array::from_fn(|slot| match (raised[slot], slot == level.selected) {
                 (false, _) => None,
                 (true, true) => Some(&selected),
                 (true, false) => Some(&ring),
-            }
-        });
+            });
         // A flat segment's colour, and after the last segment the gap's.
-        let flat: [[u8; 2]; SLOTS + 1] = core::array::from_fn(|slot| {
-            bytes(colours.get(slot).copied().unwrap_or(Rgb565::BLACK))
-        });
+        let flat: [[u8; 2]; SLOTS + 1] =
+            core::array::from_fn(|slot| bytes(colours.get(slot).copied().unwrap_or(Rgb565::BLACK)));
 
         let pixels = frame.bytes_mut();
         let mut cells = self.cells.chunks_exact(2);

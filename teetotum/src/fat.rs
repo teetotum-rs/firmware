@@ -253,12 +253,20 @@ impl<'d> Volume<'d> {
         }
         let at = (offset % SECTOR as u32) as usize;
         let entry = if self.layout.fat32 {
-            u32::from_le_bytes([self.fat[at], self.fat[at + 1], self.fat[at + 2], self.fat[at + 3]])
-                & 0x0FFF_FFFF
+            u32::from_le_bytes([
+                self.fat[at],
+                self.fat[at + 1],
+                self.fat[at + 2],
+                self.fat[at + 3],
+            ]) & 0x0FFF_FFFF
         } else {
             u32::from(u16::from_le_bytes([self.fat[at], self.fat[at + 1]]))
         };
-        let end = if self.layout.fat32 { 0x0FFF_FFF8 } else { 0xFFF8 };
+        let end = if self.layout.fat32 {
+            0x0FFF_FFF8
+        } else {
+            0xFFF8
+        };
         if entry < 2 || entry >= end || entry >= self.layout.clusters + 2 {
             Ok(None)
         } else {
@@ -270,8 +278,9 @@ impl<'d> Volume<'d> {
 /// Turn a boot sector into the numbers a reader needs.
 fn parse_boot_sector(sector: &[u8; SECTOR], start: u32) -> Result<(Layout, Start), Error> {
     let word = |at: usize| u32::from(u16::from_le_bytes([sector[at], sector[at + 1]]));
-    let long =
-        |at: usize| u32::from_le_bytes([sector[at], sector[at + 1], sector[at + 2], sector[at + 3]]);
+    let long = |at: usize| {
+        u32::from_le_bytes([sector[at], sector[at + 1], sector[at + 2], sector[at + 3]])
+    };
 
     let bytes_per_sector = word(11);
     if bytes_per_sector != SECTOR as u32 {

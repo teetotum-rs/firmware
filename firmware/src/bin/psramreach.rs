@@ -87,7 +87,10 @@ fn main() -> ! {
     };
     let _ = screen.frame().clear(Rgb565::BLACK);
     let Some(spare) = screen.take_spare() else {
-        stop(delay, format_args!("the external RAM has no spare to sweep"));
+        stop(
+            delay,
+            format_args!("the external RAM has no spare to sweep"),
+        );
     };
     let from = spare.as_ptr() as usize;
     info!(
@@ -108,7 +111,10 @@ fn main() -> ! {
         BurstConfig::default(),
     ) {
         Ok(engine) => engine,
-        Err(err) => stop(delay, format_args!("the DMA refused the descriptors: {err:?}")),
+        Err(err) => stop(
+            delay,
+            format_args!("the DMA refused the descriptors: {err:?}"),
+        ),
     };
 
     info!("block {BLOCK} bytes, stride {} KiB", STRIDE / 1024);
@@ -119,7 +125,12 @@ fn main() -> ! {
     let mut offset = 0usize;
     while offset + BLOCK <= spare.len() {
         let base = from + offset;
-        let good = read_block(&mut engine, &mut spare[offset..offset + BLOCK], rx_buffer, base);
+        let good = read_block(
+            &mut engine,
+            &mut spare[offset..offset + BLOCK],
+            rx_buffer,
+            base,
+        );
         if good {
             if first_bad.is_none() {
                 last_good = Some(base);
@@ -136,7 +147,10 @@ fn main() -> ! {
         (Some(good), Some(bad)) => {
             info!("last whole block {good:#x}, first wrong block {bad:#x} -- narrowing");
             let boundary = narrow(&mut engine, spare, rx_buffer, from, good, bad);
-            info!("the boundary is between {:#x} and {:#x}", boundary.0, boundary.1);
+            info!(
+                "the boundary is between {:#x} and {:#x}",
+                boundary.0, boundary.1
+            );
             info!(
                 "that is {} KiB and {} KiB into the window",
                 (boundary.0 - from) / 1024,

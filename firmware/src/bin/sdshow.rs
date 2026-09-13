@@ -56,6 +56,7 @@ use esp_hal::i2c::master::{Config as I2cConfig, I2c};
 use esp_hal::spi::master::{Config as SpiConfig, Spi};
 use esp_hal::time::{Duration, Instant, Rate};
 use esp_hal::usb_serial_jtag::UsbSerialJtag;
+use log::{error, info, warn};
 use teetotum::encoder::Encoder;
 use teetotum::fat::Volume;
 use teetotum::framebuffer::{BYTES, HEIGHT, WIDTH};
@@ -63,7 +64,6 @@ use teetotum::rotate::STEPS;
 use teetotum::screen::{Screen, ScreenPins};
 use teetotum::sd::{self, SdCard};
 use teetotum::touch::{Gesture, Touch};
-use log::{error, info, warn};
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
@@ -209,7 +209,9 @@ fn main() -> ! {
 
         if let Ok(byte) = keys.read_byte() {
             match byte {
-                b'r' | b'R' | b'\r' | b'\n' => show(&mut volume, &mut screen, &pictures[index], swapped),
+                b'r' | b'R' | b'\r' | b'\n' => {
+                    show(&mut volume, &mut screen, &pictures[index], swapped)
+                }
                 b's' | b'S' => {
                     swapped = !swapped;
                     swap(&mut screen, swapped);
@@ -361,7 +363,11 @@ fn swap(screen: &mut Screen<'_>, swapped: bool) {
     swap_pairs(screen.frame().bytes_mut());
     info!(
         "byte order {}, swapped in {} us",
-        if swapped { "little-endian file" } else { "big-endian file, as the panel wants" },
+        if swapped {
+            "little-endian file"
+        } else {
+            "big-endian file, as the panel wants"
+        },
         began.elapsed().as_micros()
     );
     present(screen);

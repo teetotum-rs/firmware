@@ -98,10 +98,18 @@ fn main() -> ! {
             Input::new(peripherals.GPIO7, pull_up),
         ))
         .with_touch(Touch::attached(
-            Output::new(peripherals.GPIO10.reborrow(), Level::High, OutputConfig::default()),
+            Output::new(
+                peripherals.GPIO10.reborrow(),
+                Level::High,
+                OutputConfig::default(),
+            ),
             Input::new(peripherals.GPIO9.reborrow(), pull_up),
         ))
-        .with_keys(UsbSerialJtag::new(peripherals.USB_DEVICE.reborrow()).split().0);
+        .with_keys(
+            UsbSerialJtag::new(peripherals.USB_DEVICE.reborrow())
+                .split()
+                .0,
+        );
 
     drain_for(&mut link, Duration::from_millis(300));
     link.resync();

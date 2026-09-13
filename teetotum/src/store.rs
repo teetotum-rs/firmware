@@ -211,7 +211,11 @@ impl<F: NorFlash> Store<F> {
     }
 
     /// Read one sector's header and payload, returning its sequence and length when it is valid.
-    fn read_slot(&mut self, slot: usize, scratch: &mut [u8]) -> Result<Option<(u32, usize)>, Error> {
+    fn read_slot(
+        &mut self,
+        slot: usize,
+        scratch: &mut [u8],
+    ) -> Result<Option<(u32, usize)>, Error> {
         let start = (slot * self.sector) as u32;
         self.flash
             .read(start, &mut scratch[..HEADER])
@@ -234,7 +238,10 @@ impl<F: NorFlash> Store<F> {
         let unit = F::READ_SIZE;
         let rounded = len.div_ceil(unit) * unit;
         self.flash
-            .read(start + HEADER as u32, &mut scratch[HEADER..HEADER + rounded])
+            .read(
+                start + HEADER as u32,
+                &mut scratch[HEADER..HEADER + rounded],
+            )
             .map_err(|e| Error::Flash(e.kind()))?;
 
         let crc = crc32(crc32(!0, &scratch[0..12]), &scratch[HEADER..HEADER + len]);

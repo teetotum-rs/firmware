@@ -56,7 +56,14 @@ type Pins<'d> = [Flex<'d>; 11];
 
 /// Clock one byte out and one byte in, SPI mode 0: MOSI settles while the clock is low, MISO is
 /// sampled on the rising edge.
-fn transfer(pins: &mut Pins<'_>, clk: usize, mosi: usize, miso: usize, out: u8, delay: &Delay) -> u8 {
+fn transfer(
+    pins: &mut Pins<'_>,
+    clk: usize,
+    mosi: usize,
+    miso: usize,
+    out: u8,
+    delay: &Delay,
+) -> u8 {
     let mut input = 0u8;
     for bit in (0..8).rev() {
         if out & (1 << bit) != 0 {

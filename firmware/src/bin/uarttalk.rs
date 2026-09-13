@@ -46,10 +46,10 @@ use esp_hal::i2c::master::{Config as I2cConfig, I2c};
 use esp_hal::time::{Duration, Instant, Rate};
 use esp_hal::uart::{Config as UartConfig, Uart, UartRx, UartTx};
 use esp_hal::usb_serial_jtag::UsbSerialJtag;
+use log::{error, info, warn};
 use teetotum::encoder::Encoder;
 use teetotum::step::{Prompt, Step};
 use teetotum::touch::Touch;
-use log::{error, info, warn};
 
 /// What both firmwares configure, read out of their images and confirmed by a clean byte stream.
 const BAUD: u32 = 921_600;
@@ -89,13 +89,21 @@ const KEY_PREVIOUS: u8 = 0xB6;
 /// `0x400dbedc(0)`, and **the S3's own firmware never sends either**. On a board whose DAC is
 /// muted by a pin on the other chip, a pair like that is the first place to look for the switch.
 const SWEEP: &[(u8, u8, &str)] = &[
-    (CMD_MEDIA_KEY, KEY_PREVIOUS, "previous track -- does the track change this time?"),
+    (
+        CMD_MEDIA_KEY,
+        KEY_PREVIOUS,
+        "previous track -- does the track change this time?",
+    ),
     (3, 3, "mode/transport 3 -- watch the music and the phone"),
     (3, 4, "mode/transport 4 -- watch the music and the phone"),
     (3, 5, "mode/transport 5 -- watch the music and the phone"),
     (6, 0, "command 6, meaning unread -- anything at all?"),
     (7, 0, "command 7, meaning unread -- anything at all?"),
-    (11, 0, "the pair, ON -- listen for the DAC: does silence become sound?"),
+    (
+        11,
+        0,
+        "the pair, ON -- listen for the DAC: does silence become sound?",
+    ),
     (12, 0, "the pair, OFF -- and does it go away again?"),
 ];
 
@@ -130,8 +138,16 @@ fn main() -> ! {
     // driving one of these pins: if GPIO40 were held by something, it would have to be found
     // out before the first byte and not after it.
     info!("--- the two pins of the link, before anything is driven ---");
-    probe("GPIO39 (our RX, their TX)", peripherals.GPIO39.reborrow().into(), &delay);
-    probe("GPIO40 (our TX, their RX)", peripherals.GPIO40.reborrow().into(), &delay);
+    probe(
+        "GPIO39 (our RX, their TX)",
+        peripherals.GPIO39.reborrow().into(),
+        &delay,
+    );
+    probe(
+        "GPIO40 (our TX, their RX)",
+        peripherals.GPIO40.reborrow().into(),
+        &delay,
+    );
 
     let uart = match Uart::new(peripherals.UART1, UartConfig::default().with_baudrate(BAUD)) {
         Ok(uart) => uart
@@ -189,7 +205,11 @@ fn main() -> ! {
     // find out about before the first question rather than after the last.
     let pull_up = InputConfig::default().with_pull(Pull::Up);
     let mut touch = Touch::new(
-        Output::new(peripherals.GPIO10.reborrow(), Level::High, OutputConfig::default()),
+        Output::new(
+            peripherals.GPIO10.reborrow(),
+            Level::High,
+            OutputConfig::default(),
+        ),
         Input::new(peripherals.GPIO9.reborrow(), pull_up),
         &delay,
     );
@@ -207,7 +227,11 @@ fn main() -> ! {
             Input::new(peripherals.GPIO7, pull_up),
         ))
         .with_touch(touch)
-        .with_keys(UsbSerialJtag::new(peripherals.USB_DEVICE.reborrow()).split().0);
+        .with_keys(
+            UsbSerialJtag::new(peripherals.USB_DEVICE.reborrow())
+                .split()
+                .0,
+        );
 
     // Whatever the other chip was in the middle of saying when we booted.
     info!("--- clearing the line ---");
@@ -281,7 +305,9 @@ fn main() -> ! {
         link.send(CMD_MEDIA_KEY, [KEY_NEXT, 0, 0, 0]);
         link.listen(Duration::from_millis(500));
         link.send(CMD_REPORT_STATE, [PAGE_COVER, 0, 0, 0]);
-        info!("  said we are on page 2 (state {PAGE_COVER:#04x}); listening 15 s for what a display would be sent");
+        info!(
+            "  said we are on page 2 (state {PAGE_COVER:#04x}); listening 15 s for what a display would be sent"
+        );
         link.listen(Duration::from_secs(15));
         if !pumping_wait(
             &mut prompt,
@@ -353,7 +379,9 @@ fn probe(name: &str, pin: esp_hal::gpio::AnyPin<'_>, delay: &Delay) {
     delay.delay_millis(2);
     let up = pin.level();
     match (down, up) {
-        (Level::High, Level::High) => info!("  {name}: driven high -- an idle transmit line looks like this"),
+        (Level::High, Level::High) => {
+            info!("  {name}: driven high -- an idle transmit line looks like this")
+        }
         (Level::Low, Level::Low) => info!("  {name}: driven low"),
         _ => info!("  {name}: floats, nobody drives it"),
     }
@@ -436,7 +464,11 @@ impl<'d> Link<'d> {
                 // answer would be timing its own transmitter.
                 let _ = self.tx.flush();
                 if self.cover.is_none() && !self.tracing {
-                    info!("  S3    -> ESP32  cmd {cmd:2} ({}): {:02X?}", name(FROM_S3, cmd), &frame[HEADER..]);
+                    info!(
+                        "  S3    -> ESP32  cmd {cmd:2} ({}): {:02X?}",
+                        name(FROM_S3, cmd),
+                        &frame[HEADER..]
+                    );
                 }
             }
             Err(e) => error!("  sending cmd {cmd} failed: {e:?}"),
@@ -563,14 +595,20 @@ impl<'d> Link<'d> {
         // receive FIFO spends filling up unattended.
         let quiet = (self.cover.is_some() && (cmd == 2 || cmd == 4)) || repeated_status;
         if !quiet {
-            let who = if magic == FROM_ESP32 { "ESP32 ->  S3" } else { "S3    -> ESP32" };
+            let who = if magic == FROM_ESP32 {
+                "ESP32 ->  S3"
+            } else {
+                "S3    -> ESP32"
+            };
             info!("  {who}  cmd {cmd:2} ({}), {len} bytes", name(magic, cmd));
             dump(&data[..data_len.min(len)]);
         }
 
         if magic != FROM_ESP32 {
             // Our own bytes, echoed back by nothing that should exist. Worth seeing.
-            warn!("  a frame with our own magic byte arrived -- is something looping the line back?");
+            warn!(
+                "  a frame with our own magic byte arrived -- is something looping the line back?"
+            );
             return;
         }
 
@@ -579,7 +617,10 @@ impl<'d> Link<'d> {
             1 if data_len >= 3 => {
                 let id = data[0];
                 let total = u16::from_le_bytes([data[1], data[2]]);
-                info!("  cover art offered: id {id}, {total} packets, up to {} bytes", total as usize * STRIDE);
+                info!(
+                    "  cover art offered: id {id}, {total} packets, up to {} bytes",
+                    total as usize * STRIDE
+                );
                 self.cover = Some(Cover {
                     id,
                     total,
@@ -618,7 +659,10 @@ impl<'d> Link<'d> {
         let id = data[0];
         let packet = u16::from_le_bytes([data[1], data[2]]);
         if id != cover.id {
-            warn!("  packet for transfer {id}, but {} is the open one -- ignored", cover.id);
+            warn!(
+                "  packet for transfer {id}, but {} is the open one -- ignored",
+                cover.id
+            );
             return;
         }
         // `len` counts the four bytes of sub-header as well, so the payload is what is left.
@@ -631,15 +675,23 @@ impl<'d> Link<'d> {
         }
 
         if packet >= cover.total {
-            let (bytes, total, head, head_len, took) =
-                (cover.bytes, cover.total, cover.head, cover.head_len, cover.started.elapsed());
+            let (bytes, total, head, head_len, took) = (
+                cover.bytes,
+                cover.total,
+                cover.head,
+                cover.head_len,
+                cover.started.elapsed(),
+            );
             self.cover = None;
             self.send(CMD_COVER_DONE, [0, 0, 0, 0]);
             info!(
                 "  cover art complete: {bytes} bytes in {total} packets, {} ms",
                 took.as_millis()
             );
-            info!("  first bytes: {:02X?} -- FF D8 FF is a JPEG, 89 50 4E 47 a PNG", &head[..head_len]);
+            info!(
+                "  first bytes: {:02X?} -- FF D8 FF is a JPEG, 89 50 4E 47 a PNG",
+                &head[..head_len]
+            );
         } else {
             let next = packet + 1;
             cover.asked = next;

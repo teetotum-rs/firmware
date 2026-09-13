@@ -43,14 +43,14 @@ use esp_hal::psram::{Psram, PsramConfig, PsramMode};
 use esp_hal::spi::master::{Config as SpiConfig, Spi};
 use esp_hal::time::{Instant, Rate};
 use esp_hal::usb_serial_jtag::UsbSerialJtag;
+use log::{error, info, warn};
+use st77916::{ColorMode, DisplaySize, St77916};
 use teetotum::display::{DisplayBus, DisplayReset};
 use teetotum::framebuffer::{BYTES, Framebuffer, HEIGHT, WIDTH};
 use teetotum::panel::{INIT_COMMANDS, POST_INIT_COMMANDS};
 use teetotum::rotate::{Filter, STEPS, rotate_rows};
 use teetotum::step::Prompt;
 use teetotum::touch::Touch;
-use st77916::{ColorMode, DisplaySize, St77916};
-use log::{error, info, warn};
 
 /// Bytes staged for one DMA transfer, and therefore the size of the bus's own buffer.
 ///
@@ -127,7 +127,8 @@ fn main() -> ! {
     let _backlight = Output::new(peripherals.GPIO47, Level::High, OutputConfig::default());
 
     let (rx_buffer, rx_descriptors, tx_buffer, tx_descriptors) = dma_buffers!(1, SPI_CHUNK);
-    let dma_rx = DmaRxBuf::new(rx_descriptors, rx_buffer).expect("the DMA read buffer is malformed");
+    let dma_rx =
+        DmaRxBuf::new(rx_descriptors, rx_buffer).expect("the DMA read buffer is malformed");
     let dma_tx =
         DmaTxBuf::new(tx_descriptors, tx_buffer).expect("the DMA write buffer is malformed");
 
@@ -148,20 +149,24 @@ fn main() -> ! {
         pin: Output::new(peripherals.GPIO21, Level::High, OutputConfig::default()),
         delay,
     };
-    let bus = DisplayBus::new(spi, Output::new(peripherals.GPIO14, Level::High, OutputConfig::default()));
+    let bus = DisplayBus::new(
+        spi,
+        Output::new(peripherals.GPIO14, Level::High, OutputConfig::default()),
+    );
 
-    let mut display = match St77916::builder(bus, reset, DisplaySize::new(WIDTH as u16, HEIGHT as u16))
-        .with_init_commands(INIT_COMMANDS)
-        .build(ColorMode::Rgb565, &mut delay)
-    {
-        Ok(display) => display,
-        Err(err) => {
-            error!("display initialisation failed: {err:?} -- stopping");
-            loop {
-                delay.delay_millis(1000);
+    let mut display =
+        match St77916::builder(bus, reset, DisplaySize::new(WIDTH as u16, HEIGHT as u16))
+            .with_init_commands(INIT_COMMANDS)
+            .build(ColorMode::Rgb565, &mut delay)
+        {
+            Ok(display) => display,
+            Err(err) => {
+                error!("display initialisation failed: {err:?} -- stopping");
+                loop {
+                    delay.delay_millis(1000);
+                }
             }
-        }
-    };
+        };
     delay.delay_millis(150);
     for &(cmd, data, wait) in POST_INIT_COMMANDS {
         if let Err(err) = display.send_command_with_data(cmd, data) {
@@ -196,7 +201,11 @@ fn main() -> ! {
     .with_scl(peripherals.GPIO12.reborrow());
 
     let mut touch = Touch::new(
-        Output::new(peripherals.GPIO10.reborrow(), Level::High, OutputConfig::default()),
+        Output::new(
+            peripherals.GPIO10.reborrow(),
+            Level::High,
+            OutputConfig::default(),
+        ),
         Input::new(
             peripherals.GPIO9.reborrow(),
             InputConfig::default().with_pull(Pull::Up),
@@ -206,9 +215,11 @@ fn main() -> ! {
     if let Err(e) = touch.chip_id(&mut i2c) {
         warn!("touch controller does not answer: {e:?} -- steps cannot be repeated by hand");
     }
-    let mut prompt = Prompt::new()
-        .with_touch(touch)
-        .with_keys(UsbSerialJtag::new(peripherals.USB_DEVICE.reborrow()).split().0);
+    let mut prompt = Prompt::new().with_touch(touch).with_keys(
+        UsbSerialJtag::new(peripherals.USB_DEVICE.reborrow())
+            .split()
+            .0,
+    );
 
     // --- 1. what the external RAM costs to write ---
     let started = Instant::now();
@@ -256,7 +267,11 @@ fn main() -> ! {
             let per_frame = total.as_micros() / u64::from(FRAMES_PER_CLOCK);
             info!(
                 "blit at {clock:2} MHz: {per_frame} us per frame, {} per second",
-                if per_frame == 0 { 0 } else { 1_000_000 / per_frame }
+                if per_frame == 0 {
+                    0
+                } else {
+                    1_000_000 / per_frame
+                }
             );
 
             if !prompt.again(&mut i2c, "tap to send it again at this clock") {
@@ -281,9 +296,21 @@ fn main() -> ! {
     let bands = HEIGHT / ROWS_PER_BAND;
 
     for (step, filter, what) in [
-        (3, Filter::Nearest, "a quarter turn, nearest: this one has to be exact"),
-        (1, Filter::Nearest, "30 degrees, nearest: look at the thin ring and the small text"),
-        (1, Filter::Bilinear, "30 degrees, bilinear: the same picture, four samples per pixel"),
+        (
+            3,
+            Filter::Nearest,
+            "a quarter turn, nearest: this one has to be exact",
+        ),
+        (
+            1,
+            Filter::Nearest,
+            "30 degrees, nearest: look at the thin ring and the small text",
+        ),
+        (
+            1,
+            Filter::Bilinear,
+            "30 degrees, bilinear: the same picture, four samples per pixel",
+        ),
     ] {
         prompt.wait(&mut i2c, what);
         loop {
@@ -326,10 +353,18 @@ fn main() -> ! {
                 info!(
                     "turn {:3} deg {:8}: {} us to turn, {} us turned and sent, {} per second",
                     step * 30,
-                    if filter == Filter::Nearest { "nearest" } else { "bilinear" },
+                    if filter == Filter::Nearest {
+                        "nearest"
+                    } else {
+                        "bilinear"
+                    },
                     turning.as_micros(),
                     whole.as_micros(),
-                    if whole.as_micros() == 0 { 0 } else { 1_000_000 / whole.as_micros() }
+                    if whole.as_micros() == 0 {
+                        0
+                    } else {
+                        1_000_000 / whole.as_micros()
+                    }
                 );
             }
 
@@ -344,7 +379,10 @@ fn main() -> ! {
     // The point of the whole exercise: the user turns the knob and the picture follows, in the
     // steps the setting will offer. What it shows by eye is whether the long mark still points
     // where it should after twelve steps, which is the arithmetic checking itself.
-    prompt.wait(&mut i2c, "watch the picture go round once, 30 degrees at a time");
+    prompt.wait(
+        &mut i2c,
+        "watch the picture go round once, 30 degrees at a time",
+    );
     let started = Instant::now();
     for step in 0..STEPS {
         let bus = display.interface_mut();
@@ -390,8 +428,12 @@ fn draw_scene(frame: &mut Framebuffer) {
     let dim = PrimitiveStyle::with_stroke(Rgb565::CSS_DIM_GRAY, 1);
 
     // The glass is round: a ring just inside the bezel says where the picture actually ends.
-    let _ = Circle::with_center(centre, 356).into_styled(dim).draw(frame);
-    let _ = Circle::with_center(centre, 240).into_styled(white).draw(frame);
+    let _ = Circle::with_center(centre, 356)
+        .into_styled(dim)
+        .draw(frame);
+    let _ = Circle::with_center(centre, 240)
+        .into_styled(white)
+        .draw(frame);
 
     // Twelve marks, one every 30 degrees -- the steps the orientation setting will offer.
     // Sine and cosine from a small table, because this runs on a chip without an FPU worth

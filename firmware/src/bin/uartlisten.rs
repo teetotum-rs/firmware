@@ -111,10 +111,7 @@ fn main() -> ! {
         }
     };
 
-    let mut rx = match UartRx::new(
-        peripherals.UART1,
-        UartConfig::default().with_baudrate(baud),
-    ) {
+    let mut rx = match UartRx::new(peripherals.UART1, UartConfig::default().with_baudrate(baud)) {
         Ok(rx) => rx.with_rx(peripherals.GPIO48),
         Err(e) => {
             error!("UART1 refused {baud} baud: {e:?}");

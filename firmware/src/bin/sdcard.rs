@@ -28,9 +28,9 @@ use esp_hal::delay::Delay;
 use esp_hal::gpio::{Level, Output, OutputConfig};
 use esp_hal::spi::master::{Config as SpiConfig, Spi};
 use esp_hal::time::{Instant, Rate};
+use log::{error, info, warn};
 use teetotum::fat::{Dir, Volume};
 use teetotum::sd::{self, Kind, SdCard};
-use log::{error, info, warn};
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
@@ -171,11 +171,7 @@ fn report_identity(card: &mut SdCard<'_>) {
         Err(err) => warn!("SD: CSD unreadable: {:?}", err),
     }
     match card.capacity_blocks() {
-        Ok(blocks) => info!(
-            "SD: {} blocks of 512 bytes, {} MiB",
-            blocks,
-            blocks / 2048
-        ),
+        Ok(blocks) => info!("SD: {} blocks of 512 bytes, {} MiB", blocks, blocks / 2048),
         Err(err) => warn!("SD: capacity unreadable: {:?}", err),
     }
 }
@@ -239,7 +235,10 @@ fn measure(volume: &mut Volume<'_>) {
         let mut sum = 0u32;
         let mut failed = None;
         for block in 0..blocks {
-            if let Err(err) = volume.card().read_block(start + block, (&mut buffer[..512]).try_into().unwrap()) {
+            if let Err(err) = volume
+                .card()
+                .read_block(start + block, (&mut buffer[..512]).try_into().unwrap())
+            {
                 failed = Some(err);
                 break;
             }
@@ -254,14 +253,23 @@ fn measure(volume: &mut Volume<'_>) {
         while block < blocks {
             let run = (blocks - block).min((CHUNK / 512) as u32);
             let bytes = run as usize * 512;
-            if let Err(err) = volume.card().read_blocks(start + block, &mut buffer[..bytes]) {
+            if let Err(err) = volume
+                .card()
+                .read_blocks(start + block, &mut buffer[..bytes])
+            {
                 failed = Some(err);
                 break;
             }
             sum = checksum(sum, &buffer[..bytes]);
             block += run;
         }
-        report(rate, "eight blocks per command", began, failed.is_none(), sum);
+        report(
+            rate,
+            "eight blocks per command",
+            began,
+            failed.is_none(),
+            sum,
+        );
     }
 
     // Back to what the driver hands out by default, so the file read below is measured at the

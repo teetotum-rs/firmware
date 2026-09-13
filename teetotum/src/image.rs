@@ -221,7 +221,10 @@ impl<'a> Picture<'a> {
         let (width, height) = if self.width * HEIGHT >= self.height * WIDTH {
             (WIDTH, (self.height * WIDTH / self.width).max(1).min(HEIGHT))
         } else {
-            ((self.width * HEIGHT / self.height).max(1).min(WIDTH), HEIGHT)
+            (
+                (self.width * HEIGHT / self.height).max(1).min(WIDTH),
+                HEIGHT,
+            )
         };
         Fit {
             left: (WIDTH - width) / 2,
@@ -391,10 +394,14 @@ impl<'a> Picture<'a> {
     fn draw_box(&self, frame: &mut Framebuffer, fit: Fit) {
         for dy in 0..fit.height {
             let y0 = dy * self.height / fit.height;
-            let y1 = (((dy + 1) * self.height).div_ceil(fit.height)).max(y0 + 1).min(self.height);
+            let y1 = (((dy + 1) * self.height).div_ceil(fit.height))
+                .max(y0 + 1)
+                .min(self.height);
             for dx in 0..fit.width {
                 let x0 = dx * self.width / fit.width;
-                let x1 = (((dx + 1) * self.width).div_ceil(fit.width)).max(x0 + 1).min(self.width);
+                let x1 = (((dx + 1) * self.width).div_ceil(fit.width))
+                    .max(x0 + 1)
+                    .min(self.width);
                 let (mut r, mut g, mut b) = (0u32, 0u32, 0u32);
                 for y in y0..y1 {
                     for x in x0..x1 {
@@ -405,7 +412,12 @@ impl<'a> Picture<'a> {
                     }
                 }
                 let n = ((x1 - x0) * (y1 - y0)) as u32;
-                put(frame, fit.left + dx, fit.top + dy, rgb565(r / n, g / n, b / n));
+                put(
+                    frame,
+                    fit.left + dx,
+                    fit.top + dy,
+                    rgb565(r / n, g / n, b / n),
+                );
             }
         }
     }

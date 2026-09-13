@@ -123,7 +123,9 @@ fn main() -> ! {
     );
     check(
         written.is_ok_and(|h| !h.accepted)
-            && slots.header(last).is_ok_and(|h| h.is_some_and(|h| !h.accepted)),
+            && slots
+                .header(last)
+                .is_ok_and(|h| h.is_some_and(|h| !h.accepted)),
         "a written slot waits to be accepted",
         &mut failed,
     );
@@ -140,14 +142,20 @@ fn main() -> ! {
     );
     let began = Instant::now();
     let verified = plugin::verify(&buf.0[..WASM.len()]);
-    info!("signature: {verified:?} in {} ms", began.elapsed().as_millis());
+    info!(
+        "signature: {verified:?} in {} ms",
+        began.elapsed().as_millis()
+    );
     check(verified.is_ok(), "signature holds on the copy", &mut failed);
 
     let began = Instant::now();
     let accepted = slots.accept(last);
     info!("accept: {accepted:?} in {} us", began.elapsed().as_micros());
     check(
-        accepted.is_ok() && slots.header(last).is_ok_and(|h| h.is_some_and(|h| h.accepted)),
+        accepted.is_ok()
+            && slots
+                .header(last)
+                .is_ok_and(|h| h.is_some_and(|h| h.accepted)),
         "accepting marks the header",
         &mut failed,
     );
@@ -166,7 +174,11 @@ fn main() -> ! {
     let mut slots = Slots::new(region);
     let damaged = slots.read(last, &mut buf.0);
     info!("read after damage: {damaged:?}");
-    check(damaged == Err(Error::Hash), "damaged module fails its hash", &mut failed);
+    check(
+        damaged == Err(Error::Hash),
+        "damaged module fails its hash",
+        &mut failed,
+    );
 
     let began = Instant::now();
     let erased = slots.erase(last);

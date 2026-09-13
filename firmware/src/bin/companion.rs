@@ -41,9 +41,7 @@ use esp_hal::gpio::{DriveMode, Input, InputConfig, Level, Output, OutputConfig, 
 use esp_hal::i2c::master::{Config as I2cConfig, I2c};
 use esp_hal::time::{Duration, Instant, Rate};
 use esp_hal::uart::{Config as UartConfig, Uart};
-use teetotum::companion::{
-    BAUD, Companion, Direction, Event, MediaKey, Mode, QueueKey, Status,
-};
+use teetotum::companion::{BAUD, Companion, Direction, Event, MediaKey, Mode, QueueKey, Status};
 
 /// What a swipe does. Four gestures, three different ways to reach the music -- genuinely
 /// different paths, not three guesses at one.
@@ -67,8 +65,8 @@ enum Action {
     /// stream and not on our side of it.
     SuspendStream,
 }
-use teetotum::touch::{Gesture, Taps, Touch};
 use log::{error, info, warn};
+use teetotum::touch::{Gesture, Taps, Touch};
 
 /// How often the volume is asked for. Nothing pushes it: it changes at the phone.
 const STATUS_PERIOD: Duration = Duration::from_secs(1);
@@ -140,8 +138,15 @@ fn main() -> ! {
     .with_scl(peripherals.GPIO12.reborrow());
 
     let mut touch = Touch::new(
-        Output::new(peripherals.GPIO10.reborrow(), Level::High, OutputConfig::default()),
-        Input::new(peripherals.GPIO9.reborrow(), InputConfig::default().with_pull(Pull::Up)),
+        Output::new(
+            peripherals.GPIO10.reborrow(),
+            Level::High,
+            OutputConfig::default(),
+        ),
+        Input::new(
+            peripherals.GPIO9.reborrow(),
+            InputConfig::default().with_pull(Pull::Up),
+        ),
         &delay,
     );
     match touch.chip_id(&mut i2c) {
@@ -186,14 +191,23 @@ fn main() -> ! {
                         info!(
                             "status: volume {}, encoder {}, mode {:?}",
                             status.volume,
-                            if status.encoder_enabled() { "on" } else { "OFF" },
+                            if status.encoder_enabled() {
+                                "on"
+                            } else {
+                                "OFF"
+                            },
                             status.mode(),
                         );
                     }
                 }
                 Event::Metadata => {
                     let meta = companion.metadata();
-                    info!("now playing: {} -- {} ({})", meta.title(), meta.artist(), meta.album());
+                    info!(
+                        "now playing: {} -- {} ({})",
+                        meta.title(),
+                        meta.artist(),
+                        meta.album()
+                    );
                 }
                 other => info!("{other:?}"),
             }

@@ -125,7 +125,15 @@ impl Face for Teetotum {
                 // closing, as a gap at twelve o'clock.
                 let from = (k * 360 / n) as i32;
                 let to = ((k + 1) * 360 / n) as i32;
-                teetotum_face::arc(180, 180, 160, -90 + from + gap / 2, to - from - gap, 16, colour);
+                teetotum_face::arc(
+                    180,
+                    180,
+                    160,
+                    -90 + from + gap / 2,
+                    to - from - gap,
+                    16,
+                    colour,
+                );
             }
         } else {
             teetotum_face::arc(180, 180, 160, 0, 360, 16, Colour::EMPTY);
@@ -136,11 +144,23 @@ impl Face for Teetotum {
         }
 
         let mut label = [0; 12];
-        teetotum_face::text(sides_label(n, &mut label), 180, 100, Size::Body, Colour::QUIET);
+        teetotum_face::text(
+            sides_label(n, &mut label),
+            180,
+            100,
+            Size::Body,
+            Colour::QUIET,
+        );
         match self.thrown {
             Some((side, source)) => {
                 let mut number = [0; 3];
-                teetotum_face::text(decimal(side, &mut number), 180, 170, Size::Large, Colour::NAME);
+                teetotum_face::text(
+                    decimal(side, &mut number),
+                    180,
+                    170,
+                    Size::Large,
+                    Colour::NAME,
+                );
                 let (says, colour) = match source {
                     Source::Physical => ("true random", Colour::VALUE),
                     Source::Pseudo => ("pseudo-random only", Colour::SELECTED),

@@ -76,7 +76,12 @@ impl Cloud {
     /// `moment` is a time in milliseconds for the moving cloud, from any start, or `None` for
     /// the still one. The scattering is drawn from the seed each time, so this holds no state
     /// and costs no RAM.
-    pub fn draw<D>(&self, target: &mut D, palette: &Palette, moment: Option<u32>) -> Result<(), D::Error>
+    pub fn draw<D>(
+        &self,
+        target: &mut D,
+        palette: &Palette,
+        moment: Option<u32>,
+    ) -> Result<(), D::Error>
     where
         D: DrawTarget<Color = Rgb565>,
     {
@@ -100,7 +105,8 @@ impl Cloud {
         // The turn, as a cosine and a sine of 32768. Standing still is exactly the identity.
         let (cos, sin) = match moment {
             Some(millis) => {
-                let turn = ((u64::from(millis % TURN_MILLIS) << 16) / u64::from(TURN_MILLIS)) as u16;
+                let turn =
+                    ((u64::from(millis % TURN_MILLIS) << 16) / u64::from(TURN_MILLIS)) as u16;
                 (sine(turn.wrapping_add(0x4000)), sine(turn))
             }
             None => (32768, 0),
@@ -139,13 +145,20 @@ impl Cloud {
                 let breath = sine(phase.wrapping_add(millis.wrapping_mul(pace) as u16));
                 k = (k * (BREATH_FLOOR + ((BREATH_SWING * breath) >> 15)) as u32) >> 15;
             }
-            let base = if accent { palette.icon } else { palette.selected };
+            let base = if accent {
+                palette.icon
+            } else {
+                palette.selected
+            };
             let colour = Rgb565::new(scale(base.r(), k), scale(base.g(), k), scale(base.b(), k));
             if colour == Rgb565::BLACK {
                 continue;
             }
 
-            let (x, y) = ((x * cos - y * sin + 16384) >> 15, (x * sin + y * cos + 16384) >> 15);
+            let (x, y) = (
+                (x * cos - y * sin + 16384) >> 15,
+                (x * sin + y * cos + 16384) >> 15,
+            );
             let at = centre + Point::new(x, y);
             if large {
                 target.fill_solid(&Rectangle::new(at, Size::new(2, 2)), colour)?;

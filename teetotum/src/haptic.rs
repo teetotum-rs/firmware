@@ -325,12 +325,20 @@ impl Haptic<'_> {
             Actuator::Lra => 0x01,
             Actuator::Erm => 0x20,
         };
-        let value = if open { control3 | bit } else { control3 & !bit };
+        let value = if open {
+            control3 | bit
+        } else {
+            control3 & !bit
+        };
         i2c.write(self.address, &[REG_CONTROL3, value])
     }
 
     /// Sets the period an LRA is driven at in open loop; one step is 98.46 us.
-    pub fn set_open_loop_period(&mut self, i2c: &mut I2c<'_, Blocking>, period: u8) -> Result<(), Error> {
+    pub fn set_open_loop_period(
+        &mut self,
+        i2c: &mut I2c<'_, Blocking>,
+        period: u8,
+    ) -> Result<(), Error> {
         i2c.write(self.address, &[REG_LRA_OPEN_LOOP, period])
     }
 
@@ -381,7 +389,11 @@ impl Haptic<'_> {
     }
 
     /// Picks the ROM library the effect numbers are read from.
-    pub fn set_library(&mut self, i2c: &mut I2c<'_, Blocking>, library: Library) -> Result<(), Error> {
+    pub fn set_library(
+        &mut self,
+        i2c: &mut I2c<'_, Blocking>,
+        library: Library,
+    ) -> Result<(), Error> {
         i2c.write(self.address, &[REG_LIBRARY, library as u8])
     }
 
@@ -390,7 +402,12 @@ impl Haptic<'_> {
     /// What the right numbers are depends on the actuator, and the actuator here is not
     /// documented by the vendor -- so these are set from what auto-calibration is given, not
     /// from a datasheet.
-    pub fn set_drive(&mut self, i2c: &mut I2c<'_, Blocking>, rated: u8, clamp: u8) -> Result<(), Error> {
+    pub fn set_drive(
+        &mut self,
+        i2c: &mut I2c<'_, Blocking>,
+        rated: u8,
+        clamp: u8,
+    ) -> Result<(), Error> {
         i2c.write(self.address, &[REG_RATED_VOLTAGE, rated])?;
         i2c.write(self.address, &[REG_OD_CLAMP, clamp])
     }
@@ -464,7 +481,11 @@ impl Haptic<'_> {
     }
 
     /// Loads up to eight effect numbers into the sequencer and terminates it.
-    pub fn set_sequence(&mut self, i2c: &mut I2c<'_, Blocking>, effects: &[u8]) -> Result<(), Error> {
+    pub fn set_sequence(
+        &mut self,
+        i2c: &mut I2c<'_, Blocking>,
+        effects: &[u8],
+    ) -> Result<(), Error> {
         let mut slot = REG_SEQUENCE;
         for &effect in effects.iter().take(8) {
             i2c.write(self.address, &[slot, effect])?;
@@ -477,7 +498,12 @@ impl Haptic<'_> {
     }
 
     /// Plays one ROM effect and waits for the chip to say it is finished.
-    pub fn play(&mut self, i2c: &mut I2c<'_, Blocking>, effect: u8, delay: &Delay) -> Result<(), Error> {
+    pub fn play(
+        &mut self,
+        i2c: &mut I2c<'_, Blocking>,
+        effect: u8,
+        delay: &Delay,
+    ) -> Result<(), Error> {
         self.set_mode(i2c, Mode::InternalTrigger)?;
         self.set_sequence(i2c, &[effect])?;
         self.go(i2c)?;

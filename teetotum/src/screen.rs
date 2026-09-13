@@ -50,9 +50,9 @@ use esp_hal::dma_buffers;
 use esp_hal::gpio::{AnyPin, Level, Output, OutputConfig};
 use esp_hal::peripherals::{DMA_CH0, PSRAM, SPI2};
 use esp_hal::psram::{Psram, PsramConfig, PsramMode};
-use log::info;
 use esp_hal::spi::master::{Config as SpiConfig, Spi};
 use esp_hal::time::Rate;
+use log::info;
 use st77916::{ColorMode, DisplaySize, DriverError, St77916};
 
 use crate::display::{DisplayBus, DisplayReset};
@@ -280,7 +280,14 @@ impl Screen<'static> {
         pins: ScreenPins<'static>,
         delay: Delay,
     ) -> Result<Self, Error> {
-        Self::new_skipping(psram_peripheral, spi_peripheral, dma_channel, pins, delay, 0)
+        Self::new_skipping(
+            psram_peripheral,
+            spi_peripheral,
+            dma_channel,
+            pins,
+            delay,
+            0,
+        )
     }
 
     /// Like [`new`](Self::new), with the picture pushed `skip` bytes further into the external
@@ -329,7 +336,11 @@ impl Screen<'static> {
         // picture further along. It is logged because the direct path works in one program and
         // stripes in another, and this is one of the few things that differ between them by
         // construction.
-        info!("Screen: {} KiB of external RAM from {:p}", psram_size / 1024, psram_start);
+        info!(
+            "Screen: {} KiB of external RAM from {:p}",
+            psram_size / 1024,
+            psram_start
+        );
         let skip = skip.next_multiple_of(64);
         if psram_size < skip + BYTES {
             return Err(Error::NoRoom {
@@ -346,7 +357,10 @@ impl Screen<'static> {
         let (_skipped, memory) = memory.split_at_mut(skip);
         let memory_len = memory.len();
         if skip != 0 {
-            info!("Screen: the picture is {skip} bytes into the window, at {:p}", memory.as_ptr());
+            info!(
+                "Screen: the picture is {skip} bytes into the window, at {:p}",
+                memory.as_ptr()
+            );
         }
         // The picture takes the first screen's worth; a second one behind it, if the chip
         // mapped enough, is the backdrop. Nothing else is handed any of this memory, so the
@@ -395,14 +409,11 @@ impl Screen<'static> {
             Output::new(pins.cs, Level::High, OutputConfig::default()),
         );
 
-        let mut display = St77916::builder(
-            bus,
-            reset,
-            DisplaySize::new(WIDTH as u16, HEIGHT as u16),
-        )
-        .with_init_commands(INIT_COMMANDS)
-        .build(ColorMode::Rgb565, &mut delay)
-        .map_err(Error::Panel)?;
+        let mut display =
+            St77916::builder(bus, reset, DisplaySize::new(WIDTH as u16, HEIGHT as u16))
+                .with_init_commands(INIT_COMMANDS)
+                .build(ColorMode::Rgb565, &mut delay)
+                .map_err(Error::Panel)?;
 
         // The vendor sequence ends with SLPOUT and DISPON, whose own delays are minima; running
         // at them gave a panel that initialised on some boots and not on others.
@@ -658,9 +669,15 @@ impl Screen<'_> {
             } = self;
             let bus = display.interface_mut();
             if *path == Path::Copied {
-                return bus.send_frame(frame.bytes(), BAND_BYTES).map_err(Error::Bus);
+                return bus
+                    .send_frame(frame.bytes(), BAND_BYTES)
+                    .map_err(Error::Bus);
             }
-            let piece_bytes = if *path == Path::Direct { DIRECT_BYTES } else { STAGED_BYTES };
+            let piece_bytes = if *path == Path::Direct {
+                DIRECT_BYTES
+            } else {
+                STAGED_BYTES
+            };
             bus.pixels_begin();
             let mut result = Ok(());
             for piece in frame.bytes().chunks(piece_bytes) {
@@ -694,7 +711,14 @@ impl Screen<'_> {
         bus.pixels_begin();
         let mut result = Ok(());
         for band in 0..HEIGHT / ROWS_PER_BAND {
-            rotate_rows(frame, *step, *filter, band * ROWS_PER_BAND, ROWS_PER_BAND, staging);
+            rotate_rows(
+                frame,
+                *step,
+                *filter,
+                band * ROWS_PER_BAND,
+                ROWS_PER_BAND,
+                staging,
+            );
             // The staging buffer is internal RAM, so the direct path saves only the copy into
             // the bus's own buffer here -- a smaller saving than on the picture itself, and the
             // same switch turns it off.

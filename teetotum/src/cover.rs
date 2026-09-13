@@ -345,7 +345,10 @@ pub fn show(
     }
 
     let millis = started.elapsed().as_millis() as u32;
-    info!("Cover: {width}x{height} with {} in {millis} ms", scaler.name());
+    info!(
+        "Cover: {width}x{height} with {} in {millis} ms",
+        scaler.name()
+    );
     Some(Art {
         width,
         height,

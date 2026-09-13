@@ -86,18 +86,27 @@ impl Version {
                 break;
             }
             if b == b'.' {
-                assert!(digits > 0 && part < 2, "a face's version is major.minor.patch");
+                assert!(
+                    digits > 0 && part < 2,
+                    "a face's version is major.minor.patch"
+                );
                 part += 1;
                 digits = 0;
             } else {
                 assert!(b.is_ascii_digit(), "a face's version is major.minor.patch");
                 parts[part] = parts[part] * 10 + (b - b'0') as u32;
-                assert!(parts[part] <= u16::MAX as u32, "a version number is at most 65535");
+                assert!(
+                    parts[part] <= u16::MAX as u32,
+                    "a version number is at most 65535"
+                );
                 digits += 1;
             }
             i += 1;
         }
-        assert!(part == 2 && digits > 0, "a face's version is major.minor.patch");
+        assert!(
+            part == 2 && digits > 0,
+            "a face's version is major.minor.patch"
+        );
         Self {
             major: parts[0] as u16,
             minor: parts[1] as u16,
@@ -135,8 +144,7 @@ impl Rights {
     /// A steady pulse of the motor, through [`pulse`](crate::pulse).
     pub const HAPTIC: Self = Self(1 << 4);
 
-    const KNOWN: u32 =
-        Self::HID.0 | Self::KNOB.0 | Self::RANDOM.0 | Self::RADIO.0 | Self::HAPTIC.0;
+    const KNOWN: u32 = Self::HID.0 | Self::KNOB.0 | Self::RANDOM.0 | Self::RADIO.0 | Self::HAPTIC.0;
 
     pub const fn union(self, other: Self) -> Self {
         Self(self.0 | other.0)
@@ -213,7 +221,10 @@ pub const fn encode(
         !name.is_empty() && name.len() <= NAME_MAX,
         "a face's name is 1 to 20 bytes"
     );
-    assert!(summary.len() <= SUMMARY_MAX, "a face's summary is at most 32 bytes");
+    assert!(
+        summary.len() <= SUMMARY_MAX,
+        "a face's summary is at most 32 bytes"
+    );
     let mut out = [0u8; LEN];
     out[0] = VERSION;
     let bits = rights.bits().to_le_bytes();
@@ -392,7 +403,11 @@ impl fmt::Display for Error {
             Self::Name => f.write_str("manifest name empty, too long or not UTF-8"),
             Self::Summary => f.write_str("manifest summary too long or not UTF-8"),
             Self::Rights(bits) => write!(f, "rights {bits:#x} include some this firmware lacks"),
-            Self::Abi(v) => write!(f, "built for host ABI {v}, this firmware offers {}", abi::VERSION),
+            Self::Abi(v) => write!(
+                f,
+                "built for host ABI {v}, this firmware offers {}",
+                abi::VERSION
+            ),
             Self::Unsigned => f.write_str("not signed"),
             Self::Signature => f.write_str("signature section malformed or not last"),
         }

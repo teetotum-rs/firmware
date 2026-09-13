@@ -384,7 +384,11 @@ fn slide_between(first: Contact, last: Contact) -> Option<Gesture> {
         return None;
     }
     let slide = if dx.abs() >= dy.abs() {
-        if dx < 0 { Gesture::SlideLeft } else { Gesture::SlideRight }
+        if dx < 0 {
+            Gesture::SlideLeft
+        } else {
+            Gesture::SlideRight
+        }
     } else if dy < 0 {
         Gesture::SlideUp
     } else {
@@ -445,7 +449,12 @@ impl Taps {
             }
             let slid = matches!(
                 self.seen,
-                Some(Gesture::SlideUp | Gesture::SlideDown | Gesture::SlideLeft | Gesture::SlideRight)
+                Some(
+                    Gesture::SlideUp
+                        | Gesture::SlideDown
+                        | Gesture::SlideLeft
+                        | Gesture::SlideRight
+                )
             );
             if !self.held
                 && !self.wandered
@@ -471,7 +480,11 @@ impl Taps {
         match seen {
             // Unnamed is not the same as still: a finger that travelled slid, named or not.
             None | Some(Gesture::SingleTap) => {
-                match self.first.zip(last).and_then(|(first, last)| slide_between(first, last)) {
+                match self
+                    .first
+                    .zip(last)
+                    .and_then(|(first, last)| slide_between(first, last))
+                {
                     Some(slide) => Some(Press::Gesture(slide)),
                     None => last.map(Press::Tap),
                 }

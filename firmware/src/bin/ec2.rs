@@ -41,9 +41,9 @@ use esp_hal::i2c::master::{Config as I2cConfig, I2c};
 use esp_hal::time::{Duration, Instant, Rate};
 use esp_hal::uart::{Config as UartConfig, Uart, UartRx, UartTx};
 use esp_hal::usb_serial_jtag::UsbSerialJtag;
+use log::{error, info, warn};
 use teetotum::step::{Prompt, Step};
 use teetotum::touch::Touch;
-use log::{error, info, warn};
 
 /// What both firmwares configure, measured as a clean byte stream.
 const BAUD: u32 = 921_600;
@@ -144,7 +144,11 @@ fn main() -> ! {
 
     let pull_up = InputConfig::default().with_pull(Pull::Up);
     let mut touch = Touch::new(
-        Output::new(peripherals.GPIO10.reborrow(), Level::High, OutputConfig::default()),
+        Output::new(
+            peripherals.GPIO10.reborrow(),
+            Level::High,
+            OutputConfig::default(),
+        ),
         Input::new(peripherals.GPIO9.reborrow(), pull_up),
         &delay,
     );
@@ -154,9 +158,11 @@ fn main() -> ! {
     }
 
     // Deliberately without the knob: see the module comment.
-    let mut prompt = Prompt::new()
-        .with_touch(touch)
-        .with_keys(UsbSerialJtag::new(peripherals.USB_DEVICE.reborrow()).split().0);
+    let mut prompt = Prompt::new().with_touch(touch).with_keys(
+        UsbSerialJtag::new(peripherals.USB_DEVICE.reborrow())
+            .split()
+            .0,
+    );
 
     // Whatever the other chip was in the middle of saying when we booted.
     link.listen(Duration::from_millis(300));
@@ -226,7 +232,10 @@ fn main() -> ! {
     }
 
     info!("");
-    info!("--- listening from now on, state left on {:#04x} ---", state(2, true));
+    info!(
+        "--- listening from now on, state left on {:#04x} ---",
+        state(2, true)
+    );
     loop {
         link.listen(Duration::from_secs(5));
     }
@@ -242,7 +251,8 @@ fn turn_step(
 ) {
     loop {
         info!("");
-        info!("--- state {state:#04x} = {:#010b}: bit 0 {}, mode {} ---",
+        info!(
+            "--- state {state:#04x} = {:#010b}: bit 0 {}, mode {} ---",
             state,
             if state & 1 == 1 { "set" } else { "clear" },
             (state >> 1) & 7,
@@ -443,11 +453,17 @@ impl<'d> Link<'d> {
         match cmd {
             EVENT_CLOCKWISE => {
                 self.events[0] += 1;
-                info!("  ESP32 ->  S3    BD 07  second encoder, clockwise     (#{})", self.events[0]);
+                info!(
+                    "  ESP32 ->  S3    BD 07  second encoder, clockwise     (#{})",
+                    self.events[0]
+                );
             }
             EVENT_ANTICLOCKWISE => {
                 self.events[1] += 1;
-                info!("  ESP32 ->  S3    BD 08  second encoder, anticlockwise (#{})", self.events[1]);
+                info!(
+                    "  ESP32 ->  S3    BD 08  second encoder, anticlockwise (#{})",
+                    self.events[1]
+                );
             }
             5 if data.len() >= 2 => {
                 // The two status bytes: `data[0]` is the state byte this run writes, with three
@@ -466,7 +482,10 @@ impl<'d> Link<'d> {
                 }
             }
             1 => info!("  ESP32 ->  S3    BD 01  COVER ART OFFER, {len} bytes: {data:02X?}"),
-            _ => info!("  ESP32 ->  S3    BD {cmd:02}  {len} bytes: {:02X?}", &data[..data.len().min(16)]),
+            _ => info!(
+                "  ESP32 ->  S3    BD {cmd:02}  {len} bytes: {:02X?}",
+                &data[..data.len().min(16)]
+            ),
         }
     }
 }

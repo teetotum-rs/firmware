@@ -44,12 +44,12 @@ use esp_hal::gpio::{Input, InputConfig, Io, Level, Output, OutputConfig, Pull};
 use esp_hal::i2c::master::{Config as I2cConfig, I2c};
 use esp_hal::time::{Duration, Instant, Rate};
 use esp_hal::usb_serial_jtag::UsbSerialJtag;
+use log::{error, info, warn};
 use teetotum::encoder::Encoder;
 use teetotum::framebuffer::{Framebuffer, HEIGHT, WIDTH};
 use teetotum::rotate::{Filter, STEPS};
 use teetotum::screen::{Screen, ScreenPins};
 use teetotum::touch::{Gesture, Touch};
-use log::{error, info, warn};
 
 /// How often the glass is sampled.
 const TOUCH_PERIOD: Duration = Duration::from_millis(20);
@@ -108,7 +108,11 @@ fn main() -> ! {
     .with_scl(peripherals.GPIO12.reborrow());
 
     let mut touch = Touch::new(
-        Output::new(peripherals.GPIO10.reborrow(), Level::High, OutputConfig::default()),
+        Output::new(
+            peripherals.GPIO10.reborrow(),
+            Level::High,
+            OutputConfig::default(),
+        ),
         Input::new(
             peripherals.GPIO9.reborrow(),
             InputConfig::default().with_pull(Pull::Up),
@@ -138,7 +142,9 @@ fn main() -> ! {
     draw_scene(screen.frame());
     label(&mut screen);
 
-    info!("turn the knob to rotate, tap to switch filter, Enter for the free quarters, swipe or 0 for upright");
+    info!(
+        "turn the knob to rotate, tap to switch filter, Enter for the free quarters, swipe or 0 for upright"
+    );
     show(&mut screen);
 
     let mut next_touch = Instant::now();
@@ -275,8 +281,12 @@ fn draw_scene(frame: &mut Framebuffer) {
     let white = PrimitiveStyle::with_stroke(Rgb565::WHITE, 1);
     let dim = PrimitiveStyle::with_stroke(Rgb565::CSS_DIM_GRAY, 1);
 
-    let _ = Circle::with_center(centre, 356).into_styled(dim).draw(frame);
-    let _ = Circle::with_center(centre, 240).into_styled(white).draw(frame);
+    let _ = Circle::with_center(centre, 356)
+        .into_styled(dim)
+        .draw(frame);
+    let _ = Circle::with_center(centre, 240)
+        .into_styled(white)
+        .draw(frame);
 
     const MARKS: [(i32, i32); STEPS] = [
         (0, -1000),

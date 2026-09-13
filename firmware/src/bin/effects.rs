@@ -27,13 +27,13 @@ use esp_hal::gpio::{Input, InputConfig, Io, Level, Output, OutputConfig, Pull};
 use esp_hal::i2c::master::{Config as I2cConfig, I2c};
 use esp_hal::spi::master::{Config as SpiConfig, Spi};
 use esp_hal::time::Rate;
+use log::{error, info};
+use st77916::{ColorMode, DisplaySize, St77916};
 use teetotum::display::{DisplayBus, DisplayReset};
 use teetotum::encoder::Encoder;
 use teetotum::haptic::{Actuator, CalTime, Haptic, Library};
 use teetotum::panel::{INIT_COMMANDS, POST_INIT_COMMANDS};
 use teetotum::touch::{Event, Gesture, Touch};
-use log::{error, info};
-use st77916::{ColorMode, DisplaySize, St77916};
 
 /// The panel is 360x360 of visible glass, and the glass is a circle inside it.
 const PANEL_WIDTH: u16 = 360;
@@ -62,16 +62,16 @@ const DIGITS_TOP: u16 = (PANEL_HEIGHT - DIGIT_HEIGHT) / 2;
 
 /// Which of the seven segments each digit lights, in the order a, b, c, d, e, f, g.
 const SEGMENTS: [[bool; 7]; 10] = [
-    [true, true, true, true, true, true, false],    // 0
+    [true, true, true, true, true, true, false],     // 0
     [false, true, true, false, false, false, false], // 1
-    [true, true, false, true, true, false, true],   // 2
-    [true, true, true, true, false, false, true],   // 3
-    [false, true, true, false, false, true, true],  // 4
-    [true, false, true, true, false, true, true],   // 5
-    [true, false, true, true, true, true, true],    // 6
-    [true, true, true, false, false, false, false], // 7
-    [true, true, true, true, true, true, true],     // 8
-    [true, true, true, true, false, true, true],    // 9
+    [true, true, false, true, true, false, true],    // 2
+    [true, true, true, true, false, false, true],    // 3
+    [false, true, true, false, false, true, true],   // 4
+    [true, false, true, true, false, true, true],    // 5
+    [true, false, true, true, true, true, true],     // 6
+    [true, true, true, false, false, false, false],  // 7
+    [true, true, true, true, true, true, true],      // 8
+    [true, true, true, true, false, true, true],     // 9
 ];
 
 /// How often the knob and the glass are asked, in milliseconds.
@@ -94,7 +94,8 @@ fn main() -> ! {
     let mut delay = Delay::new();
 
     let (rx_buffer, rx_descriptors, tx_buffer, tx_descriptors) = dma_buffers!(1, BUFFER_BYTES);
-    let dma_rx = DmaRxBuf::new(rx_descriptors, rx_buffer).expect("the DMA read buffer is malformed");
+    let dma_rx =
+        DmaRxBuf::new(rx_descriptors, rx_buffer).expect("the DMA read buffer is malformed");
     let dma_tx =
         DmaTxBuf::new(tx_descriptors, tx_buffer).expect("the DMA write buffer is malformed");
 
@@ -115,7 +116,10 @@ fn main() -> ! {
         pin: Output::new(peripherals.GPIO21, Level::High, OutputConfig::default()),
         delay,
     };
-    let bus = DisplayBus::new(spi, Output::new(peripherals.GPIO14, Level::High, OutputConfig::default()));
+    let bus = DisplayBus::new(
+        spi,
+        Output::new(peripherals.GPIO14, Level::High, OutputConfig::default()),
+    );
 
     let mut display = match St77916::builder(bus, reset, DISPLAY_SIZE)
         .with_init_commands(INIT_COMMANDS)
@@ -140,7 +144,15 @@ fn main() -> ! {
 
     // SAFETY: `main` runs once, and nothing else in this binary touches BUFFER.
     let buffer: &mut [u8; BUFFER_BYTES] = unsafe { &mut *core::ptr::addr_of_mut!(BUFFER) };
-    fill_rect(&mut display, buffer, 0, 0, PANEL_WIDTH, PANEL_HEIGHT, BACKGROUND);
+    fill_rect(
+        &mut display,
+        buffer,
+        0,
+        0,
+        PANEL_WIDTH,
+        PANEL_HEIGHT,
+        BACKGROUND,
+    );
 
     let mut i2c = I2c::new(
         peripherals.I2C0,
@@ -152,7 +164,10 @@ fn main() -> ! {
 
     let mut touch = Touch::new(
         Output::new(peripherals.GPIO10, Level::High, OutputConfig::default()),
-        Input::new(peripherals.GPIO9, InputConfig::default().with_pull(Pull::Up)),
+        Input::new(
+            peripherals.GPIO9,
+            InputConfig::default().with_pull(Pull::Up),
+        ),
         &delay,
     );
     if let Err(err) = touch.enable_gestures(&mut i2c) {
@@ -171,7 +186,11 @@ fn main() -> ! {
 
     // The enable line first: without it the driver talks and does nothing at all.
     let mut haptic = Haptic::new(
-        Output::new(peripherals.GPIO38.reborrow(), Level::High, OutputConfig::default()),
+        Output::new(
+            peripherals.GPIO38.reborrow(),
+            Level::High,
+            OutputConfig::default(),
+        ),
         &delay,
     );
     let _ = haptic.wake(&mut i2c);
@@ -224,12 +243,7 @@ fn main() -> ! {
 }
 
 /// Plays one effect and says which, so that the log can be read back afterwards.
-fn play(
-    haptic: &mut Haptic<'_>,
-    i2c: &mut I2c<'_, esp_hal::Blocking>,
-    delay: &Delay,
-    effect: u8,
-) {
+fn play(haptic: &mut Haptic<'_>, i2c: &mut I2c<'_, esp_hal::Blocking>, delay: &Delay, effect: u8) {
     info!("Effects: {effect}");
     if let Err(err) = haptic.play(i2c, effect, delay) {
         error!("Effects: effect {effect} failed: {err:?}");

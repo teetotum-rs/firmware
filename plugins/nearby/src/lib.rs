@@ -171,7 +171,9 @@ impl Nearby {
     fn follow(&self) {
         let list = self.list();
         match &list.chosen {
-            Some(chosen) if list.chosen_heard => teetotum_face::pulse(pulse_every(chosen.strength())),
+            Some(chosen) if list.chosen_heard => {
+                teetotum_face::pulse(pulse_every(chosen.strength()))
+            }
             _ => teetotum_face::pulse(0),
         }
     }
@@ -194,7 +196,11 @@ impl Nearby {
                 continue;
             }
             let (x, y) = place(signal);
-            let colour = if signal.has_name() { Colour::ICON } else { Colour::QUIET };
+            let colour = if signal.has_name() {
+                Colour::ICON
+            } else {
+                Colour::QUIET
+            };
             teetotum_face::arc(x, y, 2, 0, 360, 5, colour);
         }
         // The chosen one last, so that it lies on top.
@@ -236,7 +242,13 @@ impl Nearby {
                     }
                     teetotum_face::text(line.as_str(), CX, 186, Size::Small, Colour::VALUE);
                 } else {
-                    teetotum_face::text("not heard this round", CX, 186, Size::Small, Colour::SELECTED);
+                    teetotum_face::text(
+                        "not heard this round",
+                        CX,
+                        186,
+                        Size::Small,
+                        Colour::SELECTED,
+                    );
                 }
                 teetotum_face::text("tap to find", CX, 214, Size::Small, Colour::QUIET);
             }
@@ -247,7 +259,8 @@ impl Nearby {
         // The strength as a bar round the rim, with the gap at the foot, as the player's volume.
         teetotum_face::arc(CX, CY, 160, 135, 270, 16, Colour::EMPTY);
         if heard {
-            let share = (i32::from(chosen.strength()).clamp(WEAK, STRONG) - WEAK) * 270 / (STRONG - WEAK);
+            let share =
+                (i32::from(chosen.strength()).clamp(WEAK, STRONG) - WEAK) * 270 / (STRONG - WEAK);
             if share > 0 {
                 teetotum_face::arc(CX, CY, 160, 135, share, 16, Colour::SELECTED);
             }
@@ -260,7 +273,13 @@ impl Nearby {
             teetotum_face::text(line.as_str(), CX, 184, Size::Large, Colour::VALUE);
         } else {
             teetotum_face::text("--", CX, 184, Size::Large, Colour::QUIET);
-            teetotum_face::text("not heard this round", CX, 214, Size::Small, Colour::SELECTED);
+            teetotum_face::text(
+                "not heard this round",
+                CX,
+                214,
+                Size::Small,
+                Colour::SELECTED,
+            );
         }
         teetotum_face::text("tap to stop", CX, 244, Size::Small, Colour::QUIET);
     }
@@ -374,7 +393,10 @@ struct Line {
 
 impl Line {
     const fn new() -> Self {
-        Self { buf: [0; 48], len: 0 }
+        Self {
+            buf: [0; 48],
+            len: 0,
+        }
     }
 
     /// Appends `bytes` if all of them fit, and nothing otherwise.

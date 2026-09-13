@@ -68,15 +68,28 @@ fn main() -> ! {
     info!("a pin that keeps its level against both pulls has something else driving it;");
     info!("a pin that follows the pull is connected to nothing that drives.");
 
-    probe("GPIO39 (S3 RX, per the images)", peripherals.GPIO39.reborrow().into(), &delay);
-    probe("GPIO40 (S3 TX, per the images)", peripherals.GPIO40.reborrow().into(), &delay);
-    probe("GPIO38 (S3 TX, per the schematic)", peripherals.GPIO38.reborrow().into(), &delay);
-    probe("GPIO48 (S3 RX, per the schematic)", peripherals.GPIO48.reborrow().into(), &delay);
+    probe(
+        "GPIO39 (S3 RX, per the images)",
+        peripherals.GPIO39.reborrow().into(),
+        &delay,
+    );
+    probe(
+        "GPIO40 (S3 TX, per the images)",
+        peripherals.GPIO40.reborrow().into(),
+        &delay,
+    );
+    probe(
+        "GPIO38 (S3 TX, per the schematic)",
+        peripherals.GPIO38.reborrow().into(),
+        &delay,
+    );
+    probe(
+        "GPIO48 (S3 RX, per the schematic)",
+        peripherals.GPIO48.reborrow().into(),
+        &delay,
+    );
 
-    let mut rx = match UartRx::new(
-        peripherals.UART1,
-        UartConfig::default().with_baudrate(BAUD),
-    ) {
+    let mut rx = match UartRx::new(peripherals.UART1, UartConfig::default().with_baudrate(BAUD)) {
         Ok(rx) => rx.with_rx(peripherals.GPIO39),
         Err(e) => {
             error!("UART1 refused {BAUD} baud: {e:?}");
@@ -141,7 +154,9 @@ fn probe(name: &str, pin: esp_hal::gpio::AnyPin<'_>, delay: &Delay) {
     delay.delay_millis(2);
     let up = pin.level();
     match (down, up) {
-        (Level::High, Level::High) => info!("  {name}: driven high -- an idle transmit line looks exactly like this"),
+        (Level::High, Level::High) => {
+            info!("  {name}: driven high -- an idle transmit line looks exactly like this")
+        }
         (Level::Low, Level::Low) => info!("  {name}: driven low"),
         _ => info!("  {name}: floats, nobody drives it"),
     }
@@ -171,7 +186,13 @@ struct Frame {
 
 impl Default for Frame {
     fn default() -> Self {
-        Self { buf: [0; HEADER + 128], seen: 0, want: 0, dropped: 0, frames: 0 }
+        Self {
+            buf: [0; HEADER + 128],
+            seen: 0,
+            want: 0,
+            dropped: 0,
+            frames: 0,
+        }
     }
 }
 
@@ -188,7 +209,9 @@ impl Frame {
             if self.seen == HEADER {
                 let len = u16::from_le_bytes([self.buf[2], self.buf[3]]) as usize;
                 if len > MAX_LEN {
-                    warn!("frame claims {len} bytes of payload, which no sender builds -- resyncing");
+                    warn!(
+                        "frame claims {len} bytes of payload, which no sender builds -- resyncing"
+                    );
                     self.seen = 0;
                     self.dropped += HEADER as u32;
                     return;
@@ -215,14 +238,22 @@ impl Frame {
         let magic = self.buf[0];
         let cmd = self.buf[1];
         let len = self.want - HEADER;
-        let who = if magic == FROM_ESP32 { "ESP32 ->  S3" } else { "S3    -> ESP32" };
+        let who = if magic == FROM_ESP32 {
+            "ESP32 ->  S3"
+        } else {
+            "S3    -> ESP32"
+        };
         let kept = self.seen.min(self.buf.len());
         let data = &self.buf[HEADER..kept.max(HEADER)];
 
         info!(
             "  {who}  cmd {cmd:2} ({}), {len} bytes{}",
             name(magic, cmd),
-            if len > data.len() { ", truncated:" } else { ":" }
+            if len > data.len() {
+                ", truncated:"
+            } else {
+                ":"
+            }
         );
         dump(data);
 

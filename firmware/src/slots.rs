@@ -59,7 +59,9 @@ pub enum Error {
     /// The module is longer than [`MODULE_MAX`].
     TooLong,
     /// The buffer is shorter than the module.
-    Buffer { need: usize },
+    Buffer {
+        need: usize,
+    },
     /// The flash reads in units that do not divide [`BOUNCE`].
     ReadSize,
     /// The module names no id, or not the one in its header.

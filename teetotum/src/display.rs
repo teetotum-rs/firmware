@@ -509,8 +509,13 @@ impl DisplayBus<'_> {
                     piece,
                 )?;
             } else {
-                self.bus()
-                    .half_duplex_write(DataMode::Quad, Command::None, Address::None, 0, piece)?;
+                self.bus().half_duplex_write(
+                    DataMode::Quad,
+                    Command::None,
+                    Address::None,
+                    0,
+                    piece,
+                )?;
             }
             sent += piece.len();
         }

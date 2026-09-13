@@ -146,7 +146,11 @@ impl<'d> Prompt<'d> {
         // The line names only the inputs that are actually attached. A run that measures the
         // knob itself cannot also step forward with it, and telling the hand to turn it would
         // then be an instruction to walk over the measurement.
-        let go_on = match (self.encoder.is_some(), self.touch.is_some(), self.keys.is_some()) {
+        let go_on = match (
+            self.encoder.is_some(),
+            self.touch.is_some(),
+            self.keys.is_some(),
+        ) {
             (true, _, true) => "turn the knob or press Enter",
             (true, _, false) => "turn the knob",
             (false, true, true) => "swipe the glass or press Enter",
@@ -239,7 +243,11 @@ impl<'d> Prompt<'d> {
                     // reports a gesture *during* the contact (`src/bin/touch.rs`), so a swipe
                     // read on the way in would be answered as a tap before it is a swipe.
                     if self.finger_was_down && !finger_is_down {
-                        let step = if self.swiped { Step::Next } else { Step::Repeat };
+                        let step = if self.swiped {
+                            Step::Next
+                        } else {
+                            Step::Repeat
+                        };
                         self.swiped = false;
                         self.finger_was_down = false;
                         return Some(step);

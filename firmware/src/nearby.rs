@@ -92,7 +92,12 @@ pub fn publish<'a>(radio: Radio, heard: impl IntoIterator<Item = Heard<'a>>) -> 
         let (records, len) = lists.of(radio);
         let mut n = 0;
         for heard in heard.into_iter().take(records.len()) {
-            records[n] = Signal::record(key(salt, &heard.address), heard.strength, heard.channel, heard.name);
+            records[n] = Signal::record(
+                key(salt, &heard.address),
+                heard.strength,
+                heard.channel,
+                heard.name,
+            );
             n += 1;
         }
         *len = n;

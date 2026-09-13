@@ -47,9 +47,9 @@ use esp_hal::gpio::{Flex, Input, InputConfig, Io, Level, Output, OutputConfig, P
 use esp_hal::i2c::master::{Config as I2cConfig, I2c};
 use esp_hal::i2s::master::{Channels, Config, DataFormat, I2s};
 use esp_hal::time::{Duration, Instant, Rate};
+use log::{error, info};
 use teetotum::encoder::Encoder;
 use teetotum::haptic::{Actuator, CalTime, Haptic, Library};
-use log::{error, info};
 
 const SAMPLE_RATE: u32 = 44_100;
 const BYTES_PER_FRAME: usize = 4;
@@ -199,7 +199,12 @@ fn main() -> ! {
         }
 
         if selected != announced {
-            info!("candidate {} of {}: GPIO{}", selected + 1, candidates.len(), candidates[selected].0);
+            info!(
+                "candidate {} of {}: GPIO{}",
+                selected + 1,
+                candidates.len(),
+                candidates[selected].0
+            );
             announced = selected;
             // As many taps as the number of the candidate. Turning during the taps is possible
             // but slower than a thumb usually is, so a step lost here is a step not taken.
@@ -219,7 +224,10 @@ fn main() -> ! {
             let (number, pin) = &mut candidates[selected];
             pin.set_level(if level_high { Level::High } else { Level::Low });
             pin.set_output_enable(true);
-            info!("  GPIO{number} driven {}", if level_high { "high" } else { "low" });
+            info!(
+                "  GPIO{number} driven {}",
+                if level_high { "high" } else { "low" }
+            );
         }
     }
 }

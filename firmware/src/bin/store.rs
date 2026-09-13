@@ -34,14 +34,14 @@
 #![no_std]
 #![no_main]
 
+use embedded_storage::nor_flash::NorFlash;
 use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
 use esp_hal::delay::Delay;
 use esp_hal::system::software_reset;
 use esp_storage::FlashStorage;
-use embedded_storage::nor_flash::NorFlash;
 use log::{error, info};
-use teetotum::store::{self, Store, HEADER};
+use teetotum::store::{self, HEADER, Store};
 use teetotum_firmware::flash::{self, TABLE_SCRATCH};
 
 esp_bootloader_esp_idf::esp_app_desc!();

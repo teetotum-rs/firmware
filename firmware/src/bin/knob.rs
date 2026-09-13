@@ -28,11 +28,11 @@ use esp_hal::dma_buffers;
 use esp_hal::gpio::{Input, InputConfig, Io, Level, Output, OutputConfig, Pull};
 use esp_hal::spi::master::{Config as SpiConfig, Spi};
 use esp_hal::time::Rate;
+use log::{error, info};
+use st77916::{ColorMode, DisplaySize, St77916};
 use teetotum::display::{DisplayBus, DisplayReset};
 use teetotum::encoder::{Encoder, PULSES_PER_REVOLUTION};
 use teetotum::panel::{INIT_COMMANDS, POST_INIT_COMMANDS};
-use log::{error, info};
-use st77916::{ColorMode, DisplaySize, St77916};
 
 /// The panel is 360x360 of visible glass, and the glass is a circle inside it.
 const PANEL_WIDTH: u16 = 360;
@@ -90,8 +90,10 @@ fn main() -> ! {
     let mut delay = Delay::new();
 
     let (rx_buffer, rx_descriptors, tx_buffer, tx_descriptors) = dma_buffers!(1, BUFFER_BYTES);
-    let dma_rx = DmaRxBuf::new(rx_descriptors, rx_buffer).expect("the DMA read buffer is malformed");
-    let dma_tx = DmaTxBuf::new(tx_descriptors, tx_buffer).expect("the DMA write buffer is malformed");
+    let dma_rx =
+        DmaRxBuf::new(rx_descriptors, rx_buffer).expect("the DMA read buffer is malformed");
+    let dma_tx =
+        DmaTxBuf::new(tx_descriptors, tx_buffer).expect("the DMA write buffer is malformed");
 
     let spi = Spi::new(
         peripherals.SPI2,
@@ -110,7 +112,10 @@ fn main() -> ! {
         pin: Output::new(peripherals.GPIO21, Level::High, OutputConfig::default()),
         delay,
     };
-    let bus = DisplayBus::new(spi, Output::new(peripherals.GPIO14, Level::High, OutputConfig::default()));
+    let bus = DisplayBus::new(
+        spi,
+        Output::new(peripherals.GPIO14, Level::High, OutputConfig::default()),
+    );
 
     let mut display = match St77916::builder(bus, reset, DISPLAY_SIZE)
         .with_init_commands(INIT_COMMANDS)
@@ -136,7 +141,15 @@ fn main() -> ! {
     // SAFETY: `main` runs once, and nothing else in this binary touches BUFFER.
     let buffer: &mut [u8; BUFFER_BYTES] = unsafe { &mut *core::ptr::addr_of_mut!(BUFFER) };
 
-    fill_rect(&mut display, buffer, 0, 0, PANEL_WIDTH, PANEL_HEIGHT, BACKGROUND);
+    fill_rect(
+        &mut display,
+        buffer,
+        0,
+        0,
+        PANEL_WIDTH,
+        PANEL_HEIGHT,
+        BACKGROUND,
+    );
     // The index mark: a bar at twelve o'clock, outside the dot's reach.
     fill_rect(&mut display, buffer, 174, 10, 12, 34, INDEX);
     fill_rect(&mut display, buffer, 172, 172, 16, 16, HUB);
