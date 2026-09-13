@@ -41,7 +41,8 @@ is drawn to the same layout rules the firmware uses.</em></p>
   twelve 30° steps, ten backlight levels, ten click strengths, the dot-cloud background, and
   how the cover art is scaled. Written to two alternating flash sectors, not to a file.
 - **Plugins as WebAssembly**, loaded at runtime under [wasmi](https://github.com/wasmi-labs/wasmi),
-  each with a manifest of rights the firmware enforces. Bundled: a HID remote for the phone's
+  each with a manifest of rights the firmware enforces. Beyond the bundled ones, sixteen flash
+  slots take plugins written over USB and accepted on the glass. Bundled: a HID remote for the phone's
   player, a die that rolls when you turn the knob, and *Nearby*, which draws the Wi-Fi and
   Bluetooth signals around it as a radar.
 - **Drivers for all of it in one SDK crate**: the ST77916 panel over QSPI at 80 MHz, the CST816D
@@ -56,7 +57,7 @@ Not there: sound of its own (the loudspeaker belongs to the other microcontrolle
 | | For | What it covers |
 |---|---|---|
 | [User guide](docs/user-guide.md) | anyone with a Knob running TeeToTum | the controls, Home, the player, every setting, troubleshooting |
-| [Using plugins](docs/plugins.md) | anyone who starts or removes plugins | the bundled three, rights, what "stopped" means, memory |
+| [Using plugins](docs/plugins.md) | anyone who starts or removes plugins | the bundled three, rights, what "stopped" means, memory, installing more |
 | [Writing plugins](docs/plugin-development.md) | Rust developers | the `teetotum-face` SDK, the manifest, events, drawing, limits |
 | [The hardware, as measured](docs/hardware/README.md) | anyone curious about the board | what the device answered when it was asked: pins, panel, touch, knob, haptics, audio, the companion link, the card, the radios |
 

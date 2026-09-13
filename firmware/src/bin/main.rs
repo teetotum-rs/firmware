@@ -599,6 +599,8 @@ const PLUGINS_MAX: usize = Settings::PLUGINS_MAX;
 
 /// Each plugin's module, by its place in the rings; `None` past the last.
 type Modules = [Option<&'static [u8]>; PLUGINS_MAX];
+/// The slot each plugin came from; `None` for a bundled one.
+type FromSlot = [Option<usize>; PLUGINS_MAX];
 
 /// Each bundled plugin's id; `None` for one without a readable manifest or signature section.
 fn bundled_ids() -> [Option<PluginId>; BUNDLED.len()] {
@@ -629,8 +631,9 @@ type WaitingSlots = [Option<Waiting>; PLUGINS_MAX];
 fn gather_modules(
     region: Option<Region<'_, '_>>,
     spare: Option<&'static mut [u8]>,
-) -> (Modules, usize, WaitingSlots, Option<&'static mut [u8]>) {
+) -> (Modules, usize, WaitingSlots, FromSlot, Option<&'static mut [u8]>) {
     let mut modules: Modules = [None; PLUGINS_MAX];
+    let mut from_slot: FromSlot = [None; PLUGINS_MAX];
     let mut ids = [None; PLUGINS_MAX];
     let mut waiting: WaitingSlots = [None; PLUGINS_MAX];
     let mut waits = 0;
@@ -640,14 +643,13 @@ fn gather_modules(
     ids[..BUNDLED.len()].copy_from_slice(&bundled_ids());
     let mut count = BUNDLED.len();
     let Some(region) = region else {
-        return (modules, count, waiting, spare);
+        return (modules, count, waiting, from_slot, spare);
     };
     let Some(mut spare) = spare else {
         warn!("Plugin: no external RAM, only the bundled plugins");
-        return (modules, count, waiting, None);
+        return (modules, count, waiting, from_slot, None);
     };
     let floor = spare.len() / 2;
-    let mut from_slot = [false; PLUGINS_MAX];
     let mut slots = Slots::new(region);
     for n in 0..slots.count() {
         let header = match slots.header(n) {
@@ -667,7 +669,7 @@ fn gather_modules(
             None
         } else {
             match ids[..count].iter().position(|id| *id == Some(header.id)) {
-                Some(k) if from_slot[k] => {
+                Some(k) if from_slot[k].is_some() => {
                     warn!("Plugin: slot {n} skipped, another slot holds the same plugin");
                     continue;
                 }
@@ -705,7 +707,7 @@ fn gather_modules(
                 };
                 modules[at] = Some(module);
                 ids[at] = Some(header.id);
-                from_slot[at] = true;
+                from_slot[at] = Some(n);
                 if at == count {
                     count += 1;
                 }
@@ -719,7 +721,7 @@ fn gather_modules(
             Err(e) => error!("Plugin: slot {n} refused -- {e:?}"),
         }
     }
-    (modules, count, waiting, Some(spare))
+    (modules, count, waiting, from_slot, Some(spare))
 }
 
 /// What the firmware puts into a plugin's menu for it, while faces cannot bring entries of their
@@ -1001,6 +1003,8 @@ struct PluginView {
     summary: &'static str,
     bytes: usize,
     rights: Rights,
+    /// The slot it was installed from; `None` for a bundled plugin.
+    slot: Option<usize>,
     /// Installed as the dialog stands -- which becomes what is loaded only at OK.
     installed: bool,
     /// What loading cost, while it is loaded: microseconds, and bytes of internal heap.
@@ -1434,7 +1438,7 @@ async fn main(spawner: Spawner) -> ! {
     // The plugins in the `plugins` partition, read before the store takes the flash for good.
     // They are copied into the screen's external RAM, which it hands over once, so what is left
     // goes on to where the page, the ring and the cover come off it.
-    let (modules, plugin_count, waiting, spare) = gather_modules(
+    let (modules, plugin_count, waiting, from_slot, spare) = gather_modules(
         flash::plugins(flash, table)
             .inspect_err(|_| warn!("Plugin: no plugins partition, only the bundled plugins"))
             .ok(),
@@ -2038,6 +2042,7 @@ async fn main(spawner: Spawner) -> ! {
                     summary: manifest.summary(),
                     bytes: modules[n].map_or(0, <[u8]>::len),
                     rights: manifest.rights(),
+                    slot: from_slot[n],
                     installed: settings.installed(id),
                     loaded: None,
                     fault: None,
@@ -3915,7 +3920,10 @@ fn settings_screen(frame: &mut Framebuffer, state: &Overview, nav: &Navigator, r
                     (None, None) => (String::from("not loaded"), String::new()),
                 };
                 line(-42, view.name, heading);
-                line(-20, "bundled with the firmware", quiet);
+                match view.slot {
+                    Some(slot) => line(-20, &format!("from slot {slot}"), quiet),
+                    None => line(-20, "bundled with the firmware", quiet),
+                }
                 line(-4, &format!("{} bytes", view.bytes), detail);
                 line(12, &format!("rights {}", view.rights), detail);
                 line(28, &run, detail);

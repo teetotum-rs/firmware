@@ -17,11 +17,11 @@ If you want to know what the bundled plugins do or how a user removes one, read
 > - `teetotum-face` is **not published on crates.io**. A plugin depends on it by path.
 > - The API and the manifest format may change without notice. The manifest is at format 3, and
 >   formats 1 and 2 are no longer read.
-> - **Plugins are built into the firmware image.** The firmware loads them at run time, but only
->   from the list `BUNDLED` in `firmware/src/bin/main.rs`, which embeds each `.wasm` file with
->   `include_bytes!`. Loading a plugin from the SD card, over Wi-Fi or over Bluetooth is not
->   implemented. To try your plugin on a device you build your own firmware (see
->   [Quick start](#2-quick-start)).
+> - **Plugins come from two places:** the list `BUNDLED` in `firmware/src/bin/main.rs`, which
+>   embeds each `.wasm` file in the firmware image with `include_bytes!`, and the sixteen slots of
+>   the `plugins` partition, written over USB with `tools/pack-slot.py` and accepted on the glass
+>   (see [Quick start](#2-quick-start)). Loading a plugin from the SD card, over Wi-Fi or over
+>   Bluetooth is not implemented.
 
 ## Contents
 
@@ -313,9 +313,26 @@ so a summary that is too long, for example, is a compile error:
 error[E0080]: evaluation panicked: a face's summary is at most 32 bytes
 ```
 
-### 4. Bundle it into the firmware
+### 4. Install it on the device
 
-Open `firmware/src/bin/main.rs` and find `BUNDLED`. Add your module **at the end** and raise
+If the Knob already runs TeeToTum, the plugin needs no firmware build: write it into a slot of the
+`plugins` partition. With the device on USB (native USB of the ESP32-S3, see the
+[user guide](user-guide.md) about the cable orientation), from the repository root:
+
+```sh
+tools/pack-slot.py firmware/assets/plugins/my-face.wasm --slot 0 --write
+```
+
+`pack-slot.py` checks the signature, writes `my-face.slot` next to the module (a 64-byte header
+with a magic, the plugin's id, the length and the start of the module's SHA-512, then the module)
+and calls `espflash write-bin -B 921600` at the slot's address from `partitions.csv`. espflash
+restarts the board, and the firmware asks on the glass before the plugin gets a place (step 5).
+There are sixteen slots of 64 KiB, the header included. Write a new build into the same slot: a
+slot written again asks again, and of two slots holding the same plugin the lower one is used.
+[Installing other plugins](plugins.md#installing-other-plugins) describes the same from the
+user's side, emptying a slot included.
+
+**Or build it into the firmware**, the way the bundled plugins are. Open `firmware/src/bin/main.rs` and find `BUNDLED`. Add your module **at the end** and raise
 the array length by one:
 
 ```rust
@@ -348,24 +365,26 @@ face notices any of this: it has a place in both rings either way.
 A new plugin appears on Home right away, after the plugins before it. Home keeps no gaps: a
 plugin the user removes gives up its segment, and the ones after it move up.
 
-### 5. Flash and find it
+### 5. Find it
 
-From the repository root, with the device on USB (native USB of the ESP32-S3, see the
-[user guide](user-guide.md) about the cable orientation):
+If you built the plugin into the firmware, flash it first, from the repository root:
 
 ```sh
 cargo run --release
 ```
 
-This builds the firmware, flashes it with `espflash` at 921600 baud and starts the monitor.
-Then, on the device:
+This builds the firmware, flashes it with `espflash` at 921600 baud and starts the monitor. For a
+plugin in a slot, `espflash monitor` shows the log. Then, on the device:
 
-1. Home appears after boot. Your face is on the ring right of the house, after the bundled ones.
+1. A plugin from a slot is offered first, in a dialog with its name, `unknown key` (unless it is
+   signed with the project's key), the start of your key, its rights, version, size and heap
+   estimate. Tap the tick; the Knob restarts. A bundled plugin skips this step.
+2. Home appears after boot. Your face is on the ring right of the house, after the bundled ones.
    Turn the knob or tap its segment to select it, tap again to open it. The plugin is loaded now,
    not before.
-2. Turn the knob. The number counts, and each detent clicks.
-3. Hold a finger on the screen to go back to Home.
-4. In the settings (the gear on Home) your plugin has its own segment, with **About** (size,
+3. Turn the knob. The number counts, and each detent clicks.
+4. Hold a finger on the screen to go back to Home.
+5. In the settings (the gear on Home) your plugin has its own segment, with **About** (size,
    rights, load time, heap) and **Installed**.
 
 In the monitor you should see a line of this form when the face opens:
@@ -1061,7 +1080,7 @@ each time the plugin is loaded (see [Lifecycle](#10-lifecycle-and-errors)).
 ### Measuring your plugin
 
 - **On the device, in the plugin's About** (Settings, the plugin's segment, About): six lines
-  with the name, "bundled with the firmware", the module size in bytes, the rights, the load
+  with the name, "bundled with the firmware" or "from slot N", the module size in bytes, the rights, the load
   time (`loaded in 19.7 ms`) and the heap cost (`9.8 KB heap`). While the plugin is not loaded
   it says `not loaded`; after a trap or refusal, `stopped` and the reason.
 - **In the log**, when the face is opened:
@@ -1231,8 +1250,9 @@ Names such as `memmove` or `core::fmt` functions show what to hunt down.
 
 ```text
  boot
-  |  read the manifest of every bundled plugin (no code runs, nothing is loaded)
-  |  put name, icon, summary on Home; plugins the user removed are hidden
+  |  offer each plugin waiting in a slot (install dialog); restart after an OK
+  |  read the manifests, bundled and from slots (no code runs, nothing is loaded)
+  |  put name, icon, summary on Home; plugins the user removed get no segment
   v
  Home  --- user opens the face ---------------------------------------------+
   ^                                                                         |
@@ -1266,10 +1286,10 @@ Names such as `memmove` or `core::fmt` functions show what to hunt down.
   face again from Home loads it anew, from its initial value. The instance would still answer
   calls, but a plugin that trapped holds whatever state the trap cut it off in.
 - If `event` traps, the usages it sent are not sent.
-- **Removing** a plugin (its settings, Installed: No) unloads it if it is running and hides its
-  face on Home. Its segment stays, so the other faces do not move. Installing it again (Yes)
-  loads nothing; the plugin is loaded the next time its face is opened. The bytes stay in the
-  firmware image either way. [Using plugins](plugins.md) describes this from the user's side.
+- **Removing** a plugin (its settings, Installed: No) saves the choice and restarts the Knob.
+  Home is laid out again without it, and the faces after it move up. Installing it again (Yes)
+  restarts the same way and loads nothing; the plugin is loaded the next time its face is opened.
+  The bytes stay where they were, in the firmware image or in the slot. [Using plugins](plugins.md) describes this from the user's side.
 
 ### Refused at load
 
@@ -1345,7 +1365,16 @@ The lines that concern plugins:
 | Log line | When |
 |---|---|
 | `Plugin: none loaded yet, heap N bytes free` | at boot |
-| `Plugin: bundled plugin N has no usable manifest -- <reason>` | at boot, for a module whose manifest cannot be read; it gets no segment on Home |
+| `Plugin: slot N, N bytes, id [..], waits to be accepted` | at boot, for a slot written but not yet accepted |
+| `Plugin: slot N not offered -- <reason>` | at boot, for a waiting plugin whose manifest or signature does not hold; no dialog opens |
+| `Plugin: slot N offered for install` | the install dialog opens |
+| `Plugin: slot N accepted` | the tick in the install dialog |
+| `Plugin: slot N not accepted, asked again at boot` | the cross or a long press in the install dialog |
+| `Plugin: N accepted -- restarting` | after the last install dialog |
+| `Plugin: slot N, N bytes, id [..], in place N` | at boot, for an accepted slot, with its place in the rings |
+| `Plugin: slot N skipped, <reason>` | at boot: another slot holds the same plugin, the rings are full, or no external RAM is left |
+| `Plugin: plugin N has no usable manifest -- <reason>` | at boot, for a module whose manifest cannot be read; it gets no segment on Home |
+| `Plugin: installed plugins changed -- restarting` | Installed was changed and confirmed |
 | `Plugin: <name> loaded in N us, heap +N bytes, N free` | the face was opened and the plugin loaded |
 | `Plugin: refused -- <reason>` | loading failed; see [Refused at load](#refused-at-load) |
 | `Plugin: <Event> -> [<usages>]` | every event delivered, with the usages it sent, e.g. `Plugin: WipeRight -> [Next]` |

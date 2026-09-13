@@ -67,8 +67,9 @@ do:
   Its pictures are still on the microSD card, but TeeToTum does not use them. How to go back to the
   demo is in
   [section 9](#restoring-the-factory-firmware).
-- **Only the plugins built into the firmware** can be used for now. Loading other plugins is
-  covered in [Using plugins](plugins.md).
+- **No installing plugins without a computer.** Plugins beyond the bundled ones go onto the Knob
+  over the USB cable, not from the SD card, over Wi-Fi or over Bluetooth. See
+  [Using plugins](plugins.md#installing-other-plugins).
 - **The knob cannot be pressed.** It only turns. Everything that works like a button is done on
   the touch screen.
 
@@ -612,7 +613,8 @@ six, seven and eight o'clock). It opens the **plugin's menu**, titled with the p
    Main Settings 11      1  Installed
 ```
 
-- **About** shows what the plugin is: its name, `bundled with the firmware`, its size, the rights
+- **About** shows what the plugin is: its name, `bundled with the firmware` or `from slot` and
+  its number, its size, the rights
   it asks for, and whether it is loaded, not loaded or stopped, with its load time and memory.
 - **Installed** is `Yes` or `No`. The dialog adds `OK restarts`: with `No` the plugin leaves Home
   and the plugins after it move up, with `Yes` it comes back. Nothing happens until you tap the

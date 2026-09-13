@@ -349,7 +349,8 @@ looks like this:
 | Line                          | Meaning                                                   |
 |-------------------------------|-----------------------------------------------------------|
 | Name                          | The plugin's name, as on Home.                            |
-| "bundled with the firmware"   | It is built into the firmware. All plugins are, today.    |
+| "bundled with the firmware"   | It is built into the firmware.                            |
+| "from slot N"                 | It was installed into slot N, see [Installing other plugins](#installing-other-plugins). |
 | "… bytes"                     | The size of the plugin file.                              |
 | "rights …"                    | What it is allowed to do beyond drawing and hearing taps and swipes, or "rights none". See [Rights](#rights). |
 | "loaded in … ms"              | How long loading took, while it is in memory.             |
@@ -377,9 +378,11 @@ out when it starts:
 
 Your choice survives the restart and every one after it.
 
-**Removing frees memory, not storage.** The bundled plugins are part of the firmware file in the
-Knob's flash memory, and removing one only takes it off Home. That is also why a removed plugin keeps its
-menu in the settings: you can always set Installed back to Yes.
+**Removing frees memory, not storage.** A bundled plugin is part of the firmware file in the
+Knob's flash memory, a plugin from a slot stays in its slot, and removing either only takes it off
+Home. That is also why a removed plugin keeps its menu in the settings: you can always set
+Installed back to Yes. How to empty a slot for good is under
+[Installing other plugins](#installing-other-plugins).
 
 ---
 
@@ -525,27 +528,91 @@ to spare, and so does anything up to roughly 13 KB of module.
 
 ## Installing other plugins
 
-**Today, the only plugins are the ones built into the firmware.** They are embedded in the
-firmware file when it is built, and the Installed setting only shows or hides them. There is
-currently **no** way to load a plugin from the SD card, over Wi-Fi or over Bluetooth, and no way
-to install one from the Knob's screen. (The SD card sits inside the housing, and the firmware
-only reads pictures from it.)
+Besides the plugins that come with the firmware, the Knob keeps up to sixteen more in a part of
+its flash memory set aside for them, the `plugins` partition. It is cut into sixteen **slots**,
+one plugin each. A plugin gets into a slot **over the USB cable, from a computer**, and the Knob
+asks on its screen before the plugin gets a place on Home. There is no way yet to install a
+plugin from the SD card, over Wi-Fi or over Bluetooth.
 
-To add a plugin today you rebuild the firmware:
+What you need:
 
-1. Build the plugin, or get its `.wasm` file from its author. How to build one is described in
-   [plugin development](plugin-development.md).
-2. Put the file into `firmware/assets/plugins/` and add it **at the end** of the list `BUNDLED`
-   in `firmware/src/bin/main.rs`. The file must be signed by its author (the plugin guide's
-   build step does that). The Knob remembers a removed plugin by its author's key and its name,
-   so a copy signed with another key counts as a different plugin.
-3. Build and flash the firmware as described in
-   [Building and flashing it yourself](user-guide.md#9-building-and-flashing-it-yourself).
+- The plugin's `.wasm` file, signed by its author. How to build and sign one is described in
+  [plugin development](plugin-development.md).
+- A copy of this repository for `tools/pack-slot.py` (Python 3 and `openssl` 3.0 or later), and
+  `espflash`, as in
+  [Building and flashing it yourself](user-guide.md#9-building-and-flashing-it-yourself).
+- A Knob running TeeToTum with the partition table from `partitions.csv`. `cargo run --release`
+  writes it; a Knob flashed with espflash's own table has no `plugins` partition.
 
-The new plugin then appears on Home, next to the others, and gets its own menu in the settings.
-Mind the ceiling of sixteen plugins from [Memory and limits](#memory-and-limits).
+### Writing a plugin into a slot
 
-**Not available:** loading a plugin that is not part of the firmware image. Every plugin comes
-with the firmware; adding one means rebuilding it. The rights, the manifest and the Installed
-setting do not depend on where a plugin comes from: installing and removing never run plugin
-code, and even the plugins that come with the firmware can be removed.
+Connect the board so that the ESP32-S3 is on USB, then, from the repository root:
+
+```
+tools/pack-slot.py my-face.wasm --slot 0 --write
+```
+
+The tool checks the signature, writes `my-face.slot` next to the file (a short header, then the
+plugin) and hands it to `espflash write-bin` at the slot's address. Without `--write` it only
+writes the file and prints the espflash command. The Knob restarts when espflash is done.
+
+Writing a slot that already holds a plugin replaces it. **Pick a free slot for a new plugin, and
+the same slot for a new version of one.** If two slots hold the same plugin, the Knob uses the
+lower one and skips the other.
+
+### The install dialog
+
+At the next start, before Home, the Knob opens a dialog for every plugin that has been written
+but not yet accepted. The dialog is filled from the plugin's manifest and **runs none of the
+plugin's code**:
+
+```
+             <name>
+   project key  or  unknown key
+       key <16 hex digits>
+         rights <rights>
+     v<version>  <size> bytes
+    <N> KB heap of <N> free
+```
+
+| Line | Meaning |
+|---|---|
+| Name | The plugin's name, as it will stand on Home. |
+| "project key" | It is signed with the same key as the bundled plugins. |
+| "unknown key", in orange | It is signed with any other key. The Knob cannot know whose key that is: compare the next line with the key the author publishes. |
+| "key …" | The first eight bytes of the author's key. Plugins with the same key come from the same author. |
+| "rights …" | What it will be allowed to do. See [Rights](#rights). |
+| "v…  … bytes" | Its version and the size of its file. |
+| "… KB heap of … free" | How much working memory it will need once you open it, estimated as in [Memory and limits](#memory-and-limits), and how much is free. **"too large: … KB heap"** means it would be refused when opened; you can install it anyway. |
+
+- **The tick** installs it. If more plugins wait, the next dialog follows. After the last one the
+  Knob restarts, and the new plugins stand on Home after the bundled ones, each with its own menu
+  in the settings.
+- **The cross, or a long press,** installs nothing. The plugin stays in its slot, and **the next
+  start asks again**. To stop the question, empty the slot.
+
+### After installing
+
+- **Its About says "from slot N"** where a bundled plugin says "bundled with the firmware".
+  Everything else in its settings works as for any plugin, Installed included.
+- **A plugin with the same key and name as a bundled one** (a newer build of it) takes that
+  plugin's place on Home rather than a new one.
+- **Flashing a new firmware keeps the slots.** `cargo run --release` writes the firmware and the
+  partition table, not the `plugins` partition. Restoring the factory firmware overwrites them.
+- **Removing a plugin** (Installed: No) takes it off Home and leaves it in its slot. **Emptying
+  the slot** deletes it for good:
+
+  ```
+  espflash erase-region -B 921600 0x810000 0x10000
+  ```
+
+  That is slot 0. Slot N starts at `0x810000` plus N times `0x10000`; `tools/pack-slot.py`
+  prints the address of the slot it writes. At the next start the plugin is gone from Home and
+  from the settings.
+
+**The limits are the same for every plugin.** A slot holds a file of up to 63 936 bytes, but the
+heap limits what can be loaded to roughly 13 KB of module, and the rings hold sixteen plugins
+altogether, the bundled ones included. See [Memory and limits](#memory-and-limits).
+
+Plugins can also be built into the firmware, the way the bundled ones are.
+[Plugin development](plugin-development.md#4-install-it-on-the-device) describes both ways.

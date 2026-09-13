@@ -10,7 +10,7 @@ The workspace has four parts: `teetotum/` (the library: screen, touch, knob, set
 
 - [README](https://github.com/teetotum-rs/firmware/blob/main/README.md): what the firmware does today, building and flashing, layout, what you can break
 - [User guide](https://github.com/teetotum-rs/firmware/blob/main/docs/user-guide.md): the controls, Home, the Music Player, every setting, troubleshooting, building and flashing
-- [Using plugins](https://github.com/teetotum-rs/firmware/blob/main/docs/plugins.md): the bundled plugins, plugin settings, rights, memory and limits
+- [Using plugins](https://github.com/teetotum-rs/firmware/blob/main/docs/plugins.md): the bundled plugins, plugin settings, rights, memory and limits, installing more
 - [Writing plugins](https://github.com/teetotum-rs/firmware/blob/main/docs/plugin-development.md): the teetotum-face SDK, the manifest, events, drawing, host calls, resource limits, building and bundling
 
 ## Code
