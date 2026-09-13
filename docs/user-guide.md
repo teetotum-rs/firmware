@@ -614,9 +614,9 @@ six, seven and eight o'clock). It opens the **plugin's menu**, titled with the p
 
 - **About** shows what the plugin is: its name, `bundled with the firmware`, its size, the rights
   it asks for, and whether it is loaded, not loaded or stopped, with its load time and memory.
-- **Installed** is `Yes` or `No`. The dialog adds `No hides it at home`: with `No`, the plugin's
-  segment at Home becomes empty and the plugin cannot be started. Setting it back to `Yes` brings
-  it back. Nothing happens until you tap the tick.
+- **Installed** is `Yes` or `No`. The dialog adds `OK restarts`: with `No` the plugin leaves Home
+  and the plugins after it move up, with `Yes` it comes back. Nothing happens until you tap the
+  tick, which saves the choice and restarts the Knob.
 - **Main Settings** (the gear at eleven o'clock) leads to the firmware's Settings, the same way it
   does in the menu of any plugin. The tick in the plugin's menu goes back up one level.
 

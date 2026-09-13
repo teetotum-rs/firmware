@@ -83,9 +83,9 @@ memory. Go to Home, the settings or the Music Player and come back: the plugin i
 left it (the die still shows its last throw, Nearby still has the same device chosen). Opening
 a *different* plugin in between means the first one starts afresh next time.
 
-**Removed plugins leave a gap.** When you remove a plugin (see
-[Plugin settings](#plugin-settings)), its segment on Home becomes empty and the knob passes over
-it. The other plugins keep their places.
+**Home has no gaps.** The installed plugins stand side by side from one o'clock on, the bundled
+ones first. When you remove a plugin (see [Plugin settings](#plugin-settings)), the Knob
+restarts and the plugins after it move up one segment.
 
 ---
 
@@ -364,20 +364,21 @@ The last two lines change with the plugin's state:
 
 ### Installed
 
-The dialog shows **"Yes"** or **"No"**, with "turn the knob" and "No hides it at home" under it.
-Any detent of the knob flips between the two. Nothing happens until you confirm with the
-tick; the cross leaves everything as it was.
+The dialog shows **"Yes"** or **"No"**, with "turn the knob" and "OK restarts" under it. Any
+detent of the knob flips between the two. Nothing happens until you confirm with the tick; the
+cross leaves everything as it was.
 
-- **No** takes the plugin's face off Home. Its segment stays empty, so the other plugins do not
-  move. If the plugin was loaded, it is unloaded and its memory is free again; if its face was
-  the one on the screen, the Music Player takes its place.
-- **Yes** puts the face back on Home. It loads nothing: the plugin is loaded the next time you
-  open its face.
+A tick that changes something saves your choice and **restarts the Knob**, because Home is laid
+out when it starts:
 
-Your choice is saved and survives a restart.
+- **No** takes the plugin's face off Home, and the plugins after it move up one segment.
+- **Yes** puts the face back on Home, in its place in the row. It loads nothing: the plugin is
+  loaded the next time you open its face.
+
+Your choice survives the restart and every one after it.
 
 **Removing frees memory, not storage.** The bundled plugins are part of the firmware file in the
-Knob's flash memory, and removing one only hides it. That is also why a removed plugin keeps its
+Knob's flash memory, and removing one only takes it off Home. That is also why a removed plugin keeps its
 menu in the settings: you can always set Installed back to Yes.
 
 ---
@@ -450,7 +451,7 @@ setting Installed to No, also clears the "stopped".
 ### A plugin that is refused
 
 When you open a face, the firmware checks the plugin before running it. If the check fails, the
-plugin is refused and its face says why. **A refused plugin stays on Home** (it is not hidden),
+plugin is refused and its face says why. **A refused plugin stays on Home** (it is not taken off),
 precisely so that its face can tell you the reason. Opening it again tries again.
 
 The reasons the firmware can give (a developer will recognise them; a bundled plugin should

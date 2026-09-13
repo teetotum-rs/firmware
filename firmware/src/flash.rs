@@ -75,9 +75,14 @@ pub struct Region<'a, 'd> {
     size: u32,
 }
 
-impl Region<'_, '_> {
+impl<'d> Region<'_, 'd> {
     pub fn partition_size(&self) -> usize {
         self.size as usize
+    }
+
+    /// The flash under this region, to find another partition while this one is held.
+    pub fn storage(&mut self) -> &mut FlashStorage<'d> {
+        self.flash
     }
 
     /// The absolute address of `len` bytes at `from`, if they lie inside the partition.

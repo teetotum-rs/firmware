@@ -204,6 +204,12 @@ impl<F: NorFlash> Store<F> {
         self.sector
     }
 
+    /// The region the store writes to, for a caller that needs the flash under it while the
+    /// store holds it. A write into the store's two sectors through it breaks the store.
+    pub fn flash_mut(&mut self) -> &mut F {
+        &mut self.flash
+    }
+
     /// Read one sector's header and payload, returning its sequence and length when it is valid.
     fn read_slot(&mut self, slot: usize, scratch: &mut [u8]) -> Result<Option<(u32, usize)>, Error> {
         let start = (slot * self.sector) as u32;

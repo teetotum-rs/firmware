@@ -1,8 +1,8 @@
 //! Does a plugin survive a round trip through a slot of the `plugins` partition?
 //!
 //! Headless and self-judging. On the last slot it checks that a write without its header reads
-//! as empty, that a full write reads back byte for byte with a holding signature, that one
-//! cleared bit fails the hash, and that an erased slot reads as empty. The slot is erased at the
+//! as empty, that a full write waits to be accepted and reads back byte for byte with a holding
+//! signature, that accepting it leaves the module readable, that one cleared bit fails the hash, and that an erased slot reads as empty. The slot is erased at the
 //! end.
 //!
 //! ```text
@@ -121,6 +121,12 @@ fn main() -> ! {
         "write names the module's id and length",
         &mut failed,
     );
+    check(
+        written.is_ok_and(|h| !h.accepted)
+            && slots.header(last).is_ok_and(|h| h.is_some_and(|h| !h.accepted)),
+        "a written slot waits to be accepted",
+        &mut failed,
+    );
 
     buf.0.fill(0);
     let began = Instant::now();
@@ -136,6 +142,22 @@ fn main() -> ! {
     let verified = plugin::verify(&buf.0[..WASM.len()]);
     info!("signature: {verified:?} in {} ms", began.elapsed().as_millis());
     check(verified.is_ok(), "signature holds on the copy", &mut failed);
+
+    let began = Instant::now();
+    let accepted = slots.accept(last);
+    info!("accept: {accepted:?} in {} us", began.elapsed().as_micros());
+    check(
+        accepted.is_ok() && slots.header(last).is_ok_and(|h| h.is_some_and(|h| h.accepted)),
+        "accepting marks the header",
+        &mut failed,
+    );
+    buf.0.fill(0);
+    let reread = slots.read(last, &mut buf.0);
+    check(
+        reread.is_ok_and(|h| h.is_some()) && &buf.0[..WASM.len()] == WASM,
+        "accepted module still reads back byte for byte",
+        &mut failed,
+    );
 
     // Clearing bits needs no erase: zero the module's first word.
     let mut region = slots.into_inner();

@@ -29,6 +29,7 @@ use esp_backtrace as _;
 use static_cell::StaticCell;
 use esp_hal::clock::CpuClock;
 use esp_hal::delay::Delay;
+use esp_hal::system::software_reset;
 use esp_hal::gpio::{Input, InputConfig, Io, Level, Output, OutputConfig, Pull};
 use esp_hal::Blocking;
 use esp_hal::i2c::master::{Config as I2cConfig, I2c};
@@ -58,8 +59,8 @@ use teetotum::touch::{Gesture, Press, Taps, Touch};
 use esp_hal::timer::timg::TimerGroup;
 use esp_storage::FlashStorage;
 use teetotum_firmware::flash::{self, Region, TABLE_SCRATCH};
-use teetotum_firmware::slots::Slots;
-use teetotum_face::manifest::Manifest;
+use teetotum_firmware::slots::{self, Slots};
+use teetotum_face::manifest::{Manifest, Signed, Version};
 use teetotum_face::{Event as FaceEvent, HINT, Radio, Rights, Usage};
 use teetotum_firmware::nearby::{self, Heard};
 use teetotum_firmware::plugin::{self, Page, Plugin, PluginId};
@@ -419,6 +420,14 @@ const SETTING_CENTRE: Id = Id(11);
 const SETTING_ACCENT: Id = Id(12);
 /// The first QR code's dialog; the others follow in the order of [`LINKS`].
 const SETTING_QR: u16 = 13;
+/// The install dialog, past the QR codes.
+const SETTING_INSTALL: Id = Id(SETTING_QR + LINKS.len() as u16);
+
+/// Where the install dialog stands: a menu of one entry, left by its buttons or a long press.
+static INSTALL_MENU: Menu = Menu::new(
+    "Install",
+    Entry::setting("Install", &icons::PLUGIN, SETTING_INSTALL, Buttons::OkCancel),
+);
 
 /// What a long press opens at home, said under the ring there.
 const HOLD_FOR_QR: &str = "hold for QR codes";
@@ -596,34 +605,46 @@ fn bundled_ids() -> [Option<PluginId>; BUNDLED.len()] {
     core::array::from_fn(|n| PluginId::of(BUNDLED[n]).ok())
 }
 
-/// The bundled plugins, then those installed in the slots of the `plugins` partition, copied
+/// A plugin in a slot that waits to be accepted: which slot, and its module in external RAM.
+#[derive(Clone, Copy)]
+struct Waiting {
+    slot: usize,
+    wasm: &'static [u8],
+}
+
+type WaitingSlots = [Option<Waiting>; PLUGINS_MAX];
+
+/// The bundled plugins, then those accepted in the slots of the `plugins` partition, copied
 /// into external RAM so that each is a `'static` module like the bundled ones. Also how many
-/// there are, and what is left of `spare`.
+/// there are, the slots that wait for the install dialog, and what is left of `spare`.
 ///
 /// **A slot with a bundled plugin's id takes that plugin's place**: same key and name are the
 /// same plugin, so a new build of it replaces the one in the image without a firmware build. A
-/// second slot with an id already taken from a slot is skipped. Signatures are checked when a
-/// plugin is loaded, as for the bundled ones.
+/// second slot with an id already taken from a slot is skipped. An accepted plugin's signature is
+/// checked when it is loaded, as for the bundled ones; a waiting one's here, so that the dialog
+/// never offers a plugin whose signature fails.
 ///
 /// Runs before the heap exists, so nothing here allocates. The modules take at most half of
 /// `spare`; the page, the ring and the cover come off the rest.
 fn gather_modules(
     region: Option<Region<'_, '_>>,
     spare: Option<&'static mut [u8]>,
-) -> (Modules, usize, Option<&'static mut [u8]>) {
+) -> (Modules, usize, WaitingSlots, Option<&'static mut [u8]>) {
     let mut modules: Modules = [None; PLUGINS_MAX];
     let mut ids = [None; PLUGINS_MAX];
+    let mut waiting: WaitingSlots = [None; PLUGINS_MAX];
+    let mut waits = 0;
     for (n, wasm) in BUNDLED.iter().enumerate() {
         modules[n] = Some(*wasm);
     }
     ids[..BUNDLED.len()].copy_from_slice(&bundled_ids());
     let mut count = BUNDLED.len();
     let Some(region) = region else {
-        return (modules, count, spare);
+        return (modules, count, waiting, spare);
     };
     let Some(mut spare) = spare else {
         warn!("Plugin: no external RAM, only the bundled plugins");
-        return (modules, count, None);
+        return (modules, count, waiting, None);
     };
     let floor = spare.len() / 2;
     let mut from_slot = [false; PLUGINS_MAX];
@@ -637,17 +658,26 @@ fn gather_modules(
                 continue;
             }
         };
-        let at = match ids[..count].iter().position(|id| *id == Some(header.id)) {
-            Some(k) if from_slot[k] => {
-                warn!("Plugin: slot {n} skipped, another slot holds the same plugin");
+        // Where an accepted plugin goes in the rings; `None` for one that waits.
+        let at = if !header.accepted {
+            if waits == PLUGINS_MAX {
+                warn!("Plugin: slot {n} skipped, {PLUGINS_MAX} slots wait already");
                 continue;
             }
-            Some(k) => k,
-            None if count == PLUGINS_MAX => {
-                warn!("Plugin: slot {n} skipped, the rings hold {PLUGINS_MAX} plugins");
-                continue;
+            None
+        } else {
+            match ids[..count].iter().position(|id| *id == Some(header.id)) {
+                Some(k) if from_slot[k] => {
+                    warn!("Plugin: slot {n} skipped, another slot holds the same plugin");
+                    continue;
+                }
+                Some(k) => Some(k),
+                None if count == PLUGINS_MAX => {
+                    warn!("Plugin: slot {n} skipped, the rings hold {PLUGINS_MAX} plugins");
+                    continue;
+                }
+                None => Some(count),
             }
-            None => count,
         };
         if spare.len() < floor + header.len {
             warn!("Plugin: slot {n} skipped, no external RAM left for it");
@@ -658,6 +688,21 @@ fn gather_modules(
                 let (module, rest) = core::mem::take(&mut spare).split_at_mut(header.len);
                 spare = rest;
                 let module: &'static [u8] = module;
+                let Some(at) = at else {
+                    match plugin::verify(module) {
+                        Ok(()) => {
+                            waiting[waits] = Some(Waiting { slot: n, wasm: module });
+                            waits += 1;
+                            info!(
+                                "Plugin: slot {n}, {} bytes, id {:02x?}, waits to be accepted",
+                                header.len,
+                                header.id.bytes()
+                            );
+                        }
+                        Err(e) => error!("Plugin: slot {n} not offered -- {e}"),
+                    }
+                    continue;
+                };
                 modules[at] = Some(module);
                 ids[at] = Some(header.id);
                 from_slot[at] = true;
@@ -674,7 +719,7 @@ fn gather_modules(
             Err(e) => error!("Plugin: slot {n} refused -- {e:?}"),
         }
     }
-    (modules, count, Some(spare))
+    (modules, count, waiting, Some(spare))
 }
 
 /// What the firmware puts into a plugin's menu for it, while faces cannot bring entries of their
@@ -939,6 +984,8 @@ struct Overview {
     /// The plugins as the settings show them, each `None` if its manifest could not be read,
     /// and `None` past the last.
     plugins: [Option<PluginView>; PLUGINS_MAX],
+    /// The plugin the install dialog offers, while it is open.
+    offer: Option<Offer>,
     /// Counted up whenever the plugin asks to be drawn again. What it shows lives in its own
     /// memory, where the comparison that decides a redraw cannot look, so this stands in for it.
     plugin_frame: u32,
@@ -960,6 +1007,126 @@ struct PluginView {
     loaded: Option<(u64, usize)>,
     /// Why it was stopped, if it was.
     fault: Option<String>,
+}
+
+/// What the install dialog shows of a plugin waiting in a slot, all of it read from the module
+/// without running any of it.
+#[derive(Clone, PartialEq, Eq)]
+struct Offer {
+    slot: usize,
+    name: &'static str,
+    version: Version,
+    /// The first bytes of the author's key, which tell two authors apart on the glass.
+    key: [u8; 8],
+    /// Whether a bundled plugin is signed with the same key.
+    known: bool,
+    rights: Rights,
+    bytes: usize,
+    /// What loading it would take of the heap, by [`plugin::heap_needed`], and what is free.
+    heap: usize,
+    free: usize,
+}
+
+impl Offer {
+    /// `None`, with the reason logged, if the module's manifest or signature section cannot be
+    /// read.
+    fn of(waiting: Waiting) -> Option<Self> {
+        let wasm = waiting.wasm;
+        let (signed, manifest) = Signed::read(wasm)
+            .and_then(|signed| Ok((signed, Manifest::read(wasm)?)))
+            .inspect_err(|e| error!("Plugin: slot {} not offered -- {e}", waiting.slot))
+            .ok()?;
+        let mut key = [0; 8];
+        key.copy_from_slice(&signed.key[..8]);
+        Some(Self {
+            slot: waiting.slot,
+            name: manifest.name(),
+            version: manifest.version(),
+            key,
+            known: BUNDLED
+                .iter()
+                .any(|bundled| Signed::read(bundled).is_ok_and(|b| b.key == signed.key)),
+            rights: manifest.rights(),
+            bytes: wasm.len(),
+            heap: plugin::heap_needed(wasm.len()),
+            free: esp_alloc::HEAP.free(),
+        })
+    }
+}
+
+/// The plugins waiting in slots, offered one after another at boot, and how many were accepted.
+struct Offers {
+    waiting: WaitingSlots,
+    next: usize,
+    accepted: usize,
+}
+
+impl Offers {
+    fn new(waiting: WaitingSlots) -> Self {
+        Self {
+            waiting,
+            next: 0,
+            accepted: 0,
+        }
+    }
+
+    /// The next waiting plugin that can be offered.
+    fn next(&mut self) -> Option<Offer> {
+        while let Some(&waiting) = self.waiting.get(self.next) {
+            self.next += 1;
+            if let Some(offer) = waiting.and_then(Offer::of) {
+                return Some(offer);
+            }
+        }
+        None
+    }
+}
+
+/// Opens the install dialog on the next plugin waiting in a slot. With none left, a plugin
+/// accepted on the way takes a restart to get its place in the rings; otherwise it is home.
+fn offer_next(
+    state: &mut Overview,
+    offers: &mut Offers,
+    home_menu: &'static Menu,
+    settings_menu: &'static Menu,
+) {
+    state.offer = offers.next();
+    if let Some(offer) = &state.offer {
+        info!("Plugin: slot {} offered for install", offer.slot);
+        state.menu.insert(Navigator::firmware(&INSTALL_MENU)).open_selected();
+    } else if offers.accepted > 0 {
+        info!("Plugin: {} accepted -- restarting", offers.accepted);
+        software_reset();
+    } else {
+        let _ = state.menu.insert(home(home_menu, settings_menu));
+    }
+}
+
+/// Marks a waiting slot accepted, through the flash the settings store holds; says whether it
+/// took.
+fn accept_slot(
+    store: Option<&mut Store<Region<'_, '_>>>,
+    table: &mut [u8; TABLE_SCRATCH],
+    slot: usize,
+) -> bool {
+    let Some(store) = store else {
+        error!("Plugin: slot {slot} not accepted, no flash to write to");
+        return false;
+    };
+    let accepted = match flash::plugins(store.flash_mut().storage(), table) {
+        Ok(region) => Slots::new(region).accept(slot),
+        Err(_) => Err(slots::Error::NoSlot),
+    };
+    match accepted {
+        Ok(()) => {
+            info!("Plugin: slot {slot} accepted");
+            true
+        }
+        Err(e) => {
+            error!("Plugin: slot {slot} not accepted -- {e:?}");
+            false
+        }
+    }
 }
 
 /// What the picture behind the text is.
@@ -1267,7 +1434,7 @@ async fn main(spawner: Spawner) -> ! {
     // The plugins in the `plugins` partition, read before the store takes the flash for good.
     // They are copied into the screen's external RAM, which it hands over once, so what is left
     // goes on to where the page, the ring and the cover come off it.
-    let (modules, plugin_count, spare) = gather_modules(
+    let (modules, plugin_count, waiting, spare) = gather_modules(
         flash::plugins(flash, table)
             .inspect_err(|_| warn!("Plugin: no plugins partition, only the bundled plugins"))
             .ok(),
@@ -1783,15 +1950,20 @@ async fn main(spawner: Spawner) -> ! {
         let menus = PLUGIN_MENUS.init(core::array::from_fn(|n| {
             plugin_menu(manifests[n].map_or("", |manifest| manifest.name()), n)
         }));
-        // Every plugin with a manifest has a place in both. At home, the faces of those not
-        // loaded are hidden rather than left out, so each keeps its segment -- see [`home`].
+        // A plugin with a manifest has a place in the settings, and at home too while it is
+        // installed. **Both rings are laid out without gaps**, bundled plugins first, so a
+        // plugin that comes or goes takes a restart to get its place or give it up.
         //
         // **More plugins than a ring has room for spill onto a second page**, which carries only
         // the top entry and none of what the pages before it carry: the firmware's own entries
         // and the player stand on the first page alone. Each ring is
         // built backwards, its last page first, so that every page can be handed the page it
         // turns on to.
-        let settings_pages = pages_for(plugin_count, PLUGINS_ON_FIRST_SETTINGS_PAGE);
+        let listed = |n: &usize| manifests[*n].is_some();
+        let on_home = |n: &usize| listed(n) && ids[*n].is_some_and(|id| settings.installed(id));
+        let settings_count = (0..PLUGINS_MAX).filter(listed).count();
+        let home_count = (0..PLUGINS_MAX).filter(on_home).count();
+        let settings_pages = pages_for(settings_count, PLUGINS_ON_FIRST_SETTINGS_PAGE);
         let mut settings_next: Option<&'static Menu> = None;
         for page in (0..settings_pages).rev() {
             let mut menu = match page {
@@ -1801,9 +1973,9 @@ async fn main(spawner: Spawner) -> ! {
                     Entry::setting("About", &icons::ABOUT, SETTING_ABOUT, Buttons::Ok),
                 ),
             };
-            for (n, manifest) in manifests.iter().enumerate() {
-                let (at, slot) = place(n, PLUGINS_ON_FIRST_SETTINGS_PAGE, PLUGIN_SLOT);
-                if let (true, Some(manifest)) = (at == page, manifest) {
+            for (k, n) in (0..PLUGINS_MAX).filter(listed).enumerate() {
+                let (at, slot) = place(k, PLUGINS_ON_FIRST_SETTINGS_PAGE, PLUGIN_SLOT);
+                if let (true, Some(manifest)) = (at == page, manifests[n]) {
                     menu = menu.with(slot, Entry::plugin(manifest.name(), &icons[n], &menus[n]));
                 }
             }
@@ -1812,7 +1984,7 @@ async fn main(spawner: Spawner) -> ! {
             }
             settings_next = Some(MENU[page].init(menu));
         }
-        let home_pages = pages_for(plugin_count, FACES_ON_FIRST_HOME_PAGE);
+        let home_pages = pages_for(home_count, FACES_ON_FIRST_HOME_PAGE);
         let mut home_next: Option<&'static Menu> = None;
         for page in (0..home_pages).rev() {
             let mut home = match page {
@@ -1822,9 +1994,9 @@ async fn main(spawner: Spawner) -> ! {
                 ),
                 _ => Menu::home_page(HOME_TITLE).holding(HOLD_FOR_QR),
             };
-            for (n, manifest) in manifests.iter().enumerate() {
-                let (at, slot) = place(n, FACES_ON_FIRST_HOME_PAGE, HOME_PLUGIN_SLOT);
-                if let (true, Some(manifest)) = (at == page, manifest) {
+            for (k, n) in (0..PLUGINS_MAX).filter(on_home).enumerate() {
+                let (at, slot) = place(k, FACES_ON_FIRST_HOME_PAGE, HOME_PLUGIN_SLOT);
+                if let (true, Some(manifest)) = (at == page, manifests[n]) {
                     let id = Face::Plugin(n as u8).id();
                     home = home.with(slot, Entry::screen(manifest.name(), &icons[n], id));
                 }
@@ -1836,7 +2008,7 @@ async fn main(spawner: Spawner) -> ! {
         }
         if settings_pages > 1 || home_pages > 1 {
             info!(
-                "Menu: {plugin_count} plugins, home on {home_pages} page(s), settings on {settings_pages}"
+                "Menu: {plugin_count} plugins, {home_count} at home on {home_pages} page(s), settings on {settings_pages}"
             );
         }
         let first = |menu: Option<&'static Menu>| menu.expect("a ring has at least one page");
@@ -1873,8 +2045,10 @@ async fn main(spawner: Spawner) -> ! {
             }),
             ..Overview::default()
         };
-        // The device starts at home, which is where a face is chosen.
-        state.menu = Some(home(home_menu, settings_menu, &state.plugins));
+        // The device starts at home, which is where a face is chosen -- after the install dialog
+        // for each plugin that waits in a slot.
+        let mut offers = Offers::new(waiting);
+        offer_next(&mut state, &mut offers, home_menu, settings_menu);
         // Whether a finished transfer is still waiting to be decoded. The decoding does not
         // happen where the last packet arrives: it costs a few hundred milliseconds, and the
         // link is what that pass is for.
@@ -2335,6 +2509,15 @@ async fn main(spawner: Spawner) -> ! {
                         // reports.
                         match taps.press(&report, Instant::now().as_millis()) {
                             None => {}
+                            // In the install dialog a long press is Cancel: the plugin waits in
+                            // its slot, and the next boot asks again.
+                            Some(Press::Hold(_)) if state.offer.is_some() => {
+                                if let Some(offer) = &state.offer {
+                                    info!("Plugin: slot {} not accepted, asked again at boot", offer.slot);
+                                }
+                                offer_next(&mut state, &mut offers, home_menu, settings_menu);
+                                click_ends = Some(click(&mut haptic, &mut i2c, settings.haptics, CLICK_TAP, true));
+                            }
                             // **A long press goes home, whatever is on the glass.** It is
                             // answered here, before any screen sees the finger, so that no
                             // screen -- and no plugin -- can take it away.
@@ -2366,7 +2549,7 @@ async fn main(spawner: Spawner) -> ! {
                                 let entering = state.menu.is_none();
                                 // The menu first, so the click that opens it is already one of
                                 // its own and as short as the rest.
-                                state.menu = Some(home(home_menu, settings_menu, &state.plugins));
+                                state.menu = Some(home(home_menu, settings_menu));
                                 click_ends = Some(click(&mut haptic, &mut i2c, settings.haptics, CLICK_TAP, true));
                                 // The knob changes hands with the settings. Asking for it here
                                 // rather than waiting for the next status report is what keeps
@@ -2401,39 +2584,30 @@ async fn main(spawner: Spawner) -> ! {
                                     }
                                     // OK is where a setting is decided, so it is where it is
                                     // written -- and only when it differs from what is kept.
-                                    Outcome::Ok { id, owner } => {
-                                        // Installing and removing happen here and nowhere
-                                        // earlier, so Cancel has nothing to undo. Installing
-                                        // loads nothing: it puts the face back at home, and the
-                                        // plugin is loaded when that face is started.
-                                        if owner == Owner::Plugin
-                                            && let Some((n, PluginSetting::Installed)) =
-                                                PluginSetting::of(id)
+                                    // Accepting writes one byte into the slot; the restart that
+                                    // gives the plugin its place comes after the last offer.
+                                    Outcome::Ok { id: SETTING_INSTALL, owner: Owner::Firmware } => {
+                                        if let Some(offer) = &state.offer
+                                            && accept_slot(store.as_mut(), table, offer.slot)
                                         {
-                                            if state.plugins[n]
-                                                .as_ref()
-                                                .is_some_and(|view| !settings.installed(view.id))
-                                            {
-                                                if running.as_ref().is_some_and(|(m, _)| *m == n) {
-                                                    stop_plugin(
-                                                        &mut running,
-                                                        &mut page,
-                                                        &mut state.plugins,
-                                                    );
-                                                }
-                                                if let Some(view) = state.plugins[n].as_mut() {
-                                                    view.fault = None;
-                                                }
-                                                // A face that is gone can be neither the one
-                                                // shown nor one to choose at home.
-                                                if state.face == Face::Plugin(n as u8) {
-                                                    state.face = Face::Player;
-                                                }
-                                            }
-                                            if let Some(nav) = state.menu.as_mut() {
-                                                nav.hide(home_hidden(&state.plugins));
-                                            }
+                                            offers.accepted += 1;
                                         }
+                                        offer_next(&mut state, &mut offers, home_menu, settings_menu);
+                                    }
+                                    Outcome::Cancel { id: SETTING_INSTALL, owner: Owner::Firmware, .. } => {
+                                        if let Some(offer) = &state.offer {
+                                            info!("Plugin: slot {} not accepted, asked again at boot", offer.slot);
+                                        }
+                                        offer_next(&mut state, &mut offers, home_menu, settings_menu);
+                                    }
+                                    Outcome::Ok { id, .. } => {
+                                        // Installing and removing happen here and nowhere
+                                        // earlier, so Cancel has nothing to undo. The rings are
+                                        // laid out at boot without gaps, so a plugin that comes
+                                        // or goes is written first and then takes a restart.
+                                        let rings_change = state.plugins.iter().flatten().any(|view| {
+                                            settings.installed(view.id) != stored.installed(view.id)
+                                        });
                                         // The last cover's bytes are still there, so a new size
                                         // is one more decode rather than a wait for the next track.
                                         if settings.cover != stored.cover {
@@ -2446,6 +2620,10 @@ async fn main(spawner: Spawner) -> ! {
                                             stored = settings;
                                         }
                                         info!("Settings: {id:?} kept");
+                                        if rings_change {
+                                            info!("Plugin: installed plugins changed -- restarting");
+                                            software_reset();
+                                        }
                                     }
                                     Outcome::Cancel { id, .. } => {
                                         settings = before;
@@ -3077,30 +3255,11 @@ fn load_plugin(
     }
 }
 
-/// The home menu as it stands, on Home, with the settings behind the gear left of it.
-fn home(menu: &'static Menu, settings: &'static Menu, views: &[Option<PluginView>]) -> Navigator {
-    let mut nav = Navigator::home(menu, settings);
-    nav.hide(home_hidden(views));
-    nav
-}
-
-/// The segments of the home menu whose plugin is removed, and whose face can therefore not be
-/// chosen. A plugin without a manifest has no entry to hide. **Hidden rather than left out**, so that every plugin keeps its
-/// segment and the others do not move when one is removed. A plugin that is refused when its face
-/// is started keeps its segment: the face says why, which a hidden segment could not.
-fn home_hidden(views: &[Option<PluginView>]) -> u64 {
-    views
-        .iter()
-        .enumerate()
-        .filter(|(_, view)| view.as_ref().is_some_and(|view| !view.installed))
-        .fold(0, |hidden, (n, _)| hidden | 1 << home_bit(n))
-}
-
-/// Which bit of [`Navigator::hide`] the face of bundled plugin `n` is: its page and its segment
-/// on that page, the way [`place`] laid the home ring out.
-fn home_bit(n: usize) -> usize {
-    let (page, slot) = place(n, FACES_ON_FIRST_HOME_PAGE, HOME_PLUGIN_SLOT);
-    page * SLOTS + slot
+/// The home menu, on Home, with the settings behind the gear left of it. It holds only the
+/// installed plugins, laid out at boot; a plugin that is refused when its face is started keeps
+/// its segment, and the face says why.
+fn home(menu: &'static Menu, settings: &'static Menu) -> Navigator {
+    Navigator::home(menu, settings)
 }
 
 /// Which bundled plugin's face `face` is, if it is one.
@@ -3709,13 +3868,37 @@ fn settings_screen(frame: &mut Framebuffer, state: &Overview, nav: &Navigator, r
             line(16, "turn the knob", quiet);
             line(34, "the clicks show it", quiet);
         }
+        // A waiting plugin as its module describes it. An unknown key is said as such: it is
+        // what tells a stranger's plugin from the project's.
+        Some((SETTING_INSTALL, Owner::Firmware)) => {
+            if let Some(offer) = state.offer.as_ref() {
+                let kb = |bytes: usize| format!("{}.{}", bytes / 1000, bytes % 1000 / 100);
+                let key: String = offer.key.iter().map(|b| format!("{b:02x}")).collect();
+                let (owner, owner_style) = if offer.known {
+                    ("project key", quiet)
+                } else {
+                    ("unknown key", (&fonts::SMALL, Rgb565::CSS_ORANGE))
+                };
+                let heap = if offer.heap <= offer.free {
+                    format!("{} KB heap of {} free", kb(offer.heap), kb(offer.free))
+                } else {
+                    format!("too large: {} KB heap", kb(offer.heap))
+                };
+                line(-42, offer.name, heading);
+                line(-20, owner, owner_style);
+                line(-4, &format!("key {key}"), detail);
+                line(12, &format!("rights {}", offer.rights), detail);
+                line(28, &format!("v{}  {} bytes", offer.version, offer.bytes), detail);
+                line(44, &heap, detail);
+            }
+        }
         // What the manifest says, and what loading cost -- read without running the plugin,
         // which is what the manifest is for.
         Some((id, Owner::Plugin)) => {
             if let Some((n, PluginSetting::Installed)) = PluginSetting::of(id) {
                 line(-14, installed(n), reading);
                 line(16, "turn the knob", quiet);
-                line(34, "No hides it at home", quiet);
+                line(34, "OK restarts", quiet);
             } else if let Some((n, PluginSetting::About)) = PluginSetting::of(id)
                 && let Some(view) = state.plugins[n].as_ref()
             {

@@ -7,6 +7,10 @@
 //! **The header is written last**, so a write cut short leaves a slot that reads as empty or
 //! fails its hash -- never one that passes as a plugin with half its bytes.
 //!
+//! **A written slot waits to be accepted.** Header byte 5 is `0xff` as written and `0x00` once
+//! the user has accepted the plugin on the glass; any other value reads as accepted. Accepting
+//! only clears bits, so it needs no erase, and a slot written again waits again.
+//!
 //! Reading copies the module into the caller's buffer and checks hash and id. The signature is
 //! [`crate::plugin`]'s to check, before anything runs.
 
@@ -25,6 +29,12 @@ pub const MODULE_MAX: usize = SLOT - HEADER;
 const MAGIC: [u8; 4] = *b"TTPS";
 const FORMAT: u8 = 1;
 const HASH: usize = 32;
+/// Where in the header the slot says whether its plugin was accepted.
+const STATE: usize = 5;
+const PENDING: u8 = 0xff;
+const ACCEPTED: u8 = 0x00;
+/// Bytes read and written to change [`STATE`].
+const WORD: usize = 4;
 /// The largest write size a module's last bytes can be padded to.
 const TAIL: usize = 16;
 /// Bytes per read of a module.
@@ -35,6 +45,8 @@ const BOUNCE: usize = 1024;
 pub struct Header {
     pub id: PluginId,
     pub len: usize,
+    /// Whether the user accepted the plugin; one that waits is not loaded.
+    pub accepted: bool,
     hash: [u8; HASH],
 }
 
@@ -42,6 +54,8 @@ pub struct Header {
 pub enum Error {
     /// The partition has no slot with that number.
     NoSlot,
+    /// The slot holds no plugin.
+    Empty,
     /// The module is longer than [`MODULE_MAX`].
     TooLong,
     /// The buffer is shorter than the module.
@@ -100,8 +114,28 @@ impl<F: NorFlash> Slots<F> {
         Ok(Some(Header {
             id: PluginId::from_bytes(id),
             len,
+            accepted: raw[STATE] != PENDING,
             hash,
         }))
+    }
+
+    /// Marks slot `n`'s plugin accepted. Only bits are cleared: nothing is erased, and module
+    /// and hash stay as they are.
+    pub fn accept(&mut self, n: usize) -> Result<(), Error> {
+        if self.header(n)?.is_none() {
+            return Err(Error::Empty);
+        }
+        if !WORD.is_multiple_of(F::WRITE_SIZE) {
+            return Err(Error::WriteSize);
+        }
+        if !WORD.is_multiple_of(F::READ_SIZE) {
+            return Err(Error::ReadSize);
+        }
+        let at = self.start(n)? + (STATE / WORD * WORD) as u32;
+        let mut word = Aligned([0u8; WORD]);
+        self.flash.read(at, &mut word.0).map_err(flash_error)?;
+        word.0[STATE % WORD] = ACCEPTED;
+        self.flash.write(at, &word.0).map_err(flash_error)
     }
 
     /// Copies slot `n`'s module into `buf` and checks it against the header.
@@ -153,6 +187,7 @@ impl<F: NorFlash> Slots<F> {
         let header = Header {
             id,
             len: wasm.len(),
+            accepted: false,
             hash: digest(wasm),
         };
 
@@ -177,6 +212,7 @@ impl<F: NorFlash> Slots<F> {
         let mut raw = Aligned([0u8; HEADER]);
         raw.0[0..4].copy_from_slice(&MAGIC);
         raw.0[4] = FORMAT;
+        raw.0[STATE] = PENDING;
         raw.0[8..16].copy_from_slice(&id.bytes());
         raw.0[16..20].copy_from_slice(&(wasm.len() as u32).to_le_bytes());
         raw.0[20..20 + HASH].copy_from_slice(&header.hash);

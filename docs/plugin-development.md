@@ -345,7 +345,8 @@ gear and the Music Player stand on the first page alone -- which is also why a l
 its plugins at one o'clock rather than where the first page has them. A row of dots under the top segment counts the pages. Nothing in a
 face notices any of this: it has a place in both rings either way.
 
-A new plugin appears on Home right away. Only plugins the user removed are hidden.
+A new plugin appears on Home right away, after the plugins before it. Home keeps no gaps: a
+plugin the user removes gives up its segment, and the ones after it move up.
 
 ### 5. Flash and find it
 
