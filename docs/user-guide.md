@@ -259,13 +259,12 @@ camera, which is quicker than spelling out a web address.
 ```
                           TeeToTum
                            12
-              Blog  11           1  Claude Code
-                 10                 2  Waveshare
-                 9                     3  Espressif
+      Plugin guide  11           1  Claude Code
+         Issues  10                 2  Waveshare
+  Author's blog  9                     3  Espressif
                   8                  4  wasmi
-           Issues  7              5  Plugin guide
+                   7              5  esp-rs
                            6
-                         esp-rs
 ```
 
 | Segment | Leads to |
@@ -275,10 +274,10 @@ camera, which is quicker than spelling out a web address.
 | `Waveshare` | the hardware's wiki page, `waveshare.com/wiki/ESP32-S3-Knob-Touch-LCD-1.8` |
 | `Espressif` | the maker of both chips on the board, `espressif.com` |
 | `wasmi` | the WebAssembly runtime the plugins run in, `github.com/wasmi-labs/wasmi` |
-| `Plugin guide` | the guide to writing a plugin, in this firmware's repository, `github.com/teetotum-rs/firmware/blob/main/docs/plugin-development.md` |
 | `esp-rs` | the Rust projects for Espressif's chips that the firmware is built on, `github.com/esp-rs` |
+| `Author's blog` | the author's blog, `stefangruehn.github.io` |
 | `Issues` | where to report a problem with the firmware, `github.com/teetotum-rs/firmware/issues` |
-| `Blog` | the author's blog, `stefangruehn.github.io` |
+| `Plugin guide` | the guide to writing a plugin, in this firmware's repository, `github.com/teetotum-rs/firmware/blob/main/docs/plugin-development.md` |
 
 - **A first tap selects a segment, a second one opens its code.** The code fills the middle of the
   screen, black on white. Below it always stands the site it leads to (for example `github.com`), and

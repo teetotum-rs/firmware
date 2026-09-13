@@ -96,9 +96,9 @@ remove any of them.
 
 | Plugin     | Summary on Home                  | Size        | Rights                  |
 |------------|----------------------------------|-------------|-------------------------|
-| HID remote | "remote for the phone's player"  | 1248 bytes  | `hid knob`              |
-| Teetotum   | "a die of 2 to 256 sides"        | 2604 bytes  | `knob random`           |
-| Nearby     | "Wi-Fi and Bluetooth around you" | 7133 bytes  | `knob radio haptic`     |
+| HID remote | "remote for the phone's player"  | 1381 bytes  | `hid knob`              |
+| Teetotum   | "a die of 2 to 256 sides"        | 2737 bytes  | `knob random`           |
+| Nearby     | "Wi-Fi and Bluetooth around you" | 7266 bytes  | `knob radio haptic`     |
 
 Sizes are those of the modules in the firmware as of 12 September 2026.
 
@@ -340,7 +340,7 @@ looks like this:
 ```
           Teetotum
    bundled with the firmware
-         2604 bytes
+         2737 bytes
      rights knob random
       loaded in 45.3 ms
         14.1 KB heap
@@ -462,13 +462,15 @@ never show one):
 | "asks for N pages of memory, a face gets 1"               | It wants more than the one 64 KiB block every plugin gets. |
 | "imports NAME, which the firmware does not offer"         | It asks for a function this firmware does not have. |
 | "imports NAME without the right RIGHT in its manifest"    | It uses a function it has not declared the right for, for example "imports send_usage without the right hid in its manifest". |
+| "signature does not match its bytes and key"              | The file was changed after its author signed it. |
 | "no memory to run in"                                     | The memory block for plugins was not available. |
 
 The interpreter can also refuse a file that is not valid WebAssembly; the reason is then its own
 message.
 
 A plugin whose manifest cannot be read at all (for example one written for a newer manifest
-format) does not appear anywhere, neither on Home nor in the settings.
+format or a newer firmware), or that is not signed, does not appear anywhere, neither on Home nor
+in the settings.
 
 ---
 
@@ -533,9 +535,9 @@ To add a plugin today you rebuild the firmware:
 1. Build the plugin, or get its `.wasm` file from its author. How to build one is described in
    [plugin development](plugin-development.md).
 2. Put the file into `firmware/assets/plugins/` and add it **at the end** of the list `BUNDLED`
-   in `firmware/src/bin/main.rs`. The order matters: the Knob remembers which plugins you
-   removed by their position in that list, so a new plugin must never be inserted before the
-   existing ones.
+   in `firmware/src/bin/main.rs`. The file must be signed by its author (the plugin guide's
+   build step does that). The Knob remembers a removed plugin by its author's key and its name,
+   so a copy signed with another key counts as a different plugin.
 3. Build and flash the firmware as described in
    [Building and flashing it yourself](user-guide.md#9-building-and-flashing-it-yourself).
 

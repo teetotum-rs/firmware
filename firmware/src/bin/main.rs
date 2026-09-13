@@ -61,7 +61,7 @@ use teetotum_firmware::flash::{self, TABLE_SCRATCH};
 use teetotum_face::manifest::Manifest;
 use teetotum_face::{Event as FaceEvent, HINT, Radio, Rights, Usage};
 use teetotum_firmware::nearby::{self, Heard};
-use teetotum_firmware::plugin::{self, Page, Plugin};
+use teetotum_firmware::plugin::{self, Page, Plugin, PluginId};
 use teetotum_firmware::backlight::Backlight;
 use esp_hal::usb_serial_jtag::UsbSerialJtag;
 use teetotum_firmware::shot;
@@ -512,7 +512,7 @@ impl Face {
     }
 }
 
-/// The plugins that come with the firmware, in the order [`Settings::removed`] counts them.
+/// The plugins that come with the firmware, each signed (`tools/sign-face.py`).
 ///
 /// **Three so far, taking turns in one page of external RAM** -- see [`start_plugin`]. The HID
 /// remote (`plugins/hid-remote`), the teetotum (`plugins/teetotum-plugin`) and Nearby
@@ -520,8 +520,9 @@ impl Face {
 /// housing and the FAT code only reads -- a plugin that ships is a plugin in the image, and
 /// removing it takes its face off home, not its bytes out of flash.
 ///
-/// **A new one goes at the end.** The stored record names a face and the removed plugins by
-/// their place here, so a place once given keeps meaning the same plugin.
+/// **The order decides only where each stands in the rings.** The settings record names removed
+/// plugins by [`PluginId`]; records before version 11 named them by place here, so the first
+/// three have to stay where they are for those to be read.
 ///
 /// **Three fit either ring without paging**, so nothing here shows the pages off. To see them,
 /// run `plugins/dummy/build.sh` and add its nine modules below: twelve plugins put both rings on
@@ -578,6 +579,11 @@ const _: () = assert!(FACES_ON_FIRST_HOME_PAGE > 0 && PLUGINS_ON_FIRST_SETTINGS_
 const _: () = assert!(pages_for(BUNDLED.len(), FACES_ON_FIRST_HOME_PAGE) <= MAX_PAGES);
 const _: () = assert!(pages_for(BUNDLED.len(), PLUGINS_ON_FIRST_SETTINGS_PAGE) <= MAX_PAGES);
 const _: () = assert!(BUNDLED.len() <= Settings::PLUGINS_MAX);
+
+/// Each bundled plugin's id; `None` for one without a readable manifest or signature section.
+fn bundled_ids() -> [Option<PluginId>; BUNDLED.len()] {
+    core::array::from_fn(|n| PluginId::of(BUNDLED[n]).ok())
+}
 
 /// What the firmware puts into a plugin's menu for it, while faces cannot bring entries of their
 /// own: its About, drawn from the manifest, and whether it is installed.
@@ -849,6 +855,8 @@ struct Overview {
 /// What the settings know about the bundled plugin.
 #[derive(Clone, PartialEq, Eq)]
 struct PluginView {
+    /// What the settings record names it by.
+    id: PluginId,
     name: &'static str,
     /// The line from its manifest that home shows under its name.
     summary: &'static str,
@@ -1184,7 +1192,10 @@ async fn main(spawner: Spawner) -> ! {
         Some(store) => {
             let mut buf = [0u8; settings::LEN];
             match store.load(&mut buf) {
-                Ok(Some(len)) => Settings::decode(&buf[..len]),
+                Ok(Some(len)) => {
+                    info!("Settings: record version {}, {len} bytes", buf[0]);
+                    Settings::decode(&buf[..len], &bundled_ids())
+                }
                 Ok(None) => Settings::default(),
                 Err(e) => {
                     error!("Settings: could not be read: {e:?}");
@@ -1193,7 +1204,11 @@ async fn main(spawner: Spawner) -> ! {
             }
         }
     };
-    info!("Settings: colour theme {}", stored.theme.name());
+    let removed = bundled_ids().iter().flatten().filter(|id| !stored.installed(**id)).count();
+    info!(
+        "Settings: colour theme {}, {removed} bundled plugins removed",
+        stored.theme.name()
+    );
 
     // What the drive stood at before this boot wrote it. **The driver keeps it across a reset of
     // this chip** -- a boot after a flash once read back `0x17`/`0x32`, the step the previous
@@ -1640,8 +1655,11 @@ async fn main(spawner: Spawner) -> ! {
     // at a time -- see [`start_plugin`]. This comes after the radio: the heap is shared, and a
     // plugin that does not fit is a plugin missing, where a radio that does not fit is a device
     // missing.
+    // A plugin without a signature section is treated as one without a manifest: it has no id.
+    let ids = bundled_ids();
     let manifests: [Option<Manifest<'static>>; BUNDLED.len()] = core::array::from_fn(|n| {
-        Manifest::read(BUNDLED[n])
+        PluginId::of(BUNDLED[n])
+            .and(Manifest::read(BUNDLED[n]))
             .inspect_err(|e| error!("Plugin: bundled plugin {n} has no usable manifest -- {e}"))
             .ok()
     });
@@ -1737,12 +1755,13 @@ async fn main(spawner: Spawner) -> ! {
             motion: settings.motion,
             shape: settings.shape,
             plugins: core::array::from_fn(|n| {
-                manifests[n].map(|manifest| PluginView {
+                manifests[n].zip(ids[n]).map(|(manifest, id)| PluginView {
+                    id,
                     name: manifest.name(),
                     summary: manifest.summary(),
                     bytes: BUNDLED[n].len(),
                     rights: manifest.rights(),
-                    installed: settings.installed(n),
+                    installed: settings.installed(id),
                     loaded: None,
                     fault: None,
                 })
@@ -2109,10 +2128,9 @@ async fn main(spawner: Spawner) -> ! {
                             if let Some((n, PluginSetting::Installed)) = PluginSetting::of(id)
                                 && detents % 2 != 0
                             {
-                                let installed = !settings.installed(n);
-                                settings.set_installed(n, installed);
                                 if let Some(view) = state.plugins[n].as_mut() {
-                                    view.installed = installed;
+                                    view.installed = !settings.installed(view.id);
+                                    settings.set_installed(view.id, view.installed);
                                 }
                             }
                         }
@@ -2287,7 +2305,10 @@ async fn main(spawner: Spawner) -> ! {
                                             && let Some((n, PluginSetting::Installed)) =
                                                 PluginSetting::of(id)
                                         {
-                                            if !settings.installed(n) {
+                                            if state.plugins[n]
+                                                .as_ref()
+                                                .is_some_and(|view| !settings.installed(view.id))
+                                            {
                                                 if running.as_ref().is_some_and(|(m, _)| *m == n) {
                                                     stop_plugin(
                                                         &mut running,
@@ -3091,10 +3112,8 @@ fn take_back(
     state.cover = settings.cover;
     state.motion = settings.motion;
     state.shape = settings.shape;
-    for (n, view) in state.plugins.iter_mut().enumerate() {
-        if let Some(view) = view {
-            view.installed = settings.installed(n);
-        }
+    for view in state.plugins.iter_mut().flatten() {
+        view.installed = settings.installed(view.id);
     }
     if let Some(screen) = screen {
         screen.set_orientation(state.orientation);

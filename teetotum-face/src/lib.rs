@@ -76,7 +76,10 @@
 //!
 //! At load, before any code of the face has run:
 //!
-//! - a module without a manifest, or with one this version cannot read;
+//! - a module without a manifest, or with one this version cannot read -- including one built
+//!   against a newer [`abi::VERSION`];
+//! - a module that is not signed, or whose signature does not match its bytes and key (see
+//!   [`manifest`]);
 //! - memory that is not imported, or more than one page of it;
 //! - an import that is not one of this crate's functions;
 //! - [`send`] without [`Rights::HID`] in the manifest, [`random`] without [`Rights::RANDOM`],
@@ -150,6 +153,9 @@ pub const HINT: Area = Area {
 /// }
 /// ```
 ///
+/// The version in the manifest is the face crate's own, from its `Cargo.toml`. The module still
+/// has to be signed after it is built; see [`manifest`].
+///
 /// The initial value is a constant: the module starts with it in its memory, and no code of the
 /// face runs until the first event. The macro also brings the panic handler -- a panic is a trap,
 /// and a trap stops the face.
@@ -166,7 +172,13 @@ macro_rules! face {
         #[unsafe(link_section = "teetotum.manifest")]
         #[used]
         static __TEETOTUM_MANIFEST: [u8; $crate::manifest::LEN] =
-            $crate::manifest::encode($name, $summary, &$icon, $rights);
+            $crate::manifest::encode(
+                $name,
+                $summary,
+                &$icon,
+                $rights,
+                $crate::manifest::Version::parse(env!("CARGO_PKG_VERSION")),
+            );
 
         static mut __TEETOTUM_FACE: $face = $init;
 

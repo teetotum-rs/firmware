@@ -15,8 +15,8 @@ If you want to know what the bundled plugins do or how a user removes one, read
 > **Not stable yet.** Everything below describes the code as it stands in this repository.
 >
 > - `teetotum-face` is **not published on crates.io**. A plugin depends on it by path.
-> - The API and the manifest format may change without notice. The manifest already went from
->   format 1 to format 2, and format 1 is no longer read.
+> - The API and the manifest format may change without notice. The manifest is at format 3, and
+>   formats 1 and 2 are no longer read.
 > - **Plugins are built into the firmware image.** The firmware loads them at run time, but only
 >   from the list `BUNDLED` in `firmware/src/bin/main.rs`, which embeds each `.wasm` file with
 >   `include_bytes!`. Loading a plugin from the SD card, over Wi-Fi or over Bluetooth is not
@@ -121,7 +121,7 @@ wasmi gives:
 
 - a sandbox that cannot write outside its own memory,
 - a toolchain that is a stock `rustup` target (no ESP toolchain needed for the plugin),
-- small modules: the bundled HID remote is 1248 bytes,
+- small modules: the bundled HID remote is 1381 bytes,
 - validation of foreign modules before they run.
 
 The price is speed (about 30x slower than native) and flash in the firmware image (wasmi was
@@ -288,9 +288,23 @@ most of the module (see [Keeping a plugin small](#9-keeping-a-plugin-small)).
 ```
 
 This is a plain `cargo build --release` (the target and linker flags come from
-`.cargo/config.toml`) and a copy of the result to `firmware/assets/plugins/my-face.wasm`. It
-prints the size. Outside the repository, `cargo build --release` leaves the module at
-`target/wasm32v1-none/release/my_face.wasm`.
+`.cargo/config.toml`), a copy of the result to `firmware/assets/plugins/my-face.wasm` and a
+signature. It prints the size and the start of the signing key. Outside the repository,
+`cargo build --release` leaves the module at `target/wasm32v1-none/release/my_face.wasm`, and
+you sign it yourself:
+
+```sh
+tools/sign-face.py my_face.wasm            # sign (again)
+tools/sign-face.py --check my_face.wasm    # verify
+```
+
+**The firmware loads only signed plugins.** `tools/sign-face.py` appends your Ed25519 key and a
+signature over the module as its last section, `teetotum.signature`; it needs `openssl` 3.0 or
+later. The key is a PEM file: `--key`, else `$TEETOTUM_KEY`, else
+`~/.config/teetotum/face-key.pem`, created on first use. **Keep it and back it up.** Your key and
+the plugin's name together are the plugin's identity: the Knob remembers a removed plugin by
+it, and a build signed with another key is a different plugin. There is no central authority;
+any key is accepted, but the bytes must be the ones that key signed.
 
 A face that does not fit the SDK's limits fails **at compile time**. The manifest is a constant,
 so a summary that is too long, for example, is a compile error:
@@ -313,9 +327,9 @@ const BUNDLED: [&[u8]; 4] = [
 ];
 ```
 
-**Why at the end:** the settings record in flash stores which plugins the user removed by their
-position in this list. Inserting a plugin in the middle would give every later position a
-different meaning, so a plugin the user removed would come back and another one would vanish.
+**Why at the end:** the order decides where each plugin stands in the rings. The settings record
+stores removed plugins by their identity (key and name), not by position; only records written
+before version 11 used positions, so the first three entries stay where they are.
 
 **How many fit:** a ring holds nine plugin faces at Home (segments 1 to 9) and five plugin menus
 in the settings (segments 6 to 10). **Beyond that the ring runs on to a second page**, which
@@ -451,20 +465,20 @@ out=../../firmware/assets/plugins
 mkdir -p "$out"
 cargo build --release -q
 cp target/wasm32v1-none/release/hid_remote.wasm "$out/hid-remote.wasm"
-echo "$out/hid-remote.wasm: $(wc -c < "$out/hid-remote.wasm") bytes"
+../../tools/sign-face.py "$out/hid-remote.wasm"
 ```
 
-Nothing more than a build and a copy into `firmware/assets/plugins/`, where `BUNDLED` embeds it
-from. The built `.wasm` files are committed, so the firmware builds without building the plugins
+Nothing more than a build, a copy into `firmware/assets/plugins/`, where `BUNDLED` embeds it
+from, and the signature (see [Build](#3-build)). The built `.wasm` files are committed, so the firmware builds without building the plugins
 first. After changing a plugin, run its `build.sh` and rebuild the firmware.
 
 ### The examples
 
 | Plugin | Size | Rights | Shows how to |
 |---|---|---|---|
-| `plugins/hid-remote` | 1248 bytes | `HID`, `KNOB` | map taps, wipes and detents to phone media keys with `send`, react to `Linked`/`Unlinked` |
-| `plugins/teetotum-plugin` | 2604 bytes | `KNOB`, `RANDOM` | use the knob, draw unbiased random numbers, draw a segmented ring with `arc`, format numbers without `core::fmt` |
-| `plugins/nearby` | 7133 bytes | `KNOB`, `RADIO`, `HAPTIC` | read radio rounds with `nearby`, keep the motor pulsing with `pulse`, build text lines without `core::fmt`, avoid `memmove` |
+| `plugins/hid-remote` | 1381 bytes | `HID`, `KNOB` | map taps, wipes and detents to phone media keys with `send`, react to `Linked`/`Unlinked` |
+| `plugins/teetotum-plugin` | 2737 bytes | `KNOB`, `RANDOM` | use the knob, draw unbiased random numbers, draw a segmented ring with `arc`, format numbers without `core::fmt` |
+| `plugins/nearby` | 7266 bytes | `KNOB`, `RADIO`, `HAPTIC` | read radio rounds with `nearby`, keep the motor pulsing with `pulse`, build text lines without `core::fmt`, avoid `memmove` |
 
 ## 4. The `face!` macro and the manifest
 
@@ -529,20 +543,33 @@ a custom section named `teetotum.manifest`, so the module and its manifest canno
 or mixed up. The firmware reads it at boot for every bundled plugin, to put the name and icon
 on Home and in the settings, and again when it loads the plugin.
 
-Format version 2, 155 bytes, laid out by hand (`teetotum-face/src/manifest.rs`):
+Format version 3, 163 bytes, laid out by hand (`teetotum-face/src/manifest.rs`):
 
 ```text
 offset     content
-0          format version, 2
+0          format version, 3
 1..5       rights, u32 little-endian
 5          length of the name in bytes, 1 to 20
 6..26      the name, UTF-8, padded with zeros
 26..122    the icon: 24 rows, u32 little-endian, bit 23 leftmost
 122        length of the summary in bytes, 0 to 32
 123..155   the summary, UTF-8, padded with zeros
+155..157   the host ABI the face was built against, u16 little-endian
+157..163   the face's own version: major, minor, patch, u16 little-endian each
 ```
 
-Format 1 (without the summary) is no longer read.
+`face!` fills in both numbers: the ABI from `teetotum_face::abi::VERSION`, the version from your
+crate's `Cargo.toml` (a pre-release suffix such as `-beta` is dropped). A firmware refuses a
+plugin built against a newer ABI than its own. Formats 1 and 2 are no longer read.
+
+### The signature
+
+A second custom section, `teetotum.signature`, 96 bytes: the author's Ed25519 public key (32),
+then the signature (64) over every byte of the module before this section. It must be the
+module's **last** section, so nothing can be appended to a signed module. The key is not in the
+manifest because it is not part of the source: the same source signed by someone else is someone
+else's plugin. `tools/sign-face.py` writes the section; `teetotum_face::manifest::Signed` reads
+it without checking the signature, which the firmware does with `ed25519-compact`.
 
 ### Rights
 
@@ -565,17 +592,20 @@ In this order (`firmware/src/plugin.rs`, `instantiate` and `check_imports`):
 
 1. **Manifest.** The custom section is found by walking the module's section headers, without
    validating anything else. Refused if the module is not WebAssembly, has no manifest, has two,
-   is too short, has another format version, has an empty/too long/non-UTF-8 name or summary, or
-   has unknown rights.
-2. **Heap estimate.** Before wasmi allocates anything, the loader estimates the heap the module
+   is too short, has another format version, has an empty/too long/non-UTF-8 name or summary,
+   has unknown rights, or was built against a newer host ABI.
+2. **Signature.** The section `teetotum.signature` must be there, be the last section and be 96
+   bytes long, and the signature must hold for the bytes before it and the key in it. Nothing
+   has been compiled yet; the check runs in software on the chip.
+3. **Heap estimate.** Before wasmi allocates anything, the loader estimates the heap the module
    will need from its size (`heap_needed`, see [Heap](#heap-what-limits-the-largest-plugin)) and
    refuses it if that is more than is free.
-3. **Validation and compilation.** wasmi validates and translates the whole module (eagerly).
-4. **Imports.** Every import must be either `env.memory` (a memory of at most one page) or one of
+4. **Validation and compilation.** wasmi validates and translates the whole module (eagerly).
+5. **Imports.** Every import must be either `env.memory` (a memory of at most one page) or one of
    the functions in the module `teetotum`: `text`, `arc`, `icon`, `send_usage`, `random`,
    `nearby`, `pulse`. The four functions behind a right are only accepted if the manifest has
    that right. There must be an imported memory.
-5. **Instantiation** with limits: one memory of 64 KiB, one table, one instance. The page is
+6. **Instantiation** with limits: one memory of 64 KiB, one table, one instance. The page is
    linked in, and the module must export `on_event` and `draw` with the right signatures.
 
 Only the functions the manifest grants are defined in the linker at all. The exact refusal
@@ -993,19 +1023,18 @@ that computes per pixel is not what a face is for.
 
 The page costs nothing in internal RAM, but wasmi's own structures for a loaded plugin do. They
 come out of the firmware's internal heap (about 136 KiB), which the Wi-Fi and Bluetooth stacks
-also use. Measured in the firmware on 2026-09-11:
+also use. Measured on the board:
 
 | | Module | Heap while loaded | Load time |
 |---|---|---|---|
 | none loaded | — | 56 948 bytes free at boot | — |
-| HID remote | 1 248 bytes | +11 208 bytes | about 19 ms |
-| Teetotum (dice) | 2 604 bytes | +14 112 bytes | about 45 ms |
-| Nearby | 7 133 bytes | +21 324 bytes (35 384 left free) | about 85 ms |
+| HID remote | 1 381 bytes | +11 208 bytes | about 54 ms, 34 of them the signature check |
+| Teetotum (dice) | 2 737 bytes | +14 112 bytes | about 80 ms, 36 of them the signature check |
+| Nearby | 7 266 bytes | +21 324 bytes (35 384 left free) | about 123 ms, 40 of them the signature check |
 
-The HID remote's row was measured on 2026-09-12, after a detent became fast forward and rewind,
-by the `heapguard` run rather than in the firmware; the other two rows are the firmware's own.
-The two overlap: that run weighed Teetotum and Nearby to the same byte, and loaded them a few
-milliseconds faster with no radio running.
+The heap was measured in the firmware on 2026-09-11 and again by the `faceheap` run on
+2026-09-13, after plugins were signed: to the same byte. The load times are that run's, with no
+radio running. The Ed25519 check runs in software and allocates nothing.
 
 Where it goes:
 
@@ -1174,9 +1203,10 @@ section  7                           19 bytes
   export draw
   export on_event
 section 10                          478 bytes
-section 11                          408 bytes
-custom  teetotum.manifest           173 bytes
-  format 2, rights 0x3, name 'HID remote', summary "remote for the phone's player"
+section 11                          416 bytes
+custom  teetotum.manifest           181 bytes
+  format 3, rights 0x3, name 'HID remote', summary "remote for the phone's player"
+custom  teetotum.signature          115 bytes
 ```
 
 Check three things: the memory import is `1 to 1 pages`; every `teetotum.*` import behind a
@@ -1250,8 +1280,12 @@ The face stays on Home; opening it shows "stopped" and the reason, and the log s
 | `not a WebAssembly module` | the bytes do not start like a module, or its sections do not add up |
 | `no manifest` | no `teetotum.manifest` section: the module was not built with `face!` |
 | `two manifests` | two such sections |
-| `manifest too short` | shorter than 155 bytes |
-| `manifest format N, this firmware reads 2` | built against another version of the SDK |
+| `manifest too short` | shorter than 163 bytes |
+| `manifest format N, this firmware reads 3` | built against another version of the SDK |
+| `built for host ABI N, this firmware offers N` | built against a newer SDK than this firmware |
+| `not signed` | no `teetotum.signature` section: run `tools/sign-face.py` |
+| `signature section malformed or not last` | something was appended after signing, or the section is not 96 bytes |
+| `signature does not match its bytes and key` | the module changed after it was signed, or was signed with another key than the one it names |
 | `manifest name empty, too long or not UTF-8` | |
 | `manifest summary too long or not UTF-8` | |
 | `rights 0x.. include some this firmware lacks` | built for a newer firmware |
@@ -1412,10 +1446,13 @@ At most 64 drawing calls per `draw`, 20 000 fuel per call.
 | Item | Value |
 |---|---|
 | `manifest::SECTION` | `"teetotum.manifest"` |
-| `manifest::VERSION` | 2 |
+| `manifest::VERSION` | 3 |
 | `manifest::NAME_MAX`, `manifest::SUMMARY_MAX` | 20, 32 bytes |
-| `manifest::LEN` | 155 bytes |
-| `manifest::Manifest`, `manifest::Error`, `manifest::encode` | reading and writing manifests; used by the firmware and `face!` |
+| `manifest::LEN` | 163 bytes |
+| `manifest::SIGNATURE`, `manifest::KEY_LEN`, `manifest::SIGNATURE_LEN` | `"teetotum.signature"`, 32, 64 bytes |
+| `manifest::Manifest`, `manifest::Error`, `manifest::encode`, `manifest::Version` | reading and writing manifests; used by the firmware and `face!` |
+| `manifest::Signed` | a module split at its signature section; the firmware checks the signature |
+| `abi::VERSION` | 1 |
 | `abi::FUEL` | 20 000 |
 | `abi::DRAWS_MAX`, `abi::TEXT_MAX` | 64, 128 |
 | `abi::RADIUS_MAX`, `abi::WIDTH_MAX` | 512, 64 |
@@ -1444,7 +1481,8 @@ imports   module "teetotum"
           nearby(radio, at, max) -> count          right RADIO; records of 40 bytes
           pulse(every_ms)                          right HAPTIC
 
-custom    section "teetotum.manifest", 155 bytes, format 2 (see section 4)
+custom    section "teetotum.manifest", 163 bytes, format 3 (see section 4)
+          section "teetotum.signature", 96 bytes, last (see section 4)
 
 colour    0x0000..0xFFFF RGB565; 0x00010000 + role for a theme role (0 ring, 1 selected,
           2 empty, 3 icon, 4 name, 5 value, 6 quiet)

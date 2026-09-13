@@ -28,6 +28,9 @@ teetotum-face = { path = "teetotum-face", version = "0.1.0" }
 
 bt-hci                 = "0.8.0"
 critical-section       = "1.2.0"
+# `opt_size` keeps the field arithmetic out of line: inlined, one function outgrows the reach of
+# Xtensa's L32R literals and the link fails.
+ed25519-compact        = { version = "2.4.2", default-features = false, features = ["opt_size"] }
 embassy-executor       = { version = "0.10.0", features = ["log"] }
 embassy-futures        = "0.1.2"
 embassy-net            = { version = "0.9.1", features = [

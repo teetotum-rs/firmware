@@ -30,6 +30,7 @@ teetotum-face = { workspace = true }
 
 bt-hci                 = { workspace = true }
 critical-section       = { workspace = true }
+ed25519-compact        = { workspace = true }
 embassy-executor       = { workspace = true }
 embassy-futures        = { workspace = true }
 embassy-net            = { workspace = true }

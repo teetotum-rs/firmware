@@ -18,7 +18,7 @@
 //! 5   which of the twelve steps the picture stands at
 //! 6   the colour theme                                  since version 3
 //! 7   reserved, written 0 (was the face, see VERSION)   since version 4
-//! 8   bundled plugins removed, the low eight bits      since version 4
+//! 8   reserved, written 0 (was removed plugins, see VERSION) since version 4
 //! 9   the glass's brightness, a step from 1 to 10       since version 5
 //! 10  how hard the motor clicks, a step from 0 to 9     since version 6
 //! 11  how big the cover stands, 0 sharp or 1 full       since version 7
@@ -27,7 +27,8 @@
 //! 14  the cloud's brightest, in percent                 since version 9
 //! 15  the cloud's dark centre, in pixels                since version 9
 //! 16  the cloud's points in the icon colour, percent    since version 9
-//! 17  bundled plugins removed, bits 8 to 15             since version 10
+//! 17  how many bundled plugins were removed, 0 to 16   since version 11
+//! 18  their ids, eight bytes each                      since version 11
 //! ```
 
 use teetotum::haptic::Calibration;
@@ -36,6 +37,8 @@ use teetotum::menu::{
     PALETTE_MAGENTA, PALETTE_ORANGE, PALETTE_PINK, PALETTE_RED, PALETTE_VIOLET, Palette,
 };
 use teetotum::rotate::STEPS;
+
+use crate::plugin::PluginId;
 
 /// The version this build writes.
 ///
@@ -60,10 +63,18 @@ use teetotum::rotate::STEPS;
 /// set the bit of the first. The old byte keeps its meaning, so a version 9 record is read as
 /// one whose upper eight plugins are all installed -- which, on a board that had at most eight,
 /// is what it says.
-const VERSION: u8 = 10;
+///
+/// **From 10 to 11 the removed plugins are named by id** ([`PluginId`]) instead of by their place
+/// in the firmware's list, so a plugin stays removed wherever it stands, and a signed plugin is
+/// told apart from another of the same name. Byte 8 is written 0, byte 17 counts the ids that
+/// follow. A version 10 record is read by looking its bits up in the list this build bundles.
+const VERSION: u8 = 11;
 
 /// How many bytes an encoded record takes.
-pub const LEN: usize = 18;
+pub const LEN: usize = LEN_10 + Settings::PLUGINS_MAX * PluginId::LEN;
+
+const VERSION_10: u8 = 10;
+const LEN_10: usize = 18;
 
 /// The previous versions, still read: the same record without its last bytes.
 const VERSION_9: u8 = 9;
@@ -101,13 +112,13 @@ pub struct Settings {
     pub orientation: u8,
     /// Which colours the settings are drawn in.
     pub theme: Theme,
-    /// The plugins that came with the firmware and were removed, one bit each; at most sixteen.
+    /// The plugins that came with the firmware and were removed.
     ///
     /// **Removed rather than installed**, because a bundled plugin ships installed: the record a
     /// fresh board has -- none -- already says so. Removing one frees what a loaded face holds,
     /// its heap and its page; the module itself stays in the firmware image, which is also what
     /// lets it be installed again.
-    pub removed: u16,
+    removed: Removed,
     /// How bright the glass is.
     pub brightness: Brightness,
     /// How hard the motor clicks.
@@ -118,6 +129,70 @@ pub struct Settings {
     pub motion: Motion,
     /// How the cloud looks.
     pub shape: CloudShape,
+}
+
+/// Ids of removed plugins, sorted, so that two records removing the same plugins compare equal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+struct Removed {
+    ids: [PluginId; Settings::PLUGINS_MAX],
+    len: u8,
+}
+
+impl Removed {
+    fn ids(&self) -> &[PluginId] {
+        &self.ids[..usize::from(self.len)]
+    }
+
+    fn contains(&self, id: PluginId) -> bool {
+        self.ids().binary_search(&id).is_ok()
+    }
+
+    fn insert(&mut self, id: PluginId) {
+        let len = usize::from(self.len);
+        if let Err(at) = self.ids().binary_search(&id)
+            && len < self.ids.len()
+        {
+            self.ids.copy_within(at..len, at + 1);
+            self.ids[at] = id;
+            self.len += 1;
+        }
+    }
+
+    fn remove(&mut self, id: PluginId) {
+        let len = usize::from(self.len);
+        if let Ok(at) = self.ids().binary_search(&id) {
+            self.ids.copy_within(at + 1..len, at);
+            self.ids[len - 1] = PluginId::default();
+            self.len -= 1;
+        }
+    }
+
+    /// Version 11: `count` ids, of which those this build bundles are kept.
+    fn read(bytes: &[u8], count: u8, bundled: &[Option<PluginId>]) -> Self {
+        let mut removed = Self::default();
+        for chunk in bytes.chunks_exact(PluginId::LEN).take(usize::from(count)) {
+            let mut id = [0; PluginId::LEN];
+            id.copy_from_slice(chunk);
+            let id = PluginId::from_bytes(id);
+            if bundled.contains(&Some(id)) {
+                removed.insert(id);
+            }
+        }
+        removed
+    }
+
+    /// Before version 11: bit `n` for the `n`th bundled plugin.
+    fn from_bits(bits: u16, bundled: &[Option<PluginId>]) -> Self {
+        let mut removed = Self::default();
+        for (n, id) in bundled.iter().enumerate().take(u16::BITS as usize) {
+            if let Some(id) = id
+                && bits & (1 << n) != 0
+            {
+                removed.insert(*id);
+            }
+        }
+        removed
+    }
 }
 
 /// The cloud's shape as the Background menu sets it: the four sliders of the mockup it was
@@ -524,19 +599,21 @@ impl From<StoredCalibration> for Calibration {
 }
 
 impl Settings {
-    /// Whether bundled plugin `n` is installed.
-    pub fn installed(&self, n: usize) -> bool {
-        self.removed & (1 << n) == 0
+    /// How many removed plugins a record keeps.
+    pub const PLUGINS_MAX: usize = 16;
+
+    /// Whether the bundled plugin `id` is installed.
+    pub fn installed(&self, id: PluginId) -> bool {
+        !self.removed.contains(id)
     }
 
-    /// How many bundled plugins a record can keep apart.
-    pub const PLUGINS_MAX: usize = u16::BITS as usize;
-
-    pub fn set_installed(&mut self, n: usize, installed: bool) {
+    /// Past [`Self::PLUGINS_MAX`] removed plugins a removal is not kept. It does not come to that:
+    /// the firmware bundles no more than that many, and a record keeps only their ids.
+    pub fn set_installed(&mut self, id: PluginId, installed: bool) {
         if installed {
-            self.removed &= !(1 << n);
+            self.removed.remove(id);
         } else {
-            self.removed |= 1 << n;
+            self.removed.insert(id);
         }
     }
 
@@ -554,24 +631,32 @@ impl Settings {
         }
         buf[5] = self.orientation;
         buf[6] = self.theme as u8;
-        // Was the face; see [`VERSION`].
+        // Was the face, then the removed plugins' low bits; see [`VERSION`].
         buf[7] = 0;
-        buf[8] = self.removed as u8;
+        buf[8] = 0;
         buf[9] = self.brightness.0;
         buf[10] = self.haptics.0;
         buf[11] = self.cover as u8;
         buf[12] = self.motion as u8;
         self.shape.encode(&mut buf[13..17]);
-        buf[17] = (self.removed >> 8) as u8;
-        LEN
+        let ids = self.removed.ids();
+        buf[17] = self.removed.len;
+        for (id, out) in ids.iter().zip(buf[LEN_10..].chunks_exact_mut(PluginId::LEN)) {
+            out.copy_from_slice(&id.bytes());
+        }
+        LEN_10 + ids.len() * PluginId::LEN
     }
 
     /// Read a record back, or fall back to the defaults when it is not one this build knows.
-    pub fn decode(bytes: &[u8]) -> Self {
+    ///
+    /// `bundled` are the ids of the plugins this build bundles, in their order: a record before
+    /// version 11 names removed plugins by that order, and of a later one's ids only these are
+    /// kept.
+    pub fn decode(bytes: &[u8], bundled: &[Option<PluginId>]) -> Self {
         // Byte 7 of version 4 was the face, which the home menu chooses now.
-        let (theme, removed, brightness, haptics) = match bytes.first() {
-            Some(&VERSION) | Some(&VERSION_9) | Some(&VERSION_8) | Some(&VERSION_7)
-            | Some(&VERSION_6)
+        let (theme, bits, brightness, haptics) = match bytes.first() {
+            Some(&VERSION) | Some(&VERSION_10) | Some(&VERSION_9) | Some(&VERSION_8)
+            | Some(&VERSION_7) | Some(&VERSION_6)
                 if bytes.len() >= LEN_6 =>
             (
                 Theme::from_byte(bytes[6]),
@@ -608,7 +693,8 @@ impl Settings {
         };
         // Written before the cover's size could be chosen, so it stood as it does by default.
         let cover = match bytes.first() {
-            Some(&VERSION) | Some(&VERSION_9) | Some(&VERSION_8) | Some(&VERSION_7)
+            Some(&VERSION) | Some(&VERSION_10) | Some(&VERSION_9) | Some(&VERSION_8)
+            | Some(&VERSION_7)
                 if bytes.len() >= LEN_7 =>
             {
                 CoverStyle::from_byte(bytes[11])
@@ -617,23 +703,30 @@ impl Settings {
         };
         // Written before the cloud could move, so it stood still.
         let motion = match bytes.first() {
-            Some(&VERSION) | Some(&VERSION_9) | Some(&VERSION_8) if bytes.len() >= LEN_8 => {
+            Some(&VERSION) | Some(&VERSION_10) | Some(&VERSION_9) | Some(&VERSION_8)
+                if bytes.len() >= LEN_8 =>
+            {
                 Motion::from_byte(bytes[12])
             }
             _ => Motion::default(),
         };
         // Written before the cloud could be shaped, so it had the shape it was chosen with.
         let shape = match bytes.first() {
-            Some(&VERSION) | Some(&VERSION_9) if bytes.len() >= LEN_9 => {
+            Some(&VERSION) | Some(&VERSION_10) | Some(&VERSION_9) if bytes.len() >= LEN_9 => {
                 CloudShape::from_bytes(&bytes[13..17])
             }
             _ => CloudShape::default(),
         };
-        // Written before a ring could page, and so before there could be more than eight bundled
-        // plugins: the ones above the eighth were all installed, because there were none.
+        // Version 9 was written before a ring could page, and so before there could be more
+        // than eight bundled plugins: the ones above the eighth were all installed.
         let removed = match bytes.first() {
-            Some(&VERSION) if bytes.len() >= LEN => removed | u16::from(bytes[17]) << 8,
-            _ => removed,
+            Some(&VERSION) if bytes.len() >= LEN_10 => {
+                Removed::read(&bytes[LEN_10..], bytes[17], bundled)
+            }
+            Some(&VERSION_10) if bytes.len() >= LEN_10 => {
+                Removed::from_bits(bits | u16::from(bytes[17]) << 8, bundled)
+            }
+            _ => Removed::from_bits(bits, bundled),
         };
         Self {
             haptic: (bytes[1] == 1).then_some(StoredCalibration {

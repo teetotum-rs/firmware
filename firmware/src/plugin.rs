@@ -6,6 +6,9 @@
 //!   own has wasmi allocate it through the global allocator, which is internal RAM only: 76.6 KB
 //!   of a 136 KiB heap against 11.3 KB, at the same latency. So a module that does not import
 //!   its memory is refused, and the page is a [`Page`] cut out of the PSRAM once.
+//! - **A face is signed, and checked before anything else is.** Any key is accepted -- there is
+//!   no issuer -- but the bytes have to be the ones its holder signed. Key and name are the
+//!   face's identity; see [`PluginId`].
 //! - **What a face may do is settled before any of it runs.** The manifest comes out of its
 //!   custom section, the imports are checked against it, and only then is anything
 //!   instantiated. A face that imports `send_usage` without `Rights::HID` never gets that far.
@@ -32,10 +35,12 @@ use embedded_graphics::pixelcolor::Rgb565;
 use embedded_graphics::pixelcolor::raw::RawU16;
 use embedded_graphics::prelude::*;
 use embedded_graphics::primitives::{Arc, PrimitiveStyle};
+use ed25519_compact::{PublicKey, Signature, sha512};
 use esp_hal::rng::{Rng, Trng};
-use log::{error, warn};
+use esp_hal::time::Instant;
+use log::{error, info, warn};
 use teetotum::menu::{Palette, draw_packed, fonts, text};
-use teetotum_face::manifest::{self, Manifest};
+use teetotum_face::manifest::{self, Manifest, Signed};
 use teetotum_face::{Colour, Event, Icon, Paint, Radio, Rights, Role, Size, Usage, abi};
 use wasmi::{
     Caller, CompilationMode, Config, Engine, Error, ExternType, Linker, Memory, MemoryType,
@@ -321,10 +326,56 @@ impl Plugin {
     }
 }
 
+/// Who a face is, in the eight bytes the settings record keeps of it.
+///
+/// **The author's key and the face's name, hashed together**, so a face of the same name signed
+/// by another key is another face. Eight bytes of SHA-512 keep the faces of one device apart;
+/// anything that guards a face's secrets has to use the whole key.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PluginId([u8; PluginId::LEN]);
+
+impl PluginId {
+    pub const LEN: usize = 8;
+
+    pub fn new(key: &[u8; manifest::KEY_LEN], name: &str) -> Self {
+        let mut hash = sha512::Hash::new();
+        hash.update(key);
+        hash.update(name.as_bytes());
+        let digest = hash.finalize();
+        let mut id = [0; Self::LEN];
+        id.copy_from_slice(&digest[..Self::LEN]);
+        Self(id)
+    }
+
+    /// The id a module claims. The signature is not checked here; [`verify`] does that.
+    pub fn of(wasm: &[u8]) -> Result<Self, manifest::Error> {
+        let manifest = Manifest::read(wasm)?;
+        Ok(Self::new(Signed::read(wasm)?.key, manifest.name()))
+    }
+
+    pub const fn from_bytes(bytes: [u8; Self::LEN]) -> Self {
+        Self(bytes)
+    }
+
+    pub const fn bytes(self) -> [u8; Self::LEN] {
+        self.0
+    }
+}
+
+/// Whether a module's signature holds for its bytes and the key it names.
+pub fn verify(wasm: &[u8]) -> Result<(), LoadError> {
+    let signed = Signed::read(wasm).map_err(LoadError::Manifest)?;
+    PublicKey::new(*signed.key)
+        .verify(signed.message, &Signature::new(*signed.signature))
+        .map_err(|_| LoadError::Signature)
+}
+
 /// Why a face was not loaded.
 #[derive(Debug)]
 pub enum LoadError {
     Manifest(manifest::Error),
+    /// Its signature does not hold: the bytes are not what the key's holder signed.
+    Signature,
     /// The module brings its own memory, or none: it was built without `--import-memory`.
     OwnMemory,
     /// It asks for more pages than a face gets.
@@ -352,6 +403,7 @@ impl fmt::Display for LoadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Manifest(e) => write!(f, "{e}"),
+            Self::Signature => f.write_str("signature does not match its bytes and key"),
             Self::OwnMemory => f.write_str("does not import its memory"),
             Self::Pages(n) => write!(f, "asks for {n} pages of memory, a face gets 1"),
             Self::Import(name) => write!(f, "imports {name}, which the firmware does not offer"),
@@ -398,6 +450,14 @@ fn instantiate(
     LoadError,
 > {
     let manifest = Manifest::read(wasm).map_err(LoadError::Manifest)?;
+    let started = Instant::now();
+    verify(wasm)?;
+    info!(
+        "Plugin: {} {} signature holds, checked in {} ms",
+        manifest.name(),
+        manifest.version(),
+        started.elapsed().as_millis()
+    );
 
     // Before the engine, because from here on every allocation is wasmi's and none of them may
     // fail. `free` is the sum over the heap's regions rather than its largest block, so a

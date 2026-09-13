@@ -47,6 +47,7 @@ The plugins in `plugins/` depend only on `teetotum-face` from this repository.
 | `crypto-common` | 0.1.7 | MIT OR Apache-2.0 | https://github.com/RustCrypto/traits |
 | `digest` | 0.10.7 | MIT OR Apache-2.0 | https://github.com/RustCrypto/traits |
 | `docsplay` | 0.1.3 | MIT OR Apache-2.0 | https://github.com/bugadani/docsplay |
+| `ed25519-compact` | 2.4.2 | MIT | https://github.com/jedisct1/rust-ed25519-compact |
 | `embassy-embedded-hal` | 0.6.0 | MIT OR Apache-2.0 | https://github.com/embassy-rs/embassy |
 | `embassy-executor` | 0.10.0 | MIT OR Apache-2.0 | https://github.com/embassy-rs/embassy |
 | `embassy-executor-timer-queue` | 0.1.0 | MIT OR Apache-2.0 | https://github.com/embassy-rs/embassy |

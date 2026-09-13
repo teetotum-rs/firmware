@@ -10,26 +10,42 @@
 //! the only kind a dependency bump cannot change:
 //!
 //! ```text
-//! 0          format version, 2
+//! 0          format version, 3
 //! 1..5       rights, u32 little-endian
 //! 5          length of the name in bytes, 1 to NAME_MAX
 //! 6..26      the name, UTF-8, padded with zeros
 //! 26..122    the icon: 24 rows, u32 little-endian, bit 23 leftmost
 //! 122        length of the summary in bytes, 0 to SUMMARY_MAX
 //! 123..155   the summary, UTF-8, padded with zeros
+//! 155..157   the host ABI the face was built against, u16 little-endian
+//! 157..163   the face's own version: major, minor, patch, u16 little-endian each
 //! ```
 //!
-//! **Format 1 is not read any more.** It had no summary, and it went before the first release of
-//! this crate, when no face written against it could exist outside the firmware's own tree.
+//! **A face is signed by its author**, in a second custom section, [`SIGNATURE`]: the author's
+//! Ed25519 public key, then the signature over every byte of the module before that section.
+//! It has to be the module's last section, so nothing can be added to a signed module unsigned.
+//! The key is not in the manifest because it is not the face's to choose: the same source
+//! signed by someone else is someone else's face. **Key and name together are the face's
+//! identity** -- an update is the same face only if both match.
+//!
+//! Formats 1 and 2 are not read any more. They had no version and no signature, and they went
+//! before the first release of this crate, when no face written against them could exist
+//! outside the firmware's own tree.
 
 use core::fmt;
 
-use crate::Icon;
+use crate::{Icon, abi};
 
 /// The custom section a manifest is in.
 pub const SECTION: &str = "teetotum.manifest";
 /// The format this version writes and reads.
-pub const VERSION: u8 = 2;
+pub const VERSION: u8 = 3;
+/// The custom section the author's key and signature are in; see the module notes.
+pub const SIGNATURE: &str = "teetotum.signature";
+/// How long an Ed25519 public key is.
+pub const KEY_LEN: usize = 32;
+/// How long an Ed25519 signature is.
+pub const SIGNATURE_LEN: usize = 64;
 /// The longest name, in bytes. It stands large in the middle of the settings ring, and twenty
 /// is about what the middle of the ring holds.
 pub const NAME_MAX: usize = 20;
@@ -38,8 +54,63 @@ pub const NAME_MAX: usize = 20;
 pub const SUMMARY_MAX: usize = 32;
 const ICON_AT: usize = 6 + NAME_MAX;
 const SUMMARY_AT: usize = ICON_AT + 4 * Icon::SIZE;
+const ABI_AT: usize = SUMMARY_AT + 1 + SUMMARY_MAX;
+const VERSION_AT: usize = ABI_AT + 2;
 /// How long a manifest is.
-pub const LEN: usize = SUMMARY_AT + 1 + SUMMARY_MAX;
+pub const LEN: usize = VERSION_AT + 6;
+
+/// A face's own version, as its crate gives it: `major.minor.patch`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Version {
+    pub major: u16,
+    pub minor: u16,
+    pub patch: u16,
+}
+
+impl Version {
+    /// A version from `CARGO_PKG_VERSION`. A pre-release or build suffix (`-beta`, `+local`)
+    /// is dropped: the manifest has no room for it, and the firmware compares numbers only.
+    ///
+    /// # Panics
+    ///
+    /// If it is not three numbers of at most 65535 -- at compile time, where the macro calls it.
+    pub const fn parse(text: &str) -> Self {
+        let bytes = text.as_bytes();
+        let mut parts = [0u32; 3];
+        let mut part = 0;
+        let mut digits = 0;
+        let mut i = 0;
+        while i < bytes.len() {
+            let b = bytes[i];
+            if b == b'-' || b == b'+' {
+                break;
+            }
+            if b == b'.' {
+                assert!(digits > 0 && part < 2, "a face's version is major.minor.patch");
+                part += 1;
+                digits = 0;
+            } else {
+                assert!(b.is_ascii_digit(), "a face's version is major.minor.patch");
+                parts[part] = parts[part] * 10 + (b - b'0') as u32;
+                assert!(parts[part] <= u16::MAX as u32, "a version number is at most 65535");
+                digits += 1;
+            }
+            i += 1;
+        }
+        assert!(part == 2 && digits > 0, "a face's version is major.minor.patch");
+        Self {
+            major: parts[0] as u16,
+            minor: parts[1] as u16,
+            patch: parts[2] as u16,
+        }
+    }
+}
+
+impl fmt::Display for Version {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
+    }
+}
 
 /// What a face may do beyond drawing and hearing the glass.
 ///
@@ -129,7 +200,13 @@ impl fmt::Display for Rights {
 ///
 /// If the name is empty or longer than [`NAME_MAX`], or the summary longer than [`SUMMARY_MAX`]
 /// -- at compile time, where the macro calls it.
-pub const fn encode(name: &str, summary: &str, icon: &Icon, rights: Rights) -> [u8; LEN] {
+pub const fn encode(
+    name: &str,
+    summary: &str,
+    icon: &Icon,
+    rights: Rights,
+    version: Version,
+) -> [u8; LEN] {
     let name = name.as_bytes();
     let summary = summary.as_bytes();
     assert!(
@@ -167,6 +244,14 @@ pub const fn encode(name: &str, summary: &str, icon: &Icon, rights: Rights) -> [
         out[SUMMARY_AT + 1 + i] = summary[i];
         i += 1;
     }
+    let numbers = [abi::VERSION, version.major, version.minor, version.patch];
+    let mut i = 0;
+    while i < numbers.len() {
+        let bytes = numbers[i].to_le_bytes();
+        out[ABI_AT + 2 * i] = bytes[0];
+        out[ABI_AT + 2 * i + 1] = bytes[1];
+        i += 1;
+    }
     out
 }
 
@@ -177,6 +262,8 @@ pub struct Manifest<'a> {
     summary: &'a str,
     rights: Rights,
     icon: &'a [u8],
+    abi: u16,
+    version: Version,
 }
 
 impl<'a> Manifest<'a> {
@@ -208,11 +295,22 @@ impl<'a> Manifest<'a> {
         }
         let at = SUMMARY_AT + 1;
         let summary = core::str::from_utf8(&bytes[at..at + len]).map_err(|_| Error::Summary)?;
+        let number = |at: usize| u16::from_le_bytes([bytes[at], bytes[at + 1]]);
+        let abi = number(ABI_AT);
+        if abi > abi::VERSION {
+            return Err(Error::Abi(abi));
+        }
         Ok(Self {
             name,
             summary,
             rights,
             icon: &bytes[ICON_AT..SUMMARY_AT],
+            abi,
+            version: Version {
+                major: number(VERSION_AT),
+                minor: number(VERSION_AT + 2),
+                patch: number(VERSION_AT + 4),
+            },
         })
     }
 
@@ -227,6 +325,16 @@ impl<'a> Manifest<'a> {
 
     pub fn rights(&self) -> Rights {
         self.rights
+    }
+
+    /// The host ABI the face was built against; never newer than this crate's [`abi::VERSION`].
+    pub fn abi(&self) -> u16 {
+        self.abi
+    }
+
+    /// The face's own version.
+    pub fn version(&self) -> Version {
+        self.version
     }
 
     /// The icon as it is stored: 24 rows of four bytes, little-endian, bit 23 leftmost. Bytes
@@ -264,6 +372,13 @@ pub enum Error {
     Summary,
     /// Rights this version does not know.
     Rights(u32),
+    /// Built against a host ABI newer than this version's.
+    Abi(u16),
+    /// No signature section.
+    Unsigned,
+    /// A signature section that is repeated, not the module's last, or not a key and a
+    /// signature long.
+    Signature,
 }
 
 impl fmt::Display for Error {
@@ -277,21 +392,73 @@ impl fmt::Display for Error {
             Self::Name => f.write_str("manifest name empty, too long or not UTF-8"),
             Self::Summary => f.write_str("manifest summary too long or not UTF-8"),
             Self::Rights(bits) => write!(f, "rights {bits:#x} include some this firmware lacks"),
+            Self::Abi(v) => write!(f, "built for host ABI {v}, this firmware offers {}", abi::VERSION),
+            Self::Unsigned => f.write_str("not signed"),
+            Self::Signature => f.write_str("signature section malformed or not last"),
         }
     }
 }
 
+/// A module split at its signature: what was signed, and by which key.
+///
+/// Reading it checks the section's place and length, **not the signature** -- that takes the
+/// Ed25519 code, which is the firmware's to carry and not every face's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Signed<'a> {
+    /// Every byte of the module before the signature section.
+    pub message: &'a [u8],
+    pub key: &'a [u8; KEY_LEN],
+    pub signature: &'a [u8; SIGNATURE_LEN],
+}
+
+impl<'a> Signed<'a> {
+    pub fn read(wasm: &'a [u8]) -> Result<Self, Error> {
+        let mut found = None;
+        walk(wasm, |start, end, name, contents| {
+            if name == SIGNATURE.as_bytes() && found.replace((start, end, contents)).is_some() {
+                return Err(Error::Signature);
+            }
+            Ok(())
+        })?;
+        let (start, end, contents) = found.ok_or(Error::Unsigned)?;
+        if end != wasm.len() || contents.len() != KEY_LEN + SIGNATURE_LEN {
+            return Err(Error::Signature);
+        }
+        let (key, signature) = contents.split_at(KEY_LEN);
+        Ok(Self {
+            message: &wasm[..start],
+            key: key.try_into().map_err(|_| Error::Signature)?,
+            signature: signature.try_into().map_err(|_| Error::Signature)?,
+        })
+    }
+}
+
 /// The contents of the custom section called `name`, if the module has one.
+fn section<'a>(wasm: &'a [u8], name: &str) -> Result<Option<&'a [u8]>, Error> {
+    let mut found = None;
+    walk(wasm, |_, _, own, contents| {
+        if own == name.as_bytes() && found.replace(contents).is_some() {
+            return Err(Error::Twice);
+        }
+        Ok(())
+    })?;
+    Ok(found)
+}
+
+/// Calls `each` with the start, end, name and contents of every custom section.
 ///
 /// A module is a header and then sections, each an id byte and a length; a custom section has
 /// id 0 and starts with its name. That is all this reads -- everything else is skipped by its
 /// length, unvalidated, because validating is the loader's job and costs 9.5 ms.
-fn section<'a>(wasm: &'a [u8], name: &str) -> Result<Option<&'a [u8]>, Error> {
+fn walk<'a>(
+    wasm: &'a [u8],
+    mut each: impl FnMut(usize, usize, &'a [u8], &'a [u8]) -> Result<(), Error>,
+) -> Result<(), Error> {
     let mut rest = wasm
         .strip_prefix(b"\0asm\x01\0\0\0")
         .ok_or(Error::NotWasm)?;
-    let mut found = None;
     while let Some((&id, tail)) = rest.split_first() {
+        let start = wasm.len() - rest.len();
         let (size, tail) = leb128(tail).ok_or(Error::NotWasm)?;
         let body = tail.get(..size).ok_or(Error::NotWasm)?;
         rest = &tail[size..];
@@ -299,15 +466,10 @@ fn section<'a>(wasm: &'a [u8], name: &str) -> Result<Option<&'a [u8]>, Error> {
             continue;
         }
         let (len, body) = leb128(body).ok_or(Error::NotWasm)?;
-        let own = body.get(..len).ok_or(Error::NotWasm)?;
-        if own == name.as_bytes() {
-            if found.is_some() {
-                return Err(Error::Twice);
-            }
-            found = Some(&body[len..]);
-        }
+        let name = body.get(..len).ok_or(Error::NotWasm)?;
+        each(start, wasm.len() - rest.len(), name, &body[len..])?;
     }
-    Ok(found)
+    Ok(())
 }
 
 /// An unsigned LEB128 of at most 32 bits, and what follows it.

@@ -4,6 +4,11 @@
 //! are public for the other side -- the firmware's loader is written against this module too,
 //! so the two cannot drift apart.
 
+/// The host ABI this crate is written against: the functions, events and records below. A face
+/// carries it in its manifest, and a firmware refuses a face built against a newer one than its
+/// own. **Raised when a face could rely on something an older firmware does not do.**
+pub const VERSION: u16 = 1;
+
 /// The import module every call into the firmware comes from.
 pub const MODULE: &str = "teetotum";
 /// Where a face's memory is imported from, and under which name: what
