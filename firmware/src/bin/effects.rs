@@ -226,15 +226,15 @@ fn main() -> ! {
             }
         }
 
-        if touch.is_asserted() {
-            if let Ok(report) = touch.read(&mut i2c) {
-                let tapped = report.gesture == Gesture::SingleTap
-                    || report
-                        .contact
-                        .is_some_and(|contact| contact.event == Event::Down);
-                if tapped {
-                    play(&mut haptic, &mut i2c, &delay, effect);
-                }
+        if touch.is_asserted()
+            && let Ok(report) = touch.read(&mut i2c)
+        {
+            let tapped = report.gesture == Gesture::SingleTap
+                || report
+                    .contact
+                    .is_some_and(|contact| contact.event == Event::Down);
+            if tapped {
+                play(&mut haptic, &mut i2c, &delay, effect);
             }
         }
 

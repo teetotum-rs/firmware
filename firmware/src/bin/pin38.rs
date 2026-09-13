@@ -202,14 +202,12 @@ fn main() -> ! {
         );
         delay.delay_millis(2);
         let low_reading = down.level();
-        drop(down);
         let up = Input::new(
             peripherals.GPIO38.reborrow(),
             InputConfig::default().with_pull(Pull::Up),
         );
         delay.delay_millis(2);
         let high_reading = up.level();
-        drop(up);
         match (low_reading, high_reading) {
             (Level::High, Level::High) => {
                 info!("  high against a pull-down as well: something on the board holds it up")
@@ -298,7 +296,6 @@ fn main() -> ! {
     // The pin stops being an output and becomes UART1's transmit line. From here on it is
     // high whenever nothing is being sent, and chopped into bit times whenever something is.
     info!("--- 4. GPIO38 as UART1 TX at {BAUD} baud, GPIO48 listening ---");
-    drop(enable);
     let uart = match Uart::new(peripherals.UART1, UartConfig::default().with_baudrate(BAUD)) {
         Ok(uart) => uart
             .with_tx(peripherals.GPIO38.reborrow())
@@ -320,7 +317,7 @@ fn main() -> ! {
     // Now the hard case: the diagnostic runs while zeros go out without a gap.
     info!("  with a solid stream of 0x00 going out underneath it:");
     let mut traffic_runs = [None; 3];
-    for run in 0..3 {
+    for run in traffic_runs.iter_mut() {
         if haptic.set_mode(&mut i2c, Mode::Diagnostics).is_err() {
             break;
         }
@@ -331,7 +328,7 @@ fn main() -> ! {
         match haptic.status(&mut i2c) {
             Ok(status) => {
                 info!("    {status:#04x} after {sent} bytes");
-                traffic_runs[run] = Some(status);
+                *run = Some(status);
             }
             Err(err) => error!("    {err:?}"),
         }

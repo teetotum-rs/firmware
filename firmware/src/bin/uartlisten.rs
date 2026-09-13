@@ -145,7 +145,7 @@ fn main() -> ! {
                 errors += 1;
                 // A wrong baud rate shows up as a flood of these, so they are counted rather
                 // than each one written out.
-                if errors <= 8 || errors % 100 == 0 {
+                if errors <= 8 || errors.is_multiple_of(100) {
                     warn!("rx error #{errors}: {e:?}");
                     if matches!(e, RxError::FrameFormatViolated) && errors == 8 {
                         warn!("framing errors in numbers mean {baud} baud is not the rate");
@@ -174,7 +174,7 @@ fn capture(pin: &Input<'_>, samples: &mut [u32; SAMPLE_WORDS]) -> Option<u32> {
     while pin.is_high() {
         spins = spins.wrapping_add(1);
         // Checking the clock costs more than the sample does, so it is checked rarely.
-        if spins % 4096 == 0 && waiting.elapsed() > PATIENCE {
+        if spins.is_multiple_of(4096) && waiting.elapsed() > PATIENCE {
             warn!("line never fell in 30 s: the other chip said nothing while it was watched");
             return None;
         }
@@ -192,7 +192,7 @@ fn capture(pin: &Input<'_>, samples: &mut [u32; SAMPLE_WORDS]) -> Option<u32> {
     }
     let elapsed = started.elapsed().as_micros().max(1);
 
-    let sample_rate_khz = (SAMPLE_BITS as u64 * 1000 / elapsed as u64) as u32;
+    let sample_rate_khz = (SAMPLE_BITS as u64 * 1000 / elapsed) as u32;
     info!(
         "captured {SAMPLE_BITS} samples in {elapsed} us -- {sample_rate_khz} kS/s, a window of {} us",
         elapsed

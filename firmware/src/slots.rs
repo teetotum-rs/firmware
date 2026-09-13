@@ -152,7 +152,7 @@ impl<F: NorFlash> Slots<F> {
             return Err(Error::Buffer { need: header.len });
         }
         let unit = F::READ_SIZE;
-        if BOUNCE % unit != 0 {
+        if !BOUNCE.is_multiple_of(unit) {
             return Err(Error::ReadSize);
         }
         let mut bounce = Aligned([0u8; BOUNCE]);
@@ -182,7 +182,7 @@ impl<F: NorFlash> Slots<F> {
             return Err(Error::TooLong);
         }
         let unit = F::WRITE_SIZE;
-        if unit > TAIL || HEADER % unit != 0 {
+        if unit > TAIL || !HEADER.is_multiple_of(unit) {
             return Err(Error::WriteSize);
         }
         let id = PluginId::of(wasm).map_err(|_| Error::Id)?;

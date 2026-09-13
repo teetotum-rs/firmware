@@ -267,11 +267,7 @@ fn main() -> ! {
             let per_frame = total.as_micros() / u64::from(FRAMES_PER_CLOCK);
             info!(
                 "blit at {clock:2} MHz: {per_frame} us per frame, {} per second",
-                if per_frame == 0 {
-                    0
-                } else {
-                    1_000_000 / per_frame
-                }
+                1_000_000_u64.checked_div(per_frame).unwrap_or(0)
             );
 
             if !prompt.again(&mut i2c, "tap to send it again at this clock") {

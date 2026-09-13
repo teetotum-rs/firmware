@@ -263,7 +263,7 @@ impl<'d> SdCard<'d> {
     /// A failure part-way through still ends the stream -- a card left streaming would answer
     /// the next command with data.
     pub fn read_blocks(&mut self, lba: u32, buffer: &mut [u8]) -> Result<(), Error> {
-        if buffer.len() % 512 != 0 {
+        if !buffer.len().is_multiple_of(512) {
             return Err(Error::Unsupported);
         }
         if buffer.is_empty() {

@@ -159,7 +159,7 @@ fn main() -> ! {
             let _ = screen.present();
 
             let still = time(&mut screen, FRAMES, |_frame, _n| {});
-            let part = time(&mut screen, FRAMES, |frame, n| draw_scene(frame, n));
+            let part = time(&mut screen, FRAMES, draw_scene);
             let whole = time(&mut screen, FRAMES, |frame, n| {
                 let _ = frame.clear(Rgb565::BLACK);
                 draw_scene(frame, n);
@@ -186,7 +186,7 @@ fn main() -> ! {
     let mut slow = true;
     screen.set_path(Path::Direct);
     loop {
-        if frames % SWAP_AFTER == 0 {
+        if frames.is_multiple_of(SWAP_AFTER) {
             slow = !slow;
             let rate = if slow { SLOW } else { screen_clock() };
             if let Err(err) = screen.set_clock(rate) {

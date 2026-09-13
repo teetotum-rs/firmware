@@ -219,12 +219,9 @@ impl<'a> Picture<'a> {
         }
         // Wider than the screen is tall? Then the width is what runs out first.
         let (width, height) = if self.width * HEIGHT >= self.height * WIDTH {
-            (WIDTH, (self.height * WIDTH / self.width).max(1).min(HEIGHT))
+            (WIDTH, (self.height * WIDTH / self.width).clamp(1, HEIGHT))
         } else {
-            (
-                (self.width * HEIGHT / self.height).max(1).min(WIDTH),
-                HEIGHT,
-            )
+            ((self.width * HEIGHT / self.height).clamp(1, WIDTH), HEIGHT)
         };
         Fit {
             left: (WIDTH - width) / 2,

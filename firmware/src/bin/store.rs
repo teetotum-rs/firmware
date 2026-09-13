@@ -89,14 +89,14 @@ fn main() -> ! {
             Ok(r) => r,
             Err(e) => {
                 error!("no nvs partition: {e:?}");
-                loop {}
+                teetotum::step::halt()
             }
         };
         let mut store = match Store::new(region) {
             Ok(s) => s,
             Err(e) => {
                 error!("store refused the partition: {e:?}");
-                loop {}
+                teetotum::step::halt()
             }
         };
         match store.load(&mut buf) {
@@ -104,7 +104,7 @@ fn main() -> ! {
             Ok(None) => (0, None, 0, 0),
             Err(e) => {
                 error!("load failed: {e:?}");
-                loop {}
+                teetotum::step::halt()
             }
         }
     };
@@ -136,7 +136,7 @@ fn main() -> ! {
 
             let Some(newest) = slot else {
                 error!("boot 3: no slot reported, cannot stage the damage");
-                loop {}
+                teetotum::step::halt()
             };
             if newest == 0 {
                 error!("boot 3: phase 2 came out of the same slot as phase 1 -- no alternation");
@@ -151,13 +151,13 @@ fn main() -> ! {
                     Ok(r) => r,
                     Err(e) => {
                         error!("boot 3: lost the partition: {e:?}");
-                        loop {}
+                        teetotum::step::halt()
                     }
                 };
                 let at = (newest * 4096 + 12) as u32;
                 if let Err(e) = region.write(at, &[0u8; 4]) {
                     error!("boot 3: could not damage slot {newest}: {e:?}");
-                    loop {}
+                    teetotum::step::halt()
                 }
                 info!("boot 3: zeroed the checksum of slot {newest} at 0x{at:x}");
             }
@@ -201,7 +201,7 @@ fn main() -> ! {
                 Ok(()) => info!("both sectors erased -- the next reset runs the whole thing again"),
                 Err(e) => error!("could not erase: {e:?}"),
             }
-            loop {}
+            teetotum::step::halt()
         }
 
         other => {

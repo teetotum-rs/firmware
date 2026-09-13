@@ -121,7 +121,7 @@ impl Cloud {
             // depend on the palette or on anything drawn before.
             let x = (xorshift(&mut scatter) % across) as i32 - REACH;
             let y = (xorshift(&mut scatter) % across) as i32 - REACH;
-            let large = xorshift(&mut scatter) % LARGE_EVERY == 0;
+            let large = xorshift(&mut scatter).is_multiple_of(LARGE_EVERY);
             let accent = xorshift(&mut scatter) % 100 < u32::from(self.accent);
             let square = x * x + y * y;
             if square > REACH * REACH {

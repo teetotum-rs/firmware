@@ -84,6 +84,10 @@ fn transfer(
 
 /// Send one command and wait for its R1 response, which is the first byte with the top bit clear.
 /// Returns `0xFF` if the card never answered.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "a probe that tries pin assignments passes the one it tries"
+)]
 fn command(
     pins: &mut Pins<'_>,
     clk: usize,

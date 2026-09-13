@@ -99,7 +99,7 @@ fn main() -> ! {
     let free = esp_alloc::HEAP.free();
     if free < need {
         error!("{face}: {free} bytes free is already under {need}; nothing to prove here");
-        loop {}
+        teetotum::step::halt()
     }
     let mut ballast: Vec<Vec<u8>> = Vec::new();
     while esp_alloc::HEAP.free() >= need {
@@ -122,7 +122,7 @@ fn main() -> ! {
 
     info!("--- heapguard: done ---");
     let _psram = psram;
-    loop {}
+    teetotum::step::halt()
 }
 
 /// Loads a face, says what happened, and gives the page back either way. `expected` is whether

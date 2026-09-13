@@ -629,7 +629,7 @@ impl Screen<'_> {
     /// so a caller can say which path ran without repeating the condition -- and a run that
     /// compares the two paths has to be able to say it.
     pub fn free(&self) -> bool {
-        self.step == 0 || (self.quarters && self.step % (STEPS / 4) == 0)
+        self.step == 0 || (self.quarters && self.step.is_multiple_of(STEPS / 4))
     }
 
     /// Sends the picture to the glass at the current orientation.

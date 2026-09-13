@@ -807,7 +807,7 @@ impl PluginSetting {
     /// Which bundled plugin a setting in a plugin's menu belongs to, and which of the two it is.
     fn of(id: Id) -> Option<(usize, Self)> {
         let n = usize::from(id.0 / 2);
-        let setting = if id.0 % 2 == 0 {
+        let setting = if id.0.is_multiple_of(2) {
             Self::About
         } else {
             Self::Installed
@@ -1232,26 +1232,39 @@ enum Backdrop {
     Cover { width: usize, height: usize },
 }
 
-/// The GATT server the knob presents.
-///
-/// Without one, a peer discovers no services, and the specification then requires it to drop the
-/// connection after the 30 s ATT transaction timeout -- which is exactly what was measured before
-/// this existed.
-#[gatt_server]
-struct Server {
-    knob: KnobService,
+/// The GATT server and its one service, in a module of their own so that the lints on the code
+/// their macros generate are expected here rather than for the whole binary.
+#[expect(
+    clippy::needless_borrows_for_generic_args,
+    clippy::large_stack_frames,
+    reason = "both fire in the code `gatt_server` and `gatt_service` generate"
+)]
+mod gatt {
+    use super::*;
+
+    /// The GATT server the knob presents.
+    ///
+    /// Without one, a peer discovers no services, and the specification then requires it to drop the
+    /// connection after the 30 s ATT transaction timeout -- which is exactly what was measured before
+    /// this existed.
+    #[gatt_server]
+    pub(super) struct Server {
+        pub(super) knob: KnobService,
+    }
+
+    /// A service exposing what the firmware currently knows about itself.
+    #[gatt_service(uuid = "aa7154b7-6b8f-4c5b-aa39-a6cd78bad6bb")]
+    pub(super) struct KnobService {
+        /// Seconds since boot.
+        #[characteristic(uuid = "4b22a5ab-422b-4c76-a176-d7be74ec9bb7", read, notify)]
+        pub(super) uptime: u32,
+        /// Wi-Fi networks found in the most recent scan.
+        #[characteristic(uuid = "4ea309d6-ee6a-4be8-b753-1925723a2e15", read, notify)]
+        pub(super) networks: u8,
+    }
 }
 
-/// A service exposing what the firmware currently knows about itself.
-#[gatt_service(uuid = "aa7154b7-6b8f-4c5b-aa39-a6cd78bad6bb")]
-struct KnobService {
-    /// Seconds since boot.
-    #[characteristic(uuid = "4b22a5ab-422b-4c76-a176-d7be74ec9bb7", read, notify)]
-    uptime: u32,
-    /// Wi-Fi networks found in the most recent scan.
-    #[characteristic(uuid = "4ea309d6-ee6a-4be8-b753-1925723a2e15", read, notify)]
-    networks: u8,
-}
+use gatt::Server;
 
 /// One advertiser seen during a scan window.
 struct SeenDevice {
@@ -1355,7 +1368,7 @@ async fn wifi_scan(mut controller: WifiController<'static>) {
     loop {
         match controller.scan_async(&config).await {
             Ok(mut networks) => {
-                networks.sort_by(|a, b| b.signal_strength.cmp(&a.signal_strength));
+                networks.sort_by_key(|ap| core::cmp::Reverse(ap.signal_strength));
                 WIFI_NETWORKS.store(networks.len() as u8, Ordering::Relaxed);
                 nearby::publish(
                     Radio::Wifi,
@@ -1862,7 +1875,7 @@ async fn main(spawner: Spawner) -> ! {
             }
 
             let mut devices = scan_log.take();
-            devices.sort_by(|a, b| b.rssi.cmp(&a.rssi));
+            devices.sort_by_key(|device| core::cmp::Reverse(device.rssi));
             nearby::publish(
                 Radio::Bluetooth,
                 devices.iter().map(|device| Heard {
@@ -2225,7 +2238,7 @@ async fn main(spawner: Spawner) -> ! {
                 && key.eq_ignore_ascii_case(&b's')
                 && let Some(screen) = screen.as_mut()
             {
-                shot::dump(screen.frame().bytes(), WIDTH as usize, HEIGHT as usize);
+                shot::dump(screen.frame().bytes(), WIDTH, HEIGHT);
             }
 
             // The other chip, which talks whenever it feels like it. Its receive FIFO holds
@@ -2497,11 +2510,10 @@ async fn main(spawner: Spawner) -> ! {
                         } => {
                             if let Some((n, PluginSetting::Installed)) = PluginSetting::of(id)
                                 && detents % 2 != 0
+                                && let Some(view) = state.plugins[n].as_mut()
                             {
-                                if let Some(view) = state.plugins[n].as_mut() {
-                                    view.installed = !settings.installed(view.id);
-                                    settings.set_installed(view.id, view.installed);
-                                }
+                                view.installed = !settings.installed(view.id);
+                                settings.set_installed(view.id, view.installed);
                             }
                         }
                         // On the ring a click means the selection moved to another segment.
@@ -3684,7 +3696,7 @@ fn cloud_ground(frame: &mut Framebuffer, state: &Overview, ring: bool, clean: bo
     };
     let moment =
         (state.cloud != 0).then(|| state.cloud.wrapping_mul(CLOUD_FRAME.as_millis() as u32));
-    let _ = cloud_of(state.shape).draw_within(frame, &state.theme.palette(), moment, reach);
+    let _ = cloud_of(state.shape).draw_within(frame, state.theme.palette(), moment, reach);
     let spent = started.elapsed();
     CLOUD_GROUND_US.store(spent.as_micros() as u32, Ordering::Relaxed);
     spent

@@ -42,7 +42,7 @@ fn check(ok: bool, what: &str, failed: &mut u32) {
 }
 
 fn halt() -> ! {
-    loop {}
+    teetotum::step::halt()
 }
 
 #[esp_hal::main]
@@ -70,7 +70,6 @@ fn main() -> ! {
         }
     };
     info!("nvs: {} bytes", region.partition_size());
-    drop(region);
 
     region = match flash::plugins(&mut flash, &mut table) {
         Ok(region) => region,

@@ -152,7 +152,7 @@ fn main() -> ! {
     }
     info!("--- wasm: done ---");
     let _psram = psram;
-    loop {}
+    teetotum::step::halt()
 }
 
 /// Loads one module, instantiates it, times its two exports and drops it all again.

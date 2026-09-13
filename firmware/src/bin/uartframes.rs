@@ -129,7 +129,7 @@ fn main() -> ! {
                 errors += 1;
                 // A wrong baud rate shows up as a flood of these, so they are counted rather
                 // than each one written out.
-                if errors <= 8 || errors % 100 == 0 {
+                if errors <= 8 || errors.is_multiple_of(100) {
                     warn!("rx error #{errors}: {e:?}");
                     if errors == 8 {
                         warn!("errors in numbers would mean {BAUD} baud is not the rate after all");

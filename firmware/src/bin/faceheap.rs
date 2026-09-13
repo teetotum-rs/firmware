@@ -150,7 +150,7 @@ fn main() -> ! {
     if round >= rounds {
         info!("--- faceheap: done ---");
         let _psram = psram;
-        loop {}
+        teetotum::step::halt()
     }
     let (face, wasm) = FACES[round / MODES.len()];
     let (mode, compilation) = MODES[round % MODES.len()];
@@ -197,7 +197,7 @@ fn measure(face: &str, wasm: &'static [u8], mode: &str, compilation: Compilation
         error!("{face} {mode}: stopped -- {fault}");
     }
 
-    drop(plugin.unload());
+    plugin.unload();
     let left = esp_alloc::HEAP.used() as isize - base as isize;
     if left == 0 {
         info!("{face} {mode}: unloaded, heap back where it was");

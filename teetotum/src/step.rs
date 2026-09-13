@@ -287,3 +287,10 @@ impl Default for Prompt<'_> {
         Self::new()
     }
 }
+
+/// Stops a measurement run for good, without burning the core in an empty loop.
+pub fn halt() -> ! {
+    loop {
+        core::hint::spin_loop();
+    }
+}

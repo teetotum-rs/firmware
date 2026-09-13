@@ -471,20 +471,18 @@ impl DisplayBus<'_> {
             bytes: piece,
         };
 
-        let result =
-            match spi.half_duplex_write(DataMode::Quad, command, address, 0, piece.len(), window) {
-                Ok(transfer) => {
-                    let (spi, _window) = transfer.wait();
-                    self.spi = Some(spi.with_buffers(rx, tx));
-                    self.opened = true;
-                    Ok(())
-                }
-                Err((error, spi, _window)) => {
-                    self.spi = Some(spi.with_buffers(rx, tx));
-                    Err(error)
-                }
-            };
-        result
+        match spi.half_duplex_write(DataMode::Quad, command, address, 0, piece.len(), window) {
+            Ok(transfer) => {
+                let (spi, _window) = transfer.wait();
+                self.spi = Some(spi.with_buffers(rx, tx));
+                self.opened = true;
+                Ok(())
+            }
+            Err((error, spi, _window)) => {
+                self.spi = Some(spi.with_buffers(rx, tx));
+                Err(error)
+            }
+        }
     }
 
     /// Ends the pixel write, which is what tells the controller the picture is complete.
