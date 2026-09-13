@@ -89,15 +89,15 @@ espup        0.17.1   # installs the Xtensa Rust toolchain (channel "esp")
 espflash / cargo-espflash 4.5.0
 ```
 
-The toolchain is selected by `rust-toolchain.toml` (`channel = "esp"`). If a crate needs
-`LIBCLANG_PATH`, source the espup environment first (`. ~/export-esp.sh`). On Linux your user
+The toolchain is selected by `rust-toolchain.toml` (`channel = "esp"`). Source the espup
+environment in every new shell (`. ~/export-esp.sh`); without it the linker is not found. On Linux your user
 needs to be in the `dialout` group — then none of this needs `sudo`.
 
 ```
 cargo build --release
 cargo run --release          # espflash flash --monitor, see .cargo/config.toml
-espflash board-info          # chip, revision, flash size, MAC
-espflash monitor             # read along without writing
+espflash board-info -B 921600   # chip, revision, flash size, MAC
+espflash monitor -B 921600      # read along without writing
 ```
 
 **Pass `-B 921600` to espflash.** Over USB-Serial-JTAG the default baud rate is painfully slow —
@@ -111,14 +111,15 @@ because a face builds for `wasm32v1-none` and cargo takes the target per invocat
 ## Layout
 
 The repository is a Cargo workspace, cut along the crate rather than along the code: what a
-plugin author builds against is `teetotum-face` on crates.io, not this tree.
+plugin author will build against is `teetotum-face`, once it is on crates.io; until then the bundled
+plugins use it by path.
 
 | | |
 |---|---|
 | `teetotum/` | the SDK crate — glass, knob, touch, haptics, card, and the link to the other chip |
 | `teetotum-face/` | what a plugin (a *face*) is written against — the `face!` macro, events, colours, HID usages, icons; no dependencies, builds for wasm32 and Xtensa |
 | `firmware/` | the firmware, and the bring-up runs in `firmware/src/bin` that measured the board |
-| `plugins/` | the three bundled faces, each built by its own `build.sh` |
+| `plugins/` | the three bundled faces, plus `dummy`, a do-nothing face whose nine copies show the menu pages; each built by its own `build.sh` |
 | `backup/` | how to get the factory firmware back, and what it contained |
 | `docs/` | the guides above |
 

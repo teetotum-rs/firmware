@@ -96,7 +96,7 @@ confirm them.
 
 | You do | Where | What happens |
 |---|---|---|
-| **Turn the knob** | in a menu | The selection moves around the ring. Roughly one full turn of the knob goes once around the ring. |
+| **Turn the knob** | in a menu | The selection moves one entry per detent, skipping empty segments; with few entries, a small turn already goes round the ring. |
 | | in an open setting | The value changes, one step per detent. |
 | | on the Music Player | The volume changes. |
 | | on a plugin's screen | The plugin gets the turn if it uses the knob; otherwise the knob keeps working the volume. |
@@ -199,8 +199,8 @@ page, the page you are on lit:
 
 **Clicks.** The motor clicks under a tap that does something, under a long press, under every
 detent while a setting is open (except at the ends of Brightness, Haptics and the numbers under
-Background, where the value cannot move any further), under every detent on the Music Player, and in the ring whenever the
-selection moves. With Haptics set to `Off` it does not click at all.
+Background, where the value cannot move any further), under every detent on the Music Player or a plugin's screen, under a tap or
+swipe that reaches a plugin, and in the ring whenever the selection moves. With Haptics set to `Off` it does not click at all.
 
 ### "hold for home"
 
@@ -243,7 +243,7 @@ Music Player, the Settings and the screens of the plugins. The menu's title is `
 
 | Selected | The line shows | Example |
 |---|---|---|
-| Home | nothing | |
+| Home | where the firmware's source lives, on two lines | `look at github.com:` / `teetotum-rs/firmware` |
 | Settings | theme and brightness; the picture's angle if it is not 0; `silent` if clicks are off; `moving` if the [background](#background) moves | `Red · 100 %`, `Grey · 40 % · 90 deg · silent`, `Red · 100 % · moving` |
 | Music Player | the title that is playing, or `nothing playing` | `nothing playing` |
 | a plugin | the plugin's own one-line summary, or `stopped` after it failed | `remote for the phone's player` |
@@ -281,8 +281,8 @@ camera, which is quicker than spelling out a web address.
 | `Blog` | the author's blog, `stefangruehn.github.io` |
 
 - **A first tap selects a segment, a second one opens its code.** The code fills the middle of the
-  screen, black on white. Below it always stands the web address it leads to, and above it what
-  that is, if the space is wide enough. While a code is open, the screen is at full brightness,
+  screen, black on white. Below it always stands the site it leads to (for example `github.com`), and
+  above it a short caption such as `firmware and docs`, if the space is wide enough. While a code is open, the screen is at full brightness,
   whatever the brightness setting says, so that a phone camera reads it easily; closing the code
   brings the setting's level back.
 - **Turning the knob shows the next code** straight away. A tap on the code closes it, and a long
@@ -592,7 +592,7 @@ top and Cover at one o'clock. Its tick goes back up to the Settings.
 |---|---|
 | `cover  200x200` / `no cover` | The size of the cover picture on the screen, or none yet. |
 | `vol ...  encoder on` / `off` | The volume (0 to 127) and whether the second chip is reading the knob. |
-| `other chip silent` | Shown instead when the second chip has not answered yet. |
+| `other chip silent` | Shown instead while the second chip does not answer: before its first answer, and after about six seconds without one. |
 | `audio streaming` / `no audio stream` | Whether music is streaming to the Knob. The volume only moves while it is. |
 | `hid connected` / `hid not connected` | Whether a phone is connected to the second chip's remote control, `TAIJI_KNOB_HID`. |
 

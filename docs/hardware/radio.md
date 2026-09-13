@@ -67,9 +67,10 @@ took the strongest advertiser from −70 dBm through −63 to −58, and it late
 while staying the strongest in the room. A random private address that rotates every quarter hour
 is exactly what a phone with privacy enabled looks like.
 
-So the knob advertises as well, under the name `Knob Display`, connectable. That is the direction
-that works: the phone lists the knob. It is also the direction the project needs later, if plugins
-are ever to arrive over BLE.
+So the knob advertises as well, under the name `TeeToTum` (`BLE_DEVICE_NAME` in
+`firmware/src/bin/main.rs`), connectable. That is the direction that works: the phone lists the
+knob. It is also the direction the project needs later, if plugins are ever to arrive over BLE.
+The logs below were recorded under an earlier name, `Knob Display`.
 
 Verified from a laptop on 2026-09-04. `bluetoothctl scan le` lists
 

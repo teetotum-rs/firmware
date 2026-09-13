@@ -175,6 +175,9 @@ const TOUCH_PERIOD: Duration = Duration::from_millis(20);
 /// How often the other chip is asked how it is doing.
 const STATUS_PERIOD: Duration = Duration::from_secs(2);
 
+/// Status queries in a row without an answer before the other chip counts as silent.
+const STATUS_UNANSWERED: u8 = 3;
+
 /// What the other chip is asked to be: bit 0 so it looks at its own encoder at all, and in bits
 /// 1..3 who gets a detent -- mode 1 has it work the volume by itself, mode 2 sends the detent to
 /// us as `BD 07` or `BD 08`. [`KNOB_VOLUME_AT_CHIP`] chooses.
@@ -807,7 +810,7 @@ struct Overview {
     brightness: Brightness,
     /// How hard the motor clicks.
     haptics: Haptics,
-    /// The other chip's volume, 0-127, or `None` until it has answered once.
+    /// The other chip's volume, 0-127, or `None` while it does not answer.
     volume: Option<u8>,
     /// Whether the other chip says its own encoder reporting is switched on.
     companion_encoder: bool,
@@ -1781,6 +1784,8 @@ async fn main(spawner: Spawner) -> ! {
         // One answer per contact; see the gesture handling below.
         let mut taps = Taps::new();
         let mut next_status = Instant::now();
+        // Queries sent since the last answer; at [`STATUS_UNANSWERED`] the chip is taken as gone.
+        let mut status_unanswered: u8 = 0;
         // When the click currently playing should be cut off, if one is.
         let mut click_ends: Option<Instant> = None;
         // Detents the knob has counted and the phone has not been told about yet, signed.
@@ -1891,6 +1896,7 @@ async fn main(spawner: Spawner) -> ! {
                             if state.volume != Some(status.volume) {
                                 info!("Companion: volume {}", status.volume);
                             }
+                            status_unanswered = 0;
                             state.volume = Some(status.volume);
                             state.companion_encoder = status.encoder_enabled();
                             state.streaming = status.streaming();
@@ -1940,6 +1946,11 @@ async fn main(spawner: Spawner) -> ! {
                 let busy = cover.as_ref().is_some_and(Cover::busy);
                 if !busy && Instant::now() >= next_status {
                     next_status = Instant::now() + STATUS_PERIOD;
+                    if status_unanswered >= STATUS_UNANSWERED && state.volume.is_some() {
+                        info!("Companion: silent after {status_unanswered} status queries");
+                        state.volume = None;
+                    }
+                    status_unanswered = status_unanswered.saturating_add(1);
                     companion.request_status();
                 }
             }

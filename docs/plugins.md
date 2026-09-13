@@ -100,7 +100,7 @@ remove any of them.
 | Teetotum   | "a die of 2 to 256 sides"        | 2604 bytes  | `knob random`           |
 | Nearby     | "Wi-Fi and Bluetooth around you" | 7133 bytes  | `knob radio haptic`     |
 
-Sizes are those of the modules in the firmware as of 11 September 2026.
+Sizes are those of the modules in the firmware as of 12 September 2026.
 
 ### HID remote
 
@@ -130,8 +130,8 @@ keyboard with media keys (the Bluetooth profile is called HID, "human interface 
 
 Left is back in time: a swipe to the left goes to the previous title, as on a timeline.
 
-The large line in the middle shows the last key the plugin sent: "Play/Pause", "Next" or
-"Previous". Before the first one it says "HID remote". **Nothing comes back from the phone**:
+The large line in the middle shows the last key the plugin sent: "Play/Pause", "Next",
+"Previous", "Fast forward" or "Rewind". Before the first one it says "HID remote". **Nothing comes back from the phone**:
 over this link the Knob cannot read the title, the artist or the volume, so the face only shows
 what it sent.
 
@@ -278,8 +278,8 @@ Some details of the pulse:
 - The pulse only runs while the face is on the screen. Opening Home or the settings pauses it;
   coming back to the face resumes it.
 
-**Faster rounds while you look.** Normally the Knob looks for Bluetooth devices only every
-25 seconds. While the Nearby face is on the screen, the radio works flat out: a new Wi-Fi scan
+**Faster rounds while you look.** Normally the Knob listens for Bluetooth devices for five
+seconds every 30 seconds. While the Nearby face is on the screen, the radio works flat out: a new Wi-Fi scan
 starts one second after the last one ends, and Bluetooth listens in back-to-back windows of two
 seconds. Each round brings the face up to date.
 
@@ -540,7 +540,7 @@ To add a plugin today you rebuild the firmware:
    [Building and flashing it yourself](user-guide.md#9-building-and-flashing-it-yourself).
 
 The new plugin then appears on Home, next to the others, and gets its own menu in the settings.
-Mind the limit of five from [Memory and limits](#memory-and-limits).
+Mind the ceiling of sixteen plugins from [Memory and limits](#memory-and-limits).
 
 **Not available:** loading a plugin that is not part of the firmware image. Every plugin comes
 with the firmware; adding one means rebuilding it. The rights, the manifest and the Installed

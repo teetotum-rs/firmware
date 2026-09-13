@@ -94,8 +94,8 @@ const EVENT_TURN_ANTICLOCKWISE: u8 = 8;
 
 /// What `A3 03` carries: a code for the other chip's own dispatcher.
 ///
-/// The handler accepts anything below 7 and pushes it into a FreeRTOS queue. The task that
-/// drains that queue is at `0x400dbdf8`, and it was read out of the factory image
+/// The handler accepts anything below 7 and hands it to a task with `xTaskNotify`. That task
+/// is at `0x400dbdf8`, and it was read out of the factory image
 /// branch by branch -- so these numbers are the whole vocabulary and not a guess
 /// around the one value that had been watched working.
 ///
@@ -238,7 +238,8 @@ pub enum MediaKey {
 pub struct Status {
     /// The state byte, as [`Companion::set_state`] last left it -- plus three bits of the other
     /// chip's own, at positions 4, 5 and 6. Bit 6 is set on `ESP_HIDD_CONNECT_EVENT` and cleared
-    /// on `ESP_HIDD_DISCONNECT_EVENT` (read in its image); 4 and 5 are not read yet.
+    /// on `ESP_HIDD_DISCONNECT_EVENT` (read in its image), bit 5 is [`Status::streaming`], and
+    /// bit 4 is not read yet.
     pub state: u8,
     /// The phone's volume, 0..127, watched live while it was turned by hand.
     pub volume: u8,
@@ -504,8 +505,8 @@ impl<'d> Companion<'d> {
     /// passthrough key.
     ///
     /// This is the path that ends at `esp_avrc_ct_send_passthrough_cmd`, and it is *not* the
-    /// path [`Companion::media_key`] takes -- that one ends in a BLE HID report. It reaches the
-    /// same queue a turn of the second encoder in [`Mode::Volume`] does.
+    /// path [`Companion::media_key`] takes -- that one ends in a BLE HID report. It reaches that
+    /// task by `xTaskNotify`, so a second command arriving before the task looks overwrites the first.
     pub fn queue_key(&mut self, key: QueueKey) {
         self.send(CMD_QUEUE, [key as u8, 0, 0, 0]);
     }

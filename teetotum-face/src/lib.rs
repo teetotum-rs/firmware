@@ -129,7 +129,7 @@ pub struct Area {
 /// Where the firmware writes "hold for home" on every face, below the middle. A face keeps it
 /// free.
 ///
-/// It sits in the gap at the foot of a 270-degree arc of radius 170, the shape of the player's
+/// It sits in the gap at the foot of a 270-degree arc of radius 176, the shape of the player's
 /// volume, and inside a full ring of radius 160 -- the two shapes round glass invites.
 pub const HINT: Area = Area {
     left: 120,
@@ -486,7 +486,8 @@ impl Role {
 /// left out rather than guessed. **There is no volume among them**: the descriptor has none.
 ///
 /// Measured at the glass: [`Usage::Next`] skipped the track on a phone paired with
-/// `TAIJI_KNOB_HID`, and [`Usage::PlayPause`] paused and resumed. The rest are read, not tried.
+/// `TAIJI_KNOB_HID`, and [`Usage::PlayPause`] paused and resumed. The rest were tried as well
+/// and worked, except [`Usage::Pause`], which never took effect.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Usage {

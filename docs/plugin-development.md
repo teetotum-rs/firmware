@@ -77,7 +77,7 @@ theme's name colour". The firmware checks every call and appends it to a *draw l
 `draw` has returned, the firmware renders the list natively. There are two reasons:
 
 - **Speed.** Interpreted code runs about 30 times slower than native code. A pixel loop in the
-  plugin would be slow; a whole face of three drawing calls takes about 18 µs.
+  plugin would be slow; a whole face of three drawing calls takes about 19 µs.
 - **Safety.** A plugin that traps halfway through `draw` leaves a picture that was never begun,
   not half of one, because nothing is rendered until `draw` returns.
 
@@ -567,12 +567,15 @@ In this order (`firmware/src/plugin.rs`, `instantiate` and `check_imports`):
    validating anything else. Refused if the module is not WebAssembly, has no manifest, has two,
    is too short, has another format version, has an empty/too long/non-UTF-8 name or summary, or
    has unknown rights.
-2. **Validation and compilation.** wasmi validates and translates the whole module (eagerly).
-3. **Imports.** Every import must be either `env.memory` (a memory of at most one page) or one of
+2. **Heap estimate.** Before wasmi allocates anything, the loader estimates the heap the module
+   will need from its size (`heap_needed`, see [Heap](#heap-what-limits-the-largest-plugin)) and
+   refuses it if that is more than is free.
+3. **Validation and compilation.** wasmi validates and translates the whole module (eagerly).
+4. **Imports.** Every import must be either `env.memory` (a memory of at most one page) or one of
    the functions in the module `teetotum`: `text`, `arc`, `icon`, `send_usage`, `random`,
    `nearby`, `pulse`. The four functions behind a right are only accepted if the manifest has
    that right. There must be an imported memory.
-4. **Instantiation** with limits: one memory of 64 KiB, one table, one instance. The page is
+5. **Instantiation** with limits: one memory of 64 KiB, one table, one instance. The page is
    linked in, and the module must export `on_event` and `draw` with the right signatures.
 
 Only the functions the manifest grants are defined in the linker at all. The exact refusal
@@ -779,8 +782,9 @@ teetotum_face::arc(x, y, 2, 0, 360, 5, Colour::ICON);
 teetotum_face::arc(180, 180, 160, -90, 30, 16, Colour::SELECTED);
 ```
 
-There are no rectangles, lines or filled shapes. A filled disc is an arc with a stroke as wide
-as its diameter, up to the 64 px limit.
+There are no rectangles, lines or filled shapes. A filled disc is an arc whose stroke is at least
+twice its radius: `arc(x, y, r, 0, 360, 2 * r, ..)` fills a disc about `4 * r` pixels across, so
+the 64 px stroke limit makes the largest such disc about 128 px across.
 
 ### `icon`
 
@@ -964,7 +968,7 @@ What typical calls cost, measured on the device (ESP32-S3 at 240 MHz):
 | Call | Fuel | Time |
 |---|---|---|
 | a wipe in the HID remote (`event` with one `send`) | 24 | about 10 µs |
-| a `draw` with three drawing calls | 58 | about 18 µs |
+| a `draw` with three drawing calls | 58 | about 19 µs |
 
 20 000 units is over three hundred such draws, roughly 7 ms by an estimate from these two
 points. That is plenty for a face that names what to draw, and short enough that a face caught
@@ -1015,10 +1019,10 @@ Where it goes:
 > not fit would take the firmware down rather than be refused. The firmware therefore estimates
 > the cost from the module's size -- the 8 KB of base, 2.5 bytes per byte of module, the peak,
 > and 8 KB left over for itself -- and refuses the plugin if that is more than is free. Your
-> plugin's face then says `needs about <bytes> bytes of heap, <bytes> free`. The estimate is the
-> generous reading of the three measurements above, so it errs towards refusing: against the
-> 56 948 bytes free at boot it draws the line at about **13.7 KB of module**, well below what
-> would really have fitted. Keep plugins small, and measure yours (below).
+> plugin's face then says `needs about <bytes> bytes of heap, <bytes> free`. The estimate is a
+> generous fit to earlier measurements of the same three plugins, so it errs towards refusing:
+> against the 56 948 bytes free at boot it draws the line at about **13.7 KB of module**, well
+> below what would really have fitted. Keep plugins small, and measure yours (below).
 
 The load time is validation and translation, which grow with the size of the code, plus about
 4 ms to clear the page; it is paid
@@ -1042,7 +1046,7 @@ each time the plugin is loaded (see [Lifecycle](#10-lifecycle-and-errors)).
 ## 9. Keeping a plugin small
 
 Module size is heap at run time and load time at every start. These are the techniques that
-took Nearby from 10 344 to 7 068 bytes, and its heap cost from 42 KB down to about 21 KB
+took Nearby from 10 344 to about 7 100 bytes, and its heap cost from 42 KB down to about 21 KB
 (together with an interpreter setting in the firmware).
 
 **No `core::fmt`.** `write!`, `Display`, `{}` in any form pull in the formatting machinery,
@@ -1176,8 +1180,9 @@ custom  teetotum.manifest           173 bytes
 ```
 
 Check three things: the memory import is `1 to 1 pages`; every `teetotum.*` import behind a
-right has that right in the manifest (`send_usage` needs bit `0x1`); and the code section is
-far from the roughly 13.7 KB of module above which the loader refuses it.
+right has that right in the manifest (`send_usage` needs bit `0x1`); and the file size is
+far from the roughly 13.7 KB above which the loader refuses it: the estimate counts every byte of
+the module, data and manifest included, not only the code section.
 
 To see **which functions** ended up in the module, build once without stripping and look at the
 names:
@@ -1250,13 +1255,15 @@ The face stays on Home; opening it shows "stopped" and the reason, and the log s
 | `manifest name empty, too long or not UTF-8` | |
 | `manifest summary too long or not UTF-8` | |
 | `rights 0x.. include some this firmware lacks` | built for a newer firmware |
+| `needs about N bytes of heap, N free` | the module is too large for the free internal heap; see [Heap](#heap-what-limits-the-largest-plugin) |
 | `does not import its memory` | built without `--import-memory` |
 | `asks for N pages of memory, a face gets 1` | built without the memory flags |
 | `imports M.N, which the firmware does not offer` | an import that is not one of the seven functions or `env.memory` |
 | `imports send_usage without the right hid in its manifest` | a right-gated import without the right; likewise `random`/`random`, `nearby`/`radio`, `pulse`/`haptic` |
 | (a wasmi error) | invalid module, a missing or mistyped `on_event`/`draw` export, limits exceeded |
 
-With the SDK and the example's `.cargo/config.toml` only the last group can normally happen;
+With the SDK and the example's `.cargo/config.toml` only the heap refusal and the last group can
+normally happen;
 the manifest and imports are right by construction, since `face!` writes the manifest and the
 compiler only imports the functions you call.
 

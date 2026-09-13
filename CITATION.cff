@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use or refer to this software, please cite it as below."
+type: software
+title: "TeeToTum"
+abstract: >-
+  no_std Rust firmware for the Waveshare ESP32-S3 1.8" Knob Display: a ring menu turned with
+  the knob, and a host for WebAssembly plugins that get a screen of their own.
+authors:
+  - given-names: Stefan
+    family-names: Grühn
+version: 0.1.0
+license:
+  - MIT
+  - Apache-2.0
+repository-code: "https://github.com/teetotum-rs/firmware"
+url: "https://github.com/teetotum-rs/firmware"
+keywords:
+  - embedded
+  - rust
+  - no_std
+  - esp32-s3
+  - esp-hal
+  - webassembly
+  - wasmi
+  - plugins

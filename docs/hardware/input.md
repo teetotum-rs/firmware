@@ -68,9 +68,11 @@ turns the encoder's phases into direction before these pins reach the ESP32-S3 �
 second microcontroller on the board, though that is a guess and not a measurement.
 
 The pulses are slow: 15–30 ms low, 40–60 ms high at a hand's turning speed, and only two
-transitions in 134 pulses landed inside the same millisecond. So `teetotum/src/encoder.rs` polls, counts
-falling edges, and debounces each line for 5 ms — measured against a turn that ran the count to
-101 without a single step backwards.
+transitions in 134 pulses landed inside the same millisecond. So `teetotum/src/encoder.rs` counts
+falling edges and debounces each line for 5 ms — measured against a turn that ran the count to
+101 without a single step backwards. It catches each edge in the GPIO interrupt and adds it to a
+counter that `Encoder::poll` collects: a polled pin is only as good as the slowest pass of the
+loop that reads it, and one slow pass steps straight over a pulse.
 
 Which pin is clockwise, and how many pulses make a revolution, are not things a pin can say —
 they need the hand and the glass in one picture. `firmware/src/bin/knob.rs` draws a dot on a circle with
@@ -78,14 +80,15 @@ a fixed index mark at twelve o'clock and moves the dot with the knob:
 
 - **GPIO8 is clockwise.** Turning the knob clockwise counts up on GPIO8, and the dot follows the
   finger rather than running away from it.
-- **A revolution is 30 pulses.** With a marker dot on the knob and the index mark to return it
-  to, ten revolutions produced exactly 300 pulses in 300 separate steps, none of them backwards.
-  An earlier run of five gave 152 instead of 150; the two extra pulses were the hand missing its
-  starting point by roughly 24°, which is why the ten-revolution run is the one to trust.
+- **A revolution is 37 to 41 pulses, depending on speed.** With a marker dot on the knob and the
+  index mark to return it to, runs over marked revolutions counted 203, 200 and 207 pulses turned
+  slowly and 190 and 187 turned fast. Polling the pins instead counted exactly 30 a revolution,
+  300 over ten; which of the two counts the true detents is open.
 
-So one pulse is 12° of knob, and `PULSES_PER_REVOLUTION` in `teetotum/src/encoder.rs` carries the number.
-The dial doubles as the check: at 12° per pulse the dot returns to the mark after every full
-turn, and a dot that drifts away over a few turns would mean the count is wrong.
+`PULSES_PER_REVOLUTION` in `teetotum/src/encoder.rs` holds 40, the slow end, and nothing in the
+firmware depends on it. `knob.rs` takes its step from it, 9° per pulse, so after a full turn the
+dot lands within a few pulses of the mark rather than exactly on it, falling further short the
+faster the knob turns.
 
 ## The second rotary encoder can be borrowed from the other chip
 
