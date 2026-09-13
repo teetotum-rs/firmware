@@ -27,6 +27,8 @@ const FORMAT: u8 = 1;
 const HASH: usize = 32;
 /// The largest write size a module's last bytes can be padded to.
 const TAIL: usize = 16;
+/// Bytes per read of a module.
+const BOUNCE: usize = 1024;
 
 /// What a slot's header says about the module behind it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,8 +44,10 @@ pub enum Error {
     NoSlot,
     /// The module is longer than [`MODULE_MAX`].
     TooLong,
-    /// The buffer is shorter than the module rounded up to the flash's read size.
+    /// The buffer is shorter than the module.
     Buffer { need: usize },
+    /// The flash reads in units that do not divide [`BOUNCE`].
+    ReadSize,
     /// The module names no id, or not the one in its header.
     Id,
     /// The module's bytes do not match the hash in its header.
@@ -102,21 +106,29 @@ impl<F: NorFlash> Slots<F> {
 
     /// Copies slot `n`'s module into `buf` and checks it against the header.
     ///
-    /// `buf` holds the module rounded up to the flash's read size. A word-aligned buffer spares
-    /// the driver a copy through its own.
+    /// The bytes come through a word-aligned buffer on the stack, [`BOUNCE`] at a time, so `buf`
+    /// may lie in external RAM: the flash shares its bus, and a read straight into it is untested.
     pub fn read(&mut self, n: usize, buf: &mut [u8]) -> Result<Option<Header>, Error> {
         let Some(header) = self.header(n)? else {
             return Ok(None);
         };
-        let unit = F::READ_SIZE;
-        let rounded = header.len.div_ceil(unit) * unit;
-        if buf.len() < rounded {
-            return Err(Error::Buffer { need: rounded });
+        if buf.len() < header.len {
+            return Err(Error::Buffer { need: header.len });
         }
-        let body = self.start(n)? + HEADER as u32;
-        self.flash
-            .read(body, &mut buf[..rounded])
-            .map_err(flash_error)?;
+        let unit = F::READ_SIZE;
+        if BOUNCE % unit != 0 {
+            return Err(Error::ReadSize);
+        }
+        let mut bounce = Aligned([0u8; BOUNCE]);
+        let mut at = self.start(n)? + HEADER as u32;
+        for chunk in buf[..header.len].chunks_mut(BOUNCE) {
+            let rounded = chunk.len().div_ceil(unit) * unit;
+            self.flash
+                .read(at, &mut bounce.0[..rounded])
+                .map_err(flash_error)?;
+            chunk.copy_from_slice(&bounce.0[..chunk.len()]);
+            at += chunk.len() as u32;
+        }
 
         let module = &buf[..header.len];
         if digest(module) != header.hash {
@@ -190,7 +202,7 @@ impl<F: NorFlash> Slots<F> {
 }
 
 #[repr(align(4))]
-struct Aligned([u8; HEADER]);
+struct Aligned<const N: usize>([u8; N]);
 
 fn digest(module: &[u8]) -> [u8; HASH] {
     let mut hash = sha512::Hash::new();

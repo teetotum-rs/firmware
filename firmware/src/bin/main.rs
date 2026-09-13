@@ -57,7 +57,8 @@ use teetotum::menu::{
 use teetotum::touch::{Gesture, Press, Taps, Touch};
 use esp_hal::timer::timg::TimerGroup;
 use esp_storage::FlashStorage;
-use teetotum_firmware::flash::{self, TABLE_SCRATCH};
+use teetotum_firmware::flash::{self, Region, TABLE_SCRATCH};
+use teetotum_firmware::slots::Slots;
 use teetotum_face::manifest::Manifest;
 use teetotum_face::{Event as FaceEvent, HINT, Radio, Rights, Usage};
 use teetotum_firmware::nearby::{self, Heard};
@@ -491,7 +492,7 @@ enum Face {
     /// The player, the firmware's own.
     #[default]
     Player,
-    /// A bundled plugin, by its place in [`BUNDLED`].
+    /// A plugin, by its place among those [`gather_modules`] found.
     Plugin(u8),
 }
 
@@ -519,6 +520,9 @@ impl Face {
 /// (`plugins/nearby`), each built by its `build.sh`. They are embedded rather than read off the card, because the card sits inside the
 /// housing and the FAT code only reads -- a plugin that ships is a plugin in the image, and
 /// removing it takes its face off home, not its bytes out of flash.
+///
+/// **More come from the `plugins` partition**, without a firmware build: see [`gather_modules`]
+/// and `tools/pack-slot.py`.
 ///
 /// **The order decides only where each stands in the rings.** The settings record names removed
 /// plugins by [`PluginId`]; records before version 11 named them by place here, so the first
@@ -576,13 +580,101 @@ const fn pages_for(count: usize, first: usize) -> usize {
 // its overflow on without having taken any.
 const _: () = assert!(FACES_ON_FIRST_HOME_PAGE > 0 && PLUGINS_ON_FIRST_SETTINGS_PAGE > 0);
 // And the pages have to fit what `Navigator::hide` can address and what the record can count.
-const _: () = assert!(pages_for(BUNDLED.len(), FACES_ON_FIRST_HOME_PAGE) <= MAX_PAGES);
-const _: () = assert!(pages_for(BUNDLED.len(), PLUGINS_ON_FIRST_SETTINGS_PAGE) <= MAX_PAGES);
-const _: () = assert!(BUNDLED.len() <= Settings::PLUGINS_MAX);
+const _: () = assert!(pages_for(PLUGINS_MAX, FACES_ON_FIRST_HOME_PAGE) <= MAX_PAGES);
+const _: () = assert!(pages_for(PLUGINS_MAX, PLUGINS_ON_FIRST_SETTINGS_PAGE) <= MAX_PAGES);
+const _: () = assert!(BUNDLED.len() <= PLUGINS_MAX);
+
+/// How many plugins the rings hold, bundled and installed together: as many as the settings
+/// record can name.
+const PLUGINS_MAX: usize = Settings::PLUGINS_MAX;
+
+/// Each plugin's module, by its place in the rings; `None` past the last.
+type Modules = [Option<&'static [u8]>; PLUGINS_MAX];
 
 /// Each bundled plugin's id; `None` for one without a readable manifest or signature section.
 fn bundled_ids() -> [Option<PluginId>; BUNDLED.len()] {
     core::array::from_fn(|n| PluginId::of(BUNDLED[n]).ok())
+}
+
+/// The bundled plugins, then those installed in the slots of the `plugins` partition, copied
+/// into external RAM so that each is a `'static` module like the bundled ones. Also how many
+/// there are, and what is left of `spare`.
+///
+/// **A slot with a bundled plugin's id takes that plugin's place**: same key and name are the
+/// same plugin, so a new build of it replaces the one in the image without a firmware build. A
+/// second slot with an id already taken from a slot is skipped. Signatures are checked when a
+/// plugin is loaded, as for the bundled ones.
+///
+/// Runs before the heap exists, so nothing here allocates. The modules take at most half of
+/// `spare`; the page, the ring and the cover come off the rest.
+fn gather_modules(
+    region: Option<Region<'_, '_>>,
+    spare: Option<&'static mut [u8]>,
+) -> (Modules, usize, Option<&'static mut [u8]>) {
+    let mut modules: Modules = [None; PLUGINS_MAX];
+    let mut ids = [None; PLUGINS_MAX];
+    for (n, wasm) in BUNDLED.iter().enumerate() {
+        modules[n] = Some(*wasm);
+    }
+    ids[..BUNDLED.len()].copy_from_slice(&bundled_ids());
+    let mut count = BUNDLED.len();
+    let Some(region) = region else {
+        return (modules, count, spare);
+    };
+    let Some(mut spare) = spare else {
+        warn!("Plugin: no external RAM, only the bundled plugins");
+        return (modules, count, None);
+    };
+    let floor = spare.len() / 2;
+    let mut from_slot = [false; PLUGINS_MAX];
+    let mut slots = Slots::new(region);
+    for n in 0..slots.count() {
+        let header = match slots.header(n) {
+            Ok(Some(header)) => header,
+            Ok(None) => continue,
+            Err(e) => {
+                error!("Plugin: slot {n} unreadable -- {e:?}");
+                continue;
+            }
+        };
+        let at = match ids[..count].iter().position(|id| *id == Some(header.id)) {
+            Some(k) if from_slot[k] => {
+                warn!("Plugin: slot {n} skipped, another slot holds the same plugin");
+                continue;
+            }
+            Some(k) => k,
+            None if count == PLUGINS_MAX => {
+                warn!("Plugin: slot {n} skipped, the rings hold {PLUGINS_MAX} plugins");
+                continue;
+            }
+            None => count,
+        };
+        if spare.len() < floor + header.len {
+            warn!("Plugin: slot {n} skipped, no external RAM left for it");
+            continue;
+        }
+        match slots.read(n, &mut spare[..header.len]) {
+            Ok(Some(_)) => {
+                let (module, rest) = core::mem::take(&mut spare).split_at_mut(header.len);
+                spare = rest;
+                let module: &'static [u8] = module;
+                modules[at] = Some(module);
+                ids[at] = Some(header.id);
+                from_slot[at] = true;
+                if at == count {
+                    count += 1;
+                }
+                info!(
+                    "Plugin: slot {n}, {} bytes, id {:02x?}, in place {at}",
+                    header.len,
+                    header.id.bytes()
+                );
+            }
+            Ok(None) => {}
+            Err(e) => error!("Plugin: slot {n} refused -- {e:?}"),
+        }
+    }
+    (modules, count, Some(spare))
 }
 
 /// What the firmware puts into a plugin's menu for it, while faces cannot bring entries of their
@@ -608,7 +700,7 @@ impl PluginSetting {
     fn of(id: Id) -> Option<(usize, Self)> {
         let n = usize::from(id.0 / 2);
         let setting = if id.0 % 2 == 0 { Self::About } else { Self::Installed };
-        (n < BUNDLED.len()).then_some((n, setting))
+        (n < PLUGINS_MAX).then_some((n, setting))
     }
 }
 
@@ -844,9 +936,9 @@ struct Overview {
     /// What the glass shows while the menus are not up. [`Face::Plugin`] only while that plugin
     /// is installed; if loading it was refused, its face says why.
     face: Face,
-    /// The bundled plugins as the settings show them, each `None` if its manifest could not be
-    /// read.
-    plugins: [Option<PluginView>; BUNDLED.len()],
+    /// The plugins as the settings show them, each `None` if its manifest could not be read,
+    /// and `None` past the last.
+    plugins: [Option<PluginView>; PLUGINS_MAX],
     /// Counted up whenever the plugin asks to be drawn again. What it shows lives in its own
     /// memory, where the comparison that decides a redraw cannot look, so this stands in for it.
     plugin_frame: u32,
@@ -1161,16 +1253,28 @@ async fn main(spawner: Spawner) -> ! {
     // store no longer ends with this block**, though: the settings page writes through it later,
     // with the radios up, which is why what it borrows is leaked onto the heap rather than left
     // on this stack frame. See [`save_settings`] for what that costs.
+    //
+    // Both of these have to outlive this frame: the store's region writes through the flash and
+    // points into the raw partition table, so neither can be a local.
+    //
+    // **Static and not heap:** `esp_alloc::heap_allocator!` runs further down this function, so
+    // up here there is no heap to allocate from, and a box panics in `handle_alloc_error`.
+    static FLASH: StaticCell<FlashStorage<'static>> = StaticCell::new();
+    static TABLE: StaticCell<[u8; TABLE_SCRATCH]> = StaticCell::new();
+    let flash = FLASH.init(FlashStorage::new(peripherals.FLASH));
+    let table = TABLE.init([0u8; TABLE_SCRATCH]);
+
+    // The plugins in the `plugins` partition, read before the store takes the flash for good.
+    // They are copied into the screen's external RAM, which it hands over once, so what is left
+    // goes on to where the page, the ring and the cover come off it.
+    let (modules, plugin_count, spare) = gather_modules(
+        flash::plugins(flash, table)
+            .inspect_err(|_| warn!("Plugin: no plugins partition, only the bundled plugins"))
+            .ok(),
+        screen.as_mut().and_then(Screen::take_spare),
+    );
+
     let mut store = {
-        // Both of these have to outlive this frame: the region writes through the flash and
-        // points into the raw partition table, so neither can be a local.
-        //
-        // **Static and not heap:** `esp_alloc::heap_allocator!` runs further down this function,
-        // so up here there is no heap to allocate from, and a box panics in `handle_alloc_error`.
-        static FLASH: StaticCell<FlashStorage<'static>> = StaticCell::new();
-        static TABLE: StaticCell<[u8; TABLE_SCRATCH]> = StaticCell::new();
-        let flash = FLASH.init(FlashStorage::new(peripherals.FLASH));
-        let table = TABLE.init([0u8; TABLE_SCRATCH]);
         flash::nvs(flash, table)
             .and_then(|region| {
                 Store::new(region).map_err(|e| {
@@ -1317,7 +1421,7 @@ async fn main(spawner: Spawner) -> ! {
     // where a face's memory costs the internal heap nothing. One page, because one plugin runs
     // at a time -- see [`start_plugin`].
     let (spare, mut page): (_, Option<Page>) =
-        match screen.as_mut().and_then(Screen::take_spare) {
+        match spare {
             Some(spare) if spare.len() > COVER_MAX_BYTES + plugin::PAGE => {
                 let at = spare.len() - plugin::PAGE;
                 let (rest, tail) = spare.split_at_mut(at);
@@ -1656,16 +1760,18 @@ async fn main(spawner: Spawner) -> ! {
     // plugin that does not fit is a plugin missing, where a radio that does not fit is a device
     // missing.
     // A plugin without a signature section is treated as one without a manifest: it has no id.
-    let ids = bundled_ids();
-    let manifests: [Option<Manifest<'static>>; BUNDLED.len()] = core::array::from_fn(|n| {
-        PluginId::of(BUNDLED[n])
-            .and(Manifest::read(BUNDLED[n]))
-            .inspect_err(|e| error!("Plugin: bundled plugin {n} has no usable manifest -- {e}"))
+    let ids: [Option<PluginId>; PLUGINS_MAX] =
+        core::array::from_fn(|n| modules[n].and_then(|wasm| PluginId::of(wasm).ok()));
+    let manifests: [Option<Manifest<'static>>; PLUGINS_MAX] = core::array::from_fn(|n| {
+        let wasm = modules[n]?;
+        PluginId::of(wasm)
+            .and(Manifest::read(wasm))
+            .inspect_err(|e| error!("Plugin: plugin {n} has no usable manifest -- {e}"))
             .ok()
     });
     let (settings_menu, home_menu): (&'static Menu, &'static Menu) = {
-        static ICONS: StaticCell<[Icon; BUNDLED.len()]> = StaticCell::new();
-        static PLUGIN_MENUS: StaticCell<[Menu; BUNDLED.len()]> = StaticCell::new();
+        static ICONS: StaticCell<[Icon; PLUGINS_MAX]> = StaticCell::new();
+        static PLUGIN_MENUS: StaticCell<[Menu; PLUGINS_MAX]> = StaticCell::new();
         // One cell per page of either ring; the pages a build does not need stay empty.
         static MENU: [StaticCell<Menu>; MAX_PAGES] = [const { StaticCell::new() }; MAX_PAGES];
         static HOME: [StaticCell<Menu>; MAX_PAGES] = [const { StaticCell::new() }; MAX_PAGES];
@@ -1685,7 +1791,7 @@ async fn main(spawner: Spawner) -> ! {
         // and the player stand on the first page alone. Each ring is
         // built backwards, its last page first, so that every page can be handed the page it
         // turns on to.
-        let settings_pages = pages_for(BUNDLED.len(), PLUGINS_ON_FIRST_SETTINGS_PAGE);
+        let settings_pages = pages_for(plugin_count, PLUGINS_ON_FIRST_SETTINGS_PAGE);
         let mut settings_next: Option<&'static Menu> = None;
         for page in (0..settings_pages).rev() {
             let mut menu = match page {
@@ -1706,7 +1812,7 @@ async fn main(spawner: Spawner) -> ! {
             }
             settings_next = Some(MENU[page].init(menu));
         }
-        let home_pages = pages_for(BUNDLED.len(), FACES_ON_FIRST_HOME_PAGE);
+        let home_pages = pages_for(plugin_count, FACES_ON_FIRST_HOME_PAGE);
         let mut home_next: Option<&'static Menu> = None;
         for page in (0..home_pages).rev() {
             let mut home = match page {
@@ -1730,14 +1836,13 @@ async fn main(spawner: Spawner) -> ! {
         }
         if settings_pages > 1 || home_pages > 1 {
             info!(
-                "Menu: {} plugins, home on {home_pages} page(s), settings on {settings_pages}",
-                BUNDLED.len()
+                "Menu: {plugin_count} plugins, home on {home_pages} page(s), settings on {settings_pages}"
             );
         }
         let first = |menu: Option<&'static Menu>| menu.expect("a ring has at least one page");
         (first(settings_next), first(home_next))
     };
-    // The plugin that is loaded, and which of the bundled ones it is.
+    // The plugin that is loaded, and its place among the gathered ones.
     let mut running: Option<(usize, Plugin)> = None;
     info!("Plugin: none loaded yet, heap {} bytes free", esp_alloc::HEAP.free());
 
@@ -1759,7 +1864,7 @@ async fn main(spawner: Spawner) -> ! {
                     id,
                     name: manifest.name(),
                     summary: manifest.summary(),
-                    bytes: BUNDLED[n].len(),
+                    bytes: modules[n].map_or(0, <[u8]>::len),
                     rights: manifest.rights(),
                     installed: settings.installed(id),
                     loaded: None,
@@ -2359,6 +2464,7 @@ async fn main(spawner: Spawner) -> ! {
                                         if let Some(n) = shown_index(state.face) {
                                             start_plugin(
                                                 n,
+                                                &modules,
                                                 &mut running,
                                                 &mut page,
                                                 &mut state.plugins,
@@ -2877,7 +2983,7 @@ fn load_background(
     Some(String::from(name))
 }
 
-/// Starts bundled plugin `n` for its face: loads it, after unloading whichever ran before.
+/// Starts plugin `n` for its face: loads it, after unloading whichever ran before.
 ///
 /// **One plugin runs at a time.** Loading every installed plugin at boot left the two bundled
 /// ones with only 30 768 bytes of the internal heap: the home
@@ -2891,6 +2997,7 @@ fn load_background(
 /// trap.
 fn start_plugin(
     n: usize,
+    modules: &Modules,
     running: &mut Option<(usize, Plugin)>,
     page: &mut Option<Page>,
     views: &mut [Option<PluginView>],
@@ -2901,8 +3008,11 @@ fn start_plugin(
     {
         return;
     }
+    let Some(wasm) = modules.get(n).copied().flatten() else {
+        return;
+    };
     stop_plugin(running, page, views);
-    let outcome = load_plugin(BUNDLED[n], page);
+    let outcome = load_plugin(wasm, page);
     let Some(view) = views[n].as_mut() else {
         return;
     };
@@ -2936,7 +3046,7 @@ fn stop_plugin(
     info!("Plugin: {n} unloaded, heap {} bytes free", esp_alloc::HEAP.free());
 }
 
-/// Loads a bundled plugin into the page, if the page is free, and says what that cost:
+/// Loads a plugin into the page, if the page is free, and says what that cost:
 /// microseconds, and bytes of internal heap -- or why it was refused, in words for the glass.
 fn load_plugin(
     wasm: &'static [u8],
@@ -2974,15 +3084,15 @@ fn home(menu: &'static Menu, settings: &'static Menu, views: &[Option<PluginView
     nav
 }
 
-/// The segments of the home menu whose plugin is removed, or has no manifest, and whose face can
-/// therefore not be chosen. **Hidden rather than left out**, so that every plugin keeps its
+/// The segments of the home menu whose plugin is removed, and whose face can therefore not be
+/// chosen. A plugin without a manifest has no entry to hide. **Hidden rather than left out**, so that every plugin keeps its
 /// segment and the others do not move when one is removed. A plugin that is refused when its face
 /// is started keeps its segment: the face says why, which a hidden segment could not.
 fn home_hidden(views: &[Option<PluginView>]) -> u64 {
     views
         .iter()
         .enumerate()
-        .filter(|(_, view)| !view.as_ref().is_some_and(|view| view.installed))
+        .filter(|(_, view)| view.as_ref().is_some_and(|view| !view.installed))
         .fold(0, |hidden, (n, _)| hidden | 1 << home_bit(n))
 }
 
