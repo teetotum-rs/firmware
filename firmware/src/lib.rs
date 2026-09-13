@@ -17,3 +17,4 @@ pub mod plugin;
 pub mod qr;
 pub mod settings;
 pub mod shot;
+pub mod slots;

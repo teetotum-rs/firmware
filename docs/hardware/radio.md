@@ -17,7 +17,7 @@ Measured on 2026-09-04 by building both variants, `xtensa-esp32s3-elf-size` on t
 The image is larger than `.text` + `.data` because of the padding between segments, and by a
 different amount in each build — worth measuring rather than deriving.
 
-On the device the application occupies **3.24 % of its 15.6 MB partition**. Flash is not the
+In one of the two 4 MB application slots of `partitions.csv` that image would occupy **12.6 %**. Flash is not the
 constraint. RAM is the one to watch: `.rwtext.wifi` (49,544 B) and `.rodata.wifi` (28,244 B) are
 the radio stack claiming internal memory outright, before a single connection exists, and the
 64 KiB coexistence heap comes on top of that.

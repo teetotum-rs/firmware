@@ -742,6 +742,11 @@ cargo run --release       # build, flash, and read the log
 `.cargo/config.toml`) and then shows the device's log. The monitor needs a real terminal; to keep
 a copy of the log, use `cargo run --release 2>&1 | tee knob.log`.
 
+**It flashes the partition table in `partitions.csv`** along with the firmware: the settings, two
+4 MB application slots and a 1 MB `plugins` partition. Calling `espflash flash` yourself, pass
+`--partition-table partitions.csv`; without it espflash writes its own table, which has no
+`plugins` partition.
+
 **Use `-B 921600` whenever you call `espflash` yourself.** At the default speed one megabyte takes
 about 93 seconds over the S3's USB, and long transfers abort with
 `Timeout while running command`; at 921600 baud it takes about 14 seconds. `cargo run` already
@@ -764,8 +769,7 @@ espflash erase-region -B 921600 0x9000 0x2000
 ```
 
 The next start runs with default settings, and **the motor buzzes once** because it calibrates
-again. This address is where the partition table that `espflash` writes puts the settings
-partition (`nvs`); TeeToTum looks the partition up at run time, so check it if you changed the
+again. This address is where `partitions.csv` puts the settings partition (`nvs`); TeeToTum looks the partition up at run time, so check it if you changed the
 partition table.
 
 ### Restoring the factory firmware

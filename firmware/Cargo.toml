@@ -15,7 +15,7 @@ version      = { workspace = true }
 
 # The firmware. Sharing the package's name is not what makes `cargo run` choose
 # it -- `default-run` above is, and without that line cargo refuses to guess
-# between twenty-seven binaries.
+# between the binaries in src/bin.
 [lib]
 name = "teetotum_firmware"
 path = "./src/lib.rs"

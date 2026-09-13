@@ -1,0 +1,10 @@
+# TeeToTum partition table for the 16 MB flash of the Waveshare ESP32-S3 1.8" Knob Display.
+# `nvs` keeps its offset, so settings written under espflash's default table survive.
+# `plugins` holds 16 slots of 64 KiB each; its subtype is `undefined` because the
+# bootloader crate rejects tables with subtypes it does not know.
+# Name,   Type, SubType,   Offset,   Size
+nvs,      data, nvs,       0x9000,   0x5000
+otadata,  data, ota,       0xe000,   0x2000
+ota_0,    app,  ota_0,     0x10000,  0x400000
+ota_1,    app,  ota_1,     0x410000, 0x400000
+plugins,  data, undefined, 0x810000, 0x100000
