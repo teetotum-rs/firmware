@@ -1,0 +1,25 @@
+# The SDK: the glass, the knob, the haptics, the card, the other chip and the
+# settings ring, and nothing that knows about Wi-Fi, Bluetooth or the firmware's
+# own screens. Whoever builds a firmware for this board writes `teetotum = "0.1"`.
+# A face -- a plugin -- is not written against this crate: it runs in
+# WebAssembly, gets `teetotum-face`, and reaches this one only through what the
+# firmware lends it.
+[package]
+authors      = { workspace = true }
+description  = "Drivers and rendering for the Waveshare ESP32-S3 Knob Touch LCD 1.8 (TAIJI_KNOB)"
+edition      = { workspace = true }
+license      = { workspace = true }
+name         = "teetotum"
+repository   = { workspace = true }
+rust-version = { workspace = true }
+version      = { workspace = true }
+
+[dependencies]
+critical-section   = { workspace = true }
+embedded-graphics = { workspace = true }
+embedded-storage  = { workspace = true }
+esp-hal           = { workspace = true }
+log               = { workspace = true }
+u8g2-fonts        = { workspace = true }
+st77916           = { workspace = true }
+zune-jpeg         = { workspace = true }

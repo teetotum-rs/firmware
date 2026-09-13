@@ -1,0 +1,28 @@
+# Nearby: the Wi-Fi networks and Bluetooth devices around the knob, and a way to find one of
+# them by following the motor's pulse. The third face the firmware ships, embedded from
+# `firmware/assets/plugins/nearby.wasm`.
+#
+# Not a member of the firmware workspace, for the reason `plugins/hid-remote/Cargo.toml` gives.
+# `./build.sh` builds it.
+[package]
+edition = "2024"
+license = "MIT OR Apache-2.0"
+name    = "nearby"
+publish = false
+version = "0.0.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+teetotum-face = { path = "../../teetotum-face" }
+
+[profile.release]
+codegen-units = 1
+lto           = true
+opt-level     = "z"
+panic         = "abort"
+strip         = true
+
+# Its own workspace, so that cargo does not go looking for the firmware's.
+[workspace]

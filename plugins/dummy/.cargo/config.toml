@@ -1,0 +1,13 @@
+# The template for a face: build for wasm32v1-none, with one page of memory that the firmware
+# hands in. Copy it into a face of your own; the `teetotum-face` documentation says why each
+# flag is there.
+[build]
+target = "wasm32v1-none"
+
+[target.wasm32v1-none]
+rustflags = [
+  "-C", "link-arg=-zstack-size=4096",
+  "-C", "link-arg=--initial-memory=65536",
+  "-C", "link-arg=--max-memory=65536",
+  "-C", "link-arg=--import-memory",
+]

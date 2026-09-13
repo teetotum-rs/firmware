@@ -1,0 +1,14 @@
+# What a face is written against: the calls into the firmware, the events that come back, and
+# the manifest that says what the face is before any of its code runs.
+#
+# No dependencies and no target of its own. A face builds it for `wasm32v1-none`; the firmware
+# builds it for the chip and reads manifests with exactly the code a face writes them with.
+[package]
+authors      = { workspace = true }
+description  = "Write a face -- a plugin -- for the teetotum firmware on the Waveshare ESP32-S3 Knob Touch LCD 1.8"
+edition      = { workspace = true }
+license      = { workspace = true }
+name         = "teetotum-face"
+repository   = { workspace = true }
+rust-version = { workspace = true }
+version      = { workspace = true }

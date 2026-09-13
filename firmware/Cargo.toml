@@ -1,0 +1,62 @@
+# The firmware itself, plus the bring-up runs that measured the board. It is not
+# published: what a plugin builds against is `teetotum`, and a version number on
+# this package would only invite somebody to depend on it.
+[package]
+authors      = { workspace = true }
+description  = "no_std Rust firmware for the Waveshare ESP32-S3 Knob Touch LCD 1.8 (TAIJI_KNOB)"
+edition      = { workspace = true }
+license      = { workspace = true }
+default-run  = "teetotum-firmware"
+name         = "teetotum-firmware"
+publish      = false
+repository   = { workspace = true }
+rust-version = { workspace = true }
+version      = { workspace = true }
+
+# The firmware. Sharing the package's name is not what makes `cargo run` choose
+# it -- `default-run` above is, and without that line cargo refuses to guess
+# between twenty-seven binaries.
+[lib]
+name = "teetotum_firmware"
+path = "./src/lib.rs"
+
+[[bin]]
+name = "teetotum-firmware"
+path = "./src/bin/main.rs"
+
+[dependencies]
+teetotum      = { workspace = true }
+teetotum-face = { workspace = true }
+
+bt-hci                 = { workspace = true }
+critical-section       = { workspace = true }
+embassy-executor       = { workspace = true }
+embassy-futures        = { workspace = true }
+embassy-net            = { workspace = true }
+embassy-sync           = { workspace = true }
+embassy-time           = { workspace = true }
+embedded-graphics      = { workspace = true }
+embedded-io            = { workspace = true }
+embedded-io-async      = { workspace = true }
+# `internal-heap-stats` keeps the heap's high-water mark, which `faceheap` needs to see what
+# loading a face costs at its peak and not only afterwards.
+esp-alloc              = { workspace = true, features = ["internal-heap-stats"] }
+esp-backtrace          = { workspace = true }
+embedded-storage       = { workspace = true }
+esp-bootloader-esp-idf = { workspace = true }
+esp-storage            = { workspace = true }
+esp-hal                = { workspace = true }
+esp-println            = { workspace = true }
+esp-radio              = { workspace = true }
+esp-rtos               = { workspace = true }
+log                    = { workspace = true }
+smoltcp                = { workspace = true }
+st77916                = { workspace = true }
+static_cell            = { workspace = true }
+trouble-host           = { workspace = true }
+wasmi                  = { workspace = true }
+zune-jpeg              = { workspace = true }
+
+# Encodes the QR codes at build time, see build.rs.
+[build-dependencies]
+qrcodegen = "1.8"

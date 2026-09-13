@@ -1,0 +1,29 @@
+# The phone remote, as a face: a tap or a wipe becomes one HID usage for the other chip to
+# send. It is the first face the firmware ships, embedded from
+# `firmware/assets/plugins/hid-remote.wasm`.
+#
+# Not a member of the firmware workspace: it builds for `wasm32v1-none`, and cargo takes the
+# target from the directory it is started in, not per package. `./build.sh` builds it, and
+# `.cargo/config.toml` is the template a face of one's own starts from.
+[package]
+edition = "2024"
+license = "MIT OR Apache-2.0"
+name    = "hid-remote"
+publish = false
+version = "0.0.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+teetotum-face = { path = "../../teetotum-face" }
+
+[profile.release]
+codegen-units = 1
+lto           = true
+opt-level     = "z"
+panic         = "abort"
+strip         = true
+
+# Its own workspace, so that cargo does not go looking for the firmware's.
+[workspace]

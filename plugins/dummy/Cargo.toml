@@ -1,0 +1,31 @@
+# A placeholder face, built once per name so that the rings have more entries than a ring holds.
+#
+# **A test vehicle, not a feature.** The firmware ships three real plugins, and with three
+# neither the home ring nor the settings ring overflows -- so paging could not be judged where
+# it is used. `./build.sh` builds one module per name into `firmware/assets/plugins/`, and
+# adding them to `BUNDLED` in `firmware/src/bin/main.rs` puts both rings on two pages. They are
+# not bundled by default.
+#
+# Not a member of the firmware workspace, for the reason `plugins/hid-remote/Cargo.toml` gives.
+[package]
+edition = "2024"
+license = "MIT OR Apache-2.0"
+name    = "dummy"
+publish = false
+version = "0.0.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+teetotum-face = { path = "../../teetotum-face" }
+
+[profile.release]
+codegen-units = 1
+lto           = true
+opt-level     = "z"
+panic         = "abort"
+strip         = true
+
+# Its own workspace, so that cargo does not go looking for the firmware's.
+[workspace]

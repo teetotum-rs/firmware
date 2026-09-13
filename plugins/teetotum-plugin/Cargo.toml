@@ -1,0 +1,28 @@
+# The teetotum itself: the knob is the spinning top, and every detent draws a new side out of
+# physical noise. The second face the firmware ships, embedded from
+# `firmware/assets/plugins/teetotum-plugin.wasm`.
+#
+# Not a member of the firmware workspace, for the reason `plugins/hid-remote/Cargo.toml` gives.
+# `./build.sh` builds it.
+[package]
+edition = "2024"
+license = "MIT OR Apache-2.0"
+name    = "teetotum-plugin"
+publish = false
+version = "0.0.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+teetotum-face = { path = "../../teetotum-face" }
+
+[profile.release]
+codegen-units = 1
+lto           = true
+opt-level     = "z"
+panic         = "abort"
+strip         = true
+
+# Its own workspace, so that cargo does not go looking for the firmware's.
+[workspace]
