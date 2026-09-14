@@ -1,32 +1,22 @@
 //! The glass as one object: the bus, the panel, the picture, and the way out.
 //!
-//! Everything this module does was measured in `src/bin/render.rs` and judged in
-//! `src/bin/turn.rs`, and until now it lived in each of those runs separately -- eighty lines of
+//! Everything this module does was measured in `src/bin/render.rs`, and until now it lived in
+//! each run separately -- eighty lines of
 //! PSRAM, DMA, SPI and panel bring-up, copied from bin to bin. Copied code is not the problem;
 //! **copied constants are**: the 80 MHz that made the panel four times faster was measured
 //! and was still nowhere in the firmware, which went on driving the glass at the
 //! 10 MHz that was never a decision but the first value that worked. A number that has been
 //! measured belongs in one place, and this is that place.
 //!
-//! What a caller sees is a picture and an angle: draw into [`Screen::frame`] with
+//! What a caller sees is a picture and an orientation: draw into [`Screen::frame`] with
 //! `embedded-graphics`, say how the device is being held with [`Screen::set_orientation`], and
-//! call [`Screen::present`]. How the turn is done -- three bits in the panel controller or
-//! 129600 samples through the staging buffer -- is this module's business and nobody else's.
+//! call [`Screen::present`].
 //!
-//! # The quarters are free, and that is worth an if
+//! # Quarter turns only
 //!
-//! Turning the picture costs 47 ms with nearest and 145 with bilinear, against 7 ms for a
-//! picture that goes out as it lies. But MADCTL (36h) has three geometry bits -- mirror X,
-//! mirror Y, exchange axes -- so a quarter turn is a register write and costs **nothing**: four
-//! of the twelve detents are had for one command, and 90 degrees through the arithmetic is the
-//! *slowest* nearest case there is (38.5 ms, because consecutive output pixels walk down a
-//! source column and every one of them pulls a fresh cache line out of the PSRAM).
-//!
-//! The composition is on paper below, and paper is exactly what got the direction of
-//! [`rotate_rows`] wrong the first time. So it is checkable in front of the glass:
-//! [`Screen::set_quarters`] switches the free path off and makes the same angle come out of the
-//! arithmetic instead. At a multiple of 90 degrees the two must be **indistinguishable** -- if
-//! the picture jumps when the path is switched, the table below is wrong, not the eye.
+//! MADCTL (36h) has three geometry bits -- mirror X, mirror Y, exchange axes -- so a quarter turn
+//! is a register write and costs nothing. An angle in between would have to be resampled pixel by
+//! pixel on its way out, 47 ms a frame against 7, and is not offered.
 //!
 //! # The finger comes back the same way
 //!
@@ -58,7 +48,9 @@ use st77916::{ColorMode, DisplaySize, DriverError, St77916};
 use crate::display::{DisplayBus, DisplayReset};
 use crate::framebuffer::{BYTES, Framebuffer, HEIGHT, WIDTH};
 use crate::panel::{INIT_COMMANDS, PANEL_MOUNT_MADCTL, POST_INIT_COMMANDS};
-use crate::rotate::{self, Filter, STEPS, rotate_rows};
+
+/// How many orientations the picture can stand at: the four quarter turns.
+pub const ORIENTATIONS: usize = 4;
 
 /// The clock the panel is driven at.
 ///
@@ -67,7 +59,7 @@ use crate::rotate::{self, Filter, STEPS, rotate_rows};
 /// this the largest single number in the project.
 pub const CLOCK: Rate = Rate::from_mhz(80);
 
-/// Rows turned into the staging buffer before it is pushed.
+/// Rows in one piece of a copied frame.
 ///
 /// The band length is a property of the bus, not of the panel: it is how much is in flight at
 /// once, and 30 rows is 21600 bytes, comfortably inside what one DMA transfer carries.
@@ -96,7 +88,6 @@ const _: () = assert!(DIRECT_BYTES.is_multiple_of(crate::display::ALIGN));
 /// exactly.
 pub const STAGED_BYTES: usize = WIDTH * 2 * 24;
 
-const _: () = assert!(STAGED_BYTES <= BAND_BYTES);
 const _: () = assert!(STAGED_BYTES <= crate::display::DIRECT_MAX);
 const _: () = assert!(BYTES.is_multiple_of(STAGED_BYTES));
 const _: () = assert!(STAGED_BYTES.is_multiple_of(crate::display::ALIGN));
@@ -117,8 +108,7 @@ const _: () = assert!(STAGED_BYTES.is_multiple_of(crate::display::ALIGN));
 /// quarter clockwise wants the viewer to see `(W-1-j, i)`, which on the panel is `(j, H-1-i)`:
 /// axes exchanged, Y mirrored, X not. Hence `MV|MY`. The other two follow the same way.
 ///
-/// **This is arithmetic on paper, and the last piece of arithmetic on paper here had the
-/// rotation going the wrong way round.** [`Screen::set_quarters`] exists so the glass can say.
+/// Checked on the glass against the same turns computed pixel by pixel, which it matched.
 const QUARTER_MADCTL: [u8; 4] = [
     PANEL_MOUNT_MADCTL, // 0 degrees: the mount, uncorrected further
     0xA0,               // 90 degrees clockwise: MV | MY
@@ -126,19 +116,16 @@ const QUARTER_MADCTL: [u8; 4] = [
     0x60,               // 270 degrees clockwise: MV | MX
 ];
 
-/// Memory access control, the register the four free orientations live in.
+/// Memory access control, the register the four orientations live in.
 const MADCTL: u8 = 0x36;
 
-/// Where a band of turned rows is assembled.
+/// Where [`Path::Staged`] copies a piece before the DMA reads it.
 ///
-/// Internal RAM on purpose: the rotating blit writes it pixel by pixel, and the external RAM is
-/// the wrong place for that -- reading a screen out of there costs 7.9 ms, writing one 13.2.
-/// Aligned to a cache line, which the rotating blit does not care about and
-/// [`Path::Staged`] does: a piece handed to the DMA has to start on one.
+/// Internal RAM, and aligned to a cache line, which a piece handed to the DMA has to start on.
 #[repr(C, align(64))]
-struct Staging([u8; BAND_BYTES]);
+struct Staging([u8; STAGED_BYTES]);
 
-static mut STAGING: Staging = Staging([0; BAND_BYTES]);
+static mut STAGING: Staging = Staging([0; STAGED_BYTES]);
 
 const _: () = assert!(align_of::<Staging>() >= crate::display::ALIGN);
 
@@ -243,12 +230,8 @@ pub struct Screen<'d> {
     /// block of memory on the board by a wide margin, and the only place a decoded photograph
     /// or a plugin's own data can live -- see [`take_spare`](Self::take_spare).
     spare: Option<&'static mut [u8]>,
-    /// Which of the twelve orientations the picture is shown at.
-    step: usize,
-    /// Which filter the arithmetic path uses.
-    filter: Filter,
-    /// Whether the quarter turns are taken from the controller instead of computed.
-    quarters: bool,
+    /// How many quarter turns clockwise the picture is shown at.
+    quarters: usize,
     /// Which way a piece of the picture reaches the bus.
     ///
     /// **[`Path::Copied`] until the striped glass is understood** -- see
@@ -437,9 +420,7 @@ impl Screen<'static> {
             staging,
             backdrop,
             spare,
-            step: 0,
-            filter: Filter::Nearest,
-            quarters: true,
+            quarters: 0,
             path: Path::Copied,
             madctl: PANEL_MOUNT_MADCTL,
             _backlight: backlight,
@@ -507,19 +488,19 @@ impl Screen<'_> {
         self.spare.take()
     }
 
-    /// Which of the twelve orientations the picture is shown at.
+    /// How many quarter turns clockwise the picture is shown at, 0 to 3.
     pub fn orientation(&self) -> usize {
-        self.step
+        self.quarters
     }
 
-    /// Shows the picture turned by `step` * 30 degrees clockwise from here on.
+    /// Shows the picture turned by `quarters` quarter turns clockwise from here on.
     ///
     /// # Panics
     ///
-    /// If `step` is not below [`STEPS`].
-    pub fn set_orientation(&mut self, step: usize) {
-        assert!(step < STEPS, "there are only twelve orientations");
-        self.step = step;
+    /// If `quarters` is not below [`ORIENTATIONS`].
+    pub fn set_orientation(&mut self, quarters: usize) {
+        assert!(quarters < ORIENTATIONS, "there are four orientations");
+        self.quarters = quarters;
     }
 
     /// Sets the clock the panel is driven at.
@@ -537,33 +518,6 @@ impl Screen<'_> {
             .interface_mut()
             .apply_config(&SpiConfig::default().with_frequency(rate))
             .map_err(Error::Spi)
-    }
-
-    /// Which filter the turned path samples with. [`Filter::Nearest`] unless told otherwise,
-    /// and that is a judgement about interfaces -- see [`Filter::Bilinear`].
-    pub fn filter(&self) -> Filter {
-        self.filter
-    }
-
-    /// Sets the filter for the turned path.
-    pub fn set_filter(&mut self, filter: Filter) {
-        self.filter = filter;
-    }
-
-    /// Whether the quarter turns are taken from the controller (the default) or computed like
-    /// every other angle.
-    pub fn quarters(&self) -> bool {
-        self.quarters
-    }
-
-    /// Turns the free quarter turns off, or back on.
-    ///
-    /// Off, a quarter turn goes through [`rotate_rows`] like the eight angles in between: three
-    /// times slower and pixel for pixel the same picture. That equality is the point -- it is
-    /// how [`QUARTER_MADCTL`] gets checked against something other than the paper it was
-    /// derived on.
-    pub fn set_quarters(&mut self, quarters: bool) {
-        self.quarters = quarters;
     }
 
     /// Which way a piece of the picture reaches the bus.
@@ -604,128 +558,72 @@ impl Screen<'_> {
     ///
     /// The point goes in as the viewer's coordinates -- the frame the picture is drawn in while
     /// it stands upright, which is where [`Contact::in_view`](crate::touch::Contact::in_view)
-    /// leaves a finger -- and comes back in the picture's own, whatever the orientation.
-    ///
-    /// It can land **outside** the picture: the corners of a turned square come from nowhere,
-    /// and on round glass a touch near the rim is the ordinary case. What an outside touch means
-    /// is the caller's business, so it is handed back as it is rather than clamped.
+    /// leaves a finger -- and comes back in the picture's own, whatever the orientation. A quarter
+    /// turn maps the square onto itself, so a point on the glass is always a point of the picture.
     pub fn picture_point(&self, x: i32, y: i32) -> (i32, i32) {
-        rotate::source_point(self.step, x, y)
+        let (right, bottom) = (WIDTH as i32 - 1, HEIGHT as i32 - 1);
+        match self.quarters {
+            0 => (x, y),
+            1 => (y, right - x),
+            2 => (right - x, bottom - y),
+            _ => (bottom - y, x),
+        }
     }
 
     /// How many quarter turns a named direction has to come back, at this orientation.
     ///
     /// For [`Gesture::in_picture`](crate::touch::Gesture::in_picture), which turns a slide the
-    /// way [`picture_point`](Self::picture_point) turns a point -- except that four names
-    /// cannot resolve thirty degrees, so it rounds. See
-    /// [`rotate::source_quarter`](crate::rotate::source_quarter).
+    /// way [`picture_point`](Self::picture_point) turns a point.
     pub fn picture_quarter(&self) -> usize {
-        rotate::source_quarter(self.step)
-    }
-
-    /// Whether the next [`present`](Self::present) is one the controller does for free.
-    ///
-    /// True upright, and at a quarter turn while [`quarters`](Self::quarters) is on. It is here
-    /// so a caller can say which path ran without repeating the condition -- and a run that
-    /// compares the two paths has to be able to say it.
-    pub fn free(&self) -> bool {
-        self.step == 0 || (self.quarters && self.step.is_multiple_of(STEPS / 4))
+        self.quarters
     }
 
     /// Sends the picture to the glass at the current orientation.
     ///
-    /// Where the turn is free -- upright, or a quarter turn with [`quarters`](Self::quarters)
-    /// on -- it costs **6.6 ms** with the picture standing still and **7.5 ms** after the whole
-    /// of it has been redrawn, the difference being the cache written back ahead of the DMA.
-    /// That is the bus and almost nothing else: 253 KiB down four lines at 80 MHz is 6.5 ms.
-    /// Measured with `src/bin/psramdma.rs`; before the DMA read the picture where
-    /// it lay it was 14.4 ms, the copy into the bus's own buffer being the other half.
-    ///
-    /// Turned it is 47 ms with nearest, and the direct path saves 0.7 of them: what is timed
-    /// there is the arithmetic, not the bus.
+    /// It costs **6.6 ms** with the picture standing still and **7.5 ms** after the whole of it has
+    /// been redrawn, the difference being the cache written back ahead of the DMA. That is the bus
+    /// and almost nothing else: 253 KiB down four lines at 80 MHz is 6.5 ms. Measured with
+    /// `src/bin/psramdma.rs`; before the DMA read the picture where it lay it was 14.4 ms, the copy
+    /// into the bus's own buffer being the other half.
     ///
     /// # Errors
     ///
     /// If the bus rejects a transfer.
     pub fn present(&mut self) -> Result<(), Error> {
-        let free = self.free();
-        let wanted = if free {
-            QUARTER_MADCTL[self.step / (STEPS / 4)]
-        } else {
-            PANEL_MOUNT_MADCTL
-        };
+        let wanted = QUARTER_MADCTL[self.quarters];
         if wanted != self.madctl {
             self.set_madctl(wanted)?;
         }
 
-        if free {
-            // The bus and the picture are separate fields, so both can be borrowed at once.
-            let Self {
-                display,
-                frame,
-                staging,
-                path,
-                ..
-            } = self;
-            let bus = display.interface_mut();
-            if *path == Path::Copied {
-                return bus
-                    .send_frame(frame.bytes(), BAND_BYTES)
-                    .map_err(Error::Bus);
-            }
-            let piece_bytes = if *path == Path::Direct {
-                DIRECT_BYTES
-            } else {
-                STAGED_BYTES
-            };
-            bus.pixels_begin();
-            let mut result = Ok(());
-            for piece in frame.bytes().chunks(piece_bytes) {
-                result = if *path == Path::Direct {
-                    bus.pixels_push_direct(piece)
-                } else {
-                    // The same transfer with the source moved: the copy out of the external RAM
-                    // is the CPU's here rather than the DMA's.
-                    staging[..piece.len()].copy_from_slice(piece);
-                    bus.pixels_push_direct(&staging[..piece.len()])
-                }
-                .map_err(Error::Bus);
-                if result.is_err() {
-                    break;
-                }
-            }
-            bus.pixels_end();
-            return result;
-        }
-
+        // The bus and the picture are separate fields, so both can be borrowed at once.
         let Self {
             display,
             frame,
             staging,
-            step,
-            filter,
             path,
             ..
         } = self;
         let bus = display.interface_mut();
+        if *path == Path::Copied {
+            return bus
+                .send_frame(frame.bytes(), BAND_BYTES)
+                .map_err(Error::Bus);
+        }
+        let piece_bytes = if *path == Path::Direct {
+            DIRECT_BYTES
+        } else {
+            STAGED_BYTES
+        };
         bus.pixels_begin();
         let mut result = Ok(());
-        for band in 0..HEIGHT / ROWS_PER_BAND {
-            rotate_rows(
-                frame,
-                *step,
-                *filter,
-                band * ROWS_PER_BAND,
-                ROWS_PER_BAND,
-                staging,
-            );
-            // The staging buffer is internal RAM, so the direct path saves only the copy into
-            // the bus's own buffer here -- a smaller saving than on the picture itself, and the
-            // same switch turns it off.
-            result = if *path == Path::Copied {
-                bus.pixels_push(staging)
+        for piece in frame.bytes().chunks(piece_bytes) {
+            result = if *path == Path::Direct {
+                bus.pixels_push_direct(piece)
             } else {
-                bus.pixels_push_direct(staging)
+                // The same transfer with the source moved: the copy out of the external RAM
+                // is the CPU's here rather than the DMA's.
+                staging[..piece.len()].copy_from_slice(piece);
+                bus.pixels_push_direct(&staging[..piece.len()])
             }
             .map_err(Error::Bus);
             if result.is_err() {

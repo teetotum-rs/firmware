@@ -40,7 +40,7 @@ browser</a>.</em></p>
 - **A music player** for whatever the phone is playing — title, artist, cover art and a volume
   arc — over the classic ESP32 next to the S3, which is the chip the phone is paired with.
 - **Settings that survive a power cut**: eleven colour themes, the picture's orientation in
-  twelve 30° steps, ten backlight levels, ten click strengths, the dot-cloud background, and
+  quarter turns, ten backlight levels, ten click strengths, the dot-cloud background, and
   how the cover art is scaled. Written to two alternating flash sectors, not to a file.
 - **Plugins as WebAssembly**, loaded at runtime under [wasmi](https://github.com/wasmi-labs/wasmi),
   each with a manifest of rights the firmware enforces. Beyond the bundled ones, sixteen flash

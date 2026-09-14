@@ -14,9 +14,8 @@
 //!    faster than 52 ms by arithmetic alone -- 259200 bytes over four data lines -- so if the
 //!    panel takes a higher clock, that is the largest single lever there is.
 //!
-//! The picture is deliberately made of the things rotation is hard on: small text, a thin
-//! ring, and radial marks at every 30 degrees. When the rotating blit arrives, this is the
-//! scene to judge it by, and the numbers here are what it will be compared against.
+//! The picture is made of fine detail -- small text, a one-pixel ring, radial marks every 30
+//! degrees -- so that anything lost on the way to the glass is visible there.
 //!
 //! **It waits for a hand at every step**, because the result of each one is on the glass and
 //! not in the log. Swipe or turn the knob for the next step, tap to repeat one, `q` to let it
@@ -48,7 +47,6 @@ use st77916::{ColorMode, DisplaySize, St77916};
 use teetotum::display::{DisplayBus, DisplayReset};
 use teetotum::framebuffer::{BYTES, Framebuffer, HEIGHT, WIDTH};
 use teetotum::panel::{INIT_COMMANDS, POST_INIT_COMMANDS};
-use teetotum::rotate::{Filter, STEPS, rotate_rows};
 use teetotum::step::Prompt;
 use teetotum::touch::Touch;
 
@@ -66,17 +64,11 @@ const CLOCKS: [u32; 4] = [10, 20, 40, 80];
 /// measurement.
 const FRAMES_PER_CLOCK: u32 = 10;
 
-/// The clock the turned frames are sent at, so that the turning is what is being compared and
-/// not the bus.
-const BLIT_CLOCK: u32 = 80;
-
-/// Rows turned into the staging buffer before it is pushed.
+/// Rows in one [`SPI_CHUNK`].
 const ROWS_PER_BAND: usize = 30;
 
-/// Where a band of turned rows is assembled.
-///
-/// It has to be in internal RAM: it is what the SPI bus copies from, and the whole reason the
-/// picture is turned a band at a time is that a second 253 KiB framebuffer would not fit there.
+/// One chunk of zeroes in internal RAM, repeated down the panel to black it out before the
+/// first frame.
 static mut STAGING: [u8; SPI_CHUNK] = [0; SPI_CHUNK];
 
 esp_bootloader_esp_idf::esp_app_desc!();
@@ -276,148 +268,13 @@ fn main() -> ! {
         }
     }
 
-    // --- 4. what turning the picture costs ---
-    //
-    // Each case is announced, then shown: the CPU cost of turning alone, and the cost of
-    // turning and sending together, at a clock that is no longer the bottleneck.
-    let bus = display.interface_mut();
-    if let Err(err) =
-        bus.apply_config(&SpiConfig::default().with_frequency(Rate::from_mhz(BLIT_CLOCK)))
-    {
-        error!("{BLIT_CLOCK} MHz refused by the SPI peripheral: {err:?}");
-    }
-
-    // SAFETY: single-threaded, and nothing else refers to the staging buffer.
-    let staging: &mut [u8; SPI_CHUNK] = unsafe { &mut *core::ptr::addr_of_mut!(STAGING) };
-    let bands = HEIGHT / ROWS_PER_BAND;
-
-    for (step, filter, what) in [
-        (
-            3,
-            Filter::Nearest,
-            "a quarter turn, nearest: this one has to be exact",
-        ),
-        (
-            1,
-            Filter::Nearest,
-            "30 degrees, nearest: look at the thin ring and the small text",
-        ),
-        (
-            1,
-            Filter::Bilinear,
-            "30 degrees, bilinear: the same picture, four samples per pixel",
-        ),
-    ] {
-        prompt.wait(&mut i2c, what);
-        loop {
-            let started = Instant::now();
-            for band in 0..bands {
-                rotate_rows(
-                    &frame,
-                    step,
-                    filter,
-                    band * ROWS_PER_BAND,
-                    ROWS_PER_BAND,
-                    staging,
-                );
-            }
-            let turning = started.elapsed();
-
-            let started = Instant::now();
-            let bus = display.interface_mut();
-            bus.pixels_begin();
-            let mut failed = false;
-            for band in 0..bands {
-                rotate_rows(
-                    &frame,
-                    step,
-                    filter,
-                    band * ROWS_PER_BAND,
-                    ROWS_PER_BAND,
-                    staging,
-                );
-                if let Err(err) = bus.pixels_push(staging) {
-                    error!("pushing a turned band failed: {err:?}");
-                    failed = true;
-                    break;
-                }
-            }
-            bus.pixels_end();
-            let whole = started.elapsed();
-
-            if !failed {
-                info!(
-                    "turn {:3} deg {:8}: {} us to turn, {} us turned and sent, {} per second",
-                    step * 30,
-                    if filter == Filter::Nearest {
-                        "nearest"
-                    } else {
-                        "bilinear"
-                    },
-                    turning.as_micros(),
-                    whole.as_micros(),
-                    if whole.as_micros() == 0 {
-                        0
-                    } else {
-                        1_000_000 / whole.as_micros()
-                    }
-                );
-            }
-
-            if !prompt.again(&mut i2c, "tap to draw this one again") {
-                break;
-            }
-        }
-    }
-
-    // --- 5. all twelve orientations, one after the other ---
-    //
-    // The point of the whole exercise: the user turns the knob and the picture follows, in the
-    // steps the setting will offer. What it shows by eye is whether the long mark still points
-    // where it should after twelve steps, which is the arithmetic checking itself.
-    prompt.wait(
-        &mut i2c,
-        "watch the picture go round once, 30 degrees at a time",
-    );
-    let started = Instant::now();
-    for step in 0..STEPS {
-        let bus = display.interface_mut();
-        bus.pixels_begin();
-        for band in 0..bands {
-            rotate_rows(
-                &frame,
-                step,
-                Filter::Bilinear,
-                band * ROWS_PER_BAND,
-                ROWS_PER_BAND,
-                staging,
-            );
-            if bus.pixels_push(staging).is_err() {
-                break;
-            }
-        }
-        bus.pixels_end();
-        delay.delay_millis(250);
-    }
-    let spin = started.elapsed();
-    info!(
-        "one full turn in twelve steps took {} ms, of which {} ms was waiting",
-        spin.as_millis(),
-        250 * STEPS as u64
-    );
-
     info!("--- render: done. The last frame stays on the glass. ---");
     loop {
         delay.delay_millis(1000);
     }
 }
 
-/// A scene made of what rotation is hard on.
-///
-/// Small text loses its stems to a nearest-neighbour sample, a one-pixel ring turns into a
-/// dotted line, and radial marks at 30 degrees are exactly the steps the orientation setting is
-/// meant to offer -- so a mark that lands on the vertical after a 30-degree turn is the
-/// rotation working, visible without a measurement.
+/// A scene of fine detail: small text, one-pixel rings and twelve radial marks, the long one up.
 fn draw_scene(frame: &mut Framebuffer) {
     let centre = Point::new(WIDTH as i32 / 2, HEIGHT as i32 / 2);
     let white = PrimitiveStyle::with_stroke(Rgb565::WHITE, 1);
@@ -431,9 +288,8 @@ fn draw_scene(frame: &mut Framebuffer) {
         .into_styled(white)
         .draw(frame);
 
-    // Twelve marks, one every 30 degrees -- the steps the orientation setting will offer.
-    // Sine and cosine from a small table, because this runs on a chip without an FPU worth
-    // calling for twelve values.
+    // Twelve marks, one every 30 degrees. Sine and cosine from a small table, because this runs
+    // on a chip without an FPU worth calling for twelve values.
     const SIN30: [(i32, i32); 12] = [
         (0, -1000),
         (500, -866),
@@ -466,7 +322,7 @@ fn draw_scene(frame: &mut Framebuffer) {
     let small = MonoTextStyle::new(&FONT_6X10, Rgb565::CSS_LIGHT_GRAY);
     let _ = Text::with_alignment("TeeToTum", centre, big, Alignment::Center).draw(frame);
     let _ = Text::with_alignment(
-        "six by ten, the size rotation ruins first",
+        "six by ten, the smallest text here",
         Point::new(centre.x, centre.y + 24),
         small,
         Alignment::Center,

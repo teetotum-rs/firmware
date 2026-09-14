@@ -2,12 +2,11 @@
 //!
 //! # The shape
 //!
-//! **Twelve segments, because the picture turns in twelve steps.** The picture can stand at any
-//! multiple of 30 degrees (see [`rotate`](crate::rotate)), and the menu is drawn into the picture
-//! and turned with it. With twelve segments of 30 degrees, every one of those orientations leaves
-//! the middle of a segment -- never a divider -- pointing wherever a middle pointed before, so the
-//! segment that faces the USB socket keeps facing it at every setting. Eight segments would manage
-//! that at four of the twelve steps.
+//! **Twelve segments of 30 degrees, and a quarter turn is three of them.** The picture can stand
+//! at any quarter turn (see [`Screen::set_orientation`](crate::screen::Screen::set_orientation)),
+//! and the menu is drawn into the picture and turned with it. Every one of those orientations
+//! leaves the middle of a segment -- never a divider -- pointing wherever a middle pointed before,
+//! so the segment that faces the USB socket keeps facing it at every setting.
 //!
 //! The ring reaches the edge of the glass and is a quarter of its radius thick, 45 of 180 pixels,
 //! which leaves a disc 270 pixels across for the dialog. **The ring carries icons and no names**,

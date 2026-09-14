@@ -655,9 +655,9 @@ while the user is on Home or in the settings.
 The details:
 
 - **Directions are the picture's.** The touch controller reports in the frame the panel is
-  mounted in, and the user can turn the picture in 30-degree steps. The firmware turns every
-  wipe back into the picture's frame (rounded to the nearest quarter turn) before it delivers
-  it. `WipeLeft` means the finger went left as the user sees the face.
+  mounted in, and the user can turn the picture in quarter turns. The firmware turns every
+  wipe back into the picture's frame before it delivers it. `WipeLeft` means the finger went
+  left as the user sees the face.
 - **Taps carry no position.** There is no event with touch coordinates. A face cannot have
   buttons at different places on the screen; it has one tap, four wipes and, with `KNOB`, the knob.
 - **A contact that moved at least 36 px** but was not named as a wipe by the controller is
@@ -726,8 +726,8 @@ fn event(&mut self, event: Event) -> bool {
   At a distance `d` from the centre, a circle of radius `r` leaves a width of `2 * sqrt(r² - d²)`;
   inside the rim (`r` = 170) that is 340 px at the centre, about 318 px at `d` = 60, 288 px at
   `d` = 90, 241 px at `d` = 120, 160 px at `d` = 150.
-- **Draw upright.** The user may turn the picture in twelve 30-degree steps. The firmware
-  rotates the whole finished picture, so the face never knows.
+- **Draw upright.** The user may turn the picture in quarter turns. The firmware turns the
+  whole finished picture, so the face never knows.
 - **Every `draw` starts from black.** The firmware clears the framebuffer before it calls
   `draw`, so draw everything, every time. Home, the menus and the Music Player without a cover
   stand on a cloud of points in the theme's colours; a face does not get it.

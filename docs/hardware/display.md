@@ -83,11 +83,9 @@ knowing for the next panel: the controller's RAM is 360x390 against 360 rows of 
 mirroring in Y can shift the visible window by the difference. Here it does not.
 
 That constant describes how the glass is fitted, and a board that mounts the same panel the other
-way up changes it there. It is **not** where a viewing orientation belongs. MADCTL can only
-express the eight combinations of mirror-X, mirror-Y and axis exchange -- 0, 90, 180, 270 degrees
-plus mirrors -- so an angle the user picks freely cannot come from the controller at all. It is
-a rotation in the rendering layer on top of the mount correction, chosen on the device and kept
-in the settings.
+way up changes it there. It is **not** where a viewing orientation belongs: the orientation the
+user picks is a quarter turn on top of the mount correction, chosen on the device and kept in the
+settings (see [below](#the-panel-turns-in-quarters-and-nothing-in-between)).
 
 **Neither a host refresh nor TE is needed.** The ST77916 carries a full frame memory and scans
 the glass out of it on its own oscillator, so pixels are written once and stay. The tearing-effect
@@ -158,64 +156,27 @@ The write figure is not a matter of instruction count. Clearing the screen with 
 per pixel took 13.47 ms; the same loop writing 32-bit words, a quarter of the stores, took
 13.19 ms. The cache fills and writes back lines either way.
 
-### Turning the picture costs more than sending it
+### The panel turns in quarters, and nothing in between
 
-The panel controller turns a picture in quarters only — MADCTL has three geometry bits — and the
-glass is round, so any angle would be usable. `teetotum/src/rotate.rs` supplies the eight angles in
-between by turning the picture band by band into a staging buffer on its way out, at 80 MHz:
+MADCTL (36h) has three geometry bits — mirror X, mirror Y, exchange axes — so the panel turns a
+picture by 0, 90, 180 or 270 degrees in one register write. The glass is round, so any angle would
+be usable, but an angle in between has to be resampled pixel by pixel on its way out. Turning the
+picture band by band into internal RAM measured, at 80 MHz:
 
 | case | turning alone | turned and sent | frames per second |
 |---|---|---|---|
 | not turned | — | 14.4 ms | 69 |
-| 90 degrees, nearest | 38.5 ms | 45.6 ms | 21 |
 | 30 degrees, nearest | 34.8 ms | 42.1 ms | 23 |
 | 30 degrees, bilinear | 138.2 ms | 145.4 ms | 6 |
 
-Per pixel that is about **65 cycles** for nearest and **256** for bilinear at 240 MHz — bilinear
-is four times nearest, the number of samples, so the interpolation is free next to the reads.
+The cost is memory, not arithmetic: a turned output row walks the source diagonally, so nearly
+every sample pulls a fresh 32-byte PSRAM cache line to use two bytes of it. A third of the frame
+rate or less, for eight more angles, is not worth it, so the firmware offers the four quarter turns
+and nothing in between.
 
-Sixty-five cycles to move one pixel is a lot, and the reason is that **the rotation is
-memory-bound**: a turned output row walks the source diagonally, so nearly every sample pulls a
-fresh 32-byte PSRAM cache line to use two bytes of it. Which is why exact arithmetic does not
-help — 90 degrees is the *slowest* nearest case, because consecutive output pixels step down a
-source column and miss every time, while at 30 degrees they still mostly walk along a source
-row. And the case that costs the most is the one nobody has to pay: 0, 90, 180 and 270 degrees
-are three bits in the controller.
-
-The direction was settled the only way a direction can be. A full turn in twelve steps ended on
-the eleventh, and the mark that starts at twelve o'clock stood at eleven, so `rotate_rows(step)`
-turns the picture **clockwise** by `step * 30` degrees. The module comment had said anticlockwise,
-from the sign of the matrix on paper.
-
-### Nearest wins, and darker is not a bug
-
-`firmware/src/bin/turn.rs` puts the two filters under one finger: the knob turns the picture, a tap swaps
-the filter, and the name of the running filter is drawn *into* the picture, so the word is
-rendered by the filter it names. Judged that way the answer was immediate — **nearest is clearly
-better at every angle that is not a multiple of 90 degrees**, and bilinear is not merely softer
-but visibly darker.
-
-The darkness is the filter doing what it is defined to do. The scene is one-pixel white strokes
-on black. A stroke falling between two output pixels is given to both at half strength: it stays
-continuous, which is the point of bilinear, and it goes grey. Nearest gives one pixel the whole
-stroke and drops the other — brighter, and broken. For thin strokes and small text, which is
-what an interface is made of, brighter and broken reads better than dim and whole.
-
-At multiples of 90 degrees the two are identical by construction — every output pixel lands
-exactly on a source pixel — so tapping there changes nothing, which is a free check that the
-arithmetic sits on the grid.
-
-So the default is nearest, and it is also the cheap one: 42 ms against 145, 23 frames a second
-against 7. Bilinear stays in the module, because the judgement was about this content. A
-photograph has no one-pixel strokes to smear, and cover art resampled with nearest is exactly
-the case bilinear exists for. **The filter belongs to what is being drawn, not to the device.**
-
-### The quarters are free, and the glass confirmed the bits
-
-Four of the twelve detents never need the arithmetic: 0, 90, 180 and 270 degrees are mirror-X,
-mirror-Y and exchange-axes in MADCTL (36h), so they cost one register write. Which value belongs
-to which quarter follows from how the controller maps the pixel stream onto the panel — writing
-`(i, j)` for a pixel's place in the stream and `(px, py)` for where it lands:
+Which MADCTL value belongs to which quarter follows from how the controller maps the pixel stream
+onto the panel — writing `(i, j)` for a pixel's place in the stream and `(px, py)` for where it
+lands:
 
 ```text
 MV clear:  px = MX ? W-1-i : i      py = MY ? H-1-j : j
@@ -227,18 +188,14 @@ The glass is fitted upside down, so the viewer's frame is the panel's turned by 
 see `(W-1-j, i)`, which on the panel is `(j, H-1-i)`: axes exchanged, Y mirrored, X not. So the
 four values are `0xC0`, `0xA0`, `0x00`, `0x60`.
 
-That is arithmetic on paper, and the last piece of arithmetic on paper here had the rotation
-going the wrong way round. So `firmware/src/bin/turn.rs` can switch the free path off and draw the same
-angle through `rotate_rows` instead: at a multiple of 90 degrees the two must be
-indistinguishable. Checked on 2026-09-08 at 90 and 270 degrees — **the picture does not move**,
-while the frame time in the log drops from 45.6 ms to 14.4. The switch is Enter in the monitor;
-it was a double-tap first, and the glass never reported one.
+That is arithmetic on paper, so it was checked on the glass against the same quarter turns
+computed pixel by pixel: at 90 and 270 degrees **the picture does not move**, while the frame time
+drops from 45.6 ms to 14.4.
 
 ### One screen, one place for the numbers
 
 `teetotum/src/screen.rs` is the whole way from external RAM to the glass in one object: the PSRAM
-framebuffer, the QSPI bus, the vendor initialisation sequence, the orientation and the blit that
-suits it. A caller draws into `screen.frame()` with `embedded-graphics`, says how the device is
+framebuffer, the QSPI bus, the vendor initialisation sequence and the orientation. A caller draws into `screen.frame()` with `embedded-graphics`, says how the device is
 being held with `set_orientation`, and calls `present`.
 
 The reason is not tidiness. Until 2026-09-08 that bring-up was copied into five binaries, and

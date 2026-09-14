@@ -24,9 +24,8 @@
 //!
 //! # Three scalers, because the right one is a matter for the glass
 //!
-//! Cover art and photographs arrive **larger** than the screen and have to come down, which is
-//! the opposite of what the rotating blit in [`crate::rotate`] does. That changes which filter
-//! is right, and it changes it twice over:
+//! Cover art and photographs arrive **larger** than the screen and have to come down. That
+//! decides which filter is right, and it decides it twice over:
 //!
 //! - [`Scaler::Nearest`] throws away every source pixel it does not land on. Coming down by a
 //!   factor of two that is half the picture, and what is left aliases: a striped shirt turns
@@ -41,10 +40,10 @@
 //! **Judged at the glass with `src/bin/jpegshow.rs`, on four synthetic pictures
 //! built to separate them: `Scaler::Box` wins clearly, and `Scaler::Nearest` invents rings that
 //! are not in the source.** Coming down to 360 pixels, box is the filter. That reverses the
-//! judgement the rotating blit got -- and it has to, because the two do opposite
-//! things: [`crate::rotate`] resamples at 1:1, where nearest keeps a one-pixel line whole and
-//! bilinear greys it, while here every output pixel covers several source pixels and the ones
-//! a sampler skips come back as moire.
+//! judgement for a picture that keeps its size -- and it has to, because the two cases are
+//! opposite: resampled at 1:1, nearest keeps a one-pixel line whole and bilinear greys it,
+//! while here every output pixel covers several source pixels and the ones a sampler skips
+//! come back as moire.
 //!
 //! It is not free. 1024 down to 360 costs box 587 ms against 104 for nearest and 237 for
 //! bilinear, and box is the one whose cost follows the *source*: it reads every pixel, so it
@@ -333,7 +332,7 @@ impl<'a> Picture<'a> {
     /// its top left corner. Without it a picture halved in size drifts up and left by half a
     /// source pixel, which is invisible on a photograph and obvious on a grid.
     fn draw_sampled(&self, frame: &mut Framebuffer, fit: Fit, blend: bool) {
-        // 16.16 fixed point throughout, the same as `crate::rotate`: a picture is never so big
+        // 16.16 fixed point throughout: a picture is never so big
         // that its coordinates need more than sixteen whole bits, and a sixteen-bit fraction is
         // finer than the eye at these sizes.
         let step_x = ((self.width as i64) << 16) / fit.width as i64;
@@ -360,8 +359,8 @@ impl<'a> Picture<'a> {
 
     /// The four source pixels around a 16.16 sample, mixed by how close it falls to each.
     ///
-    /// Clamped rather than refused at the edges: unlike the rotating blit, every sample here is
-    /// inside the picture by construction, and only the outermost half pixel reaches past it.
+    /// Clamped rather than refused at the edges: every sample here is inside the picture by
+    /// construction, and only the outermost half pixel reaches past it.
     fn bilinear(&self, sx: i32, sy: i32, last_x: i32, last_y: i32) -> u16 {
         let x0 = (sx >> 16).clamp(0, last_x);
         let y0 = (sy >> 16).clamp(0, last_y);

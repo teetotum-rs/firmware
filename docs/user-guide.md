@@ -50,7 +50,7 @@ do:
 - Clicks you feel under your finger from the vibration motor, in adjustable strength or off.
 - Music from your phone through the second chip: title, artist, cover picture and volume on the
   screen, play/pause with a tap, previous and next track with a swipe, volume with the knob.
-- Twelve picture orientations, eleven colour themes, ten brightness steps.
+- Four picture orientations, eleven colour themes, ten brightness steps.
 - A background of points in the colours of the theme behind Home, the menus and the Music Player,
   still or moving.
 - Plugins: small add-on programs that each get their own screen. Three come with the firmware.
@@ -119,9 +119,8 @@ value goes back to what it was when you opened the setting, then Home appears. *
 long press opens the [QR codes](#qr-codes)**, and the next one leads back to Home.
 
 **Swipes** count in the directions of the picture as you see it, whichever way you have turned the
-picture (see [Orientation](#orientation)). At the in-between angles they are rounded to the nearest
-quarter turn. A swipe has to travel at least about a tenth of the screen; a shorter movement counts
-as a tap. Up and down swipes do nothing on the Music Player, and no swipe does anything in the menus.
+picture (see [Orientation](#orientation)). A swipe has to travel at least about a tenth of the
+screen; a shorter movement counts as a tap. Up and down swipes do nothing on the Music Player, and no swipe does anything in the menus.
 
 ### How the menus work
 
@@ -440,7 +439,7 @@ you see while the setting is open is a preview until you confirm it.
 
 | Setting | Values | Default | At the end of the range |
 |---|---|---|---|
-| [Orientation](#orientation) | `0 deg` to `330 deg` in steps of 30 | `0 deg` | goes round |
+| [Orientation](#orientation) | `0 deg`, `90 deg`, `180 deg`, `270 deg` | `0 deg` | goes round |
 | [Theme](#theme) | eleven colour themes | `Red` | goes round |
 | [Brightness](#brightness) | `10 %` to `100 %` in steps of 10 | `100 %` | stops |
 | [Haptics](#haptics) | `Off`, then `1 / 9` to `9 / 9` | `9 / 9` | stops |
@@ -479,18 +478,16 @@ About only shows information, so it has only the tick.
 
 ### Orientation
 
-Turns the picture in twelve steps of 30 degrees, so you can use the device in any position,
-for example with the USB cable pointing away from you. Each detent clockwise turns the picture
-30 degrees clockwise; after `330 deg` comes `0 deg` again. The dialog says `turn the knob` and
+Turns the picture in quarter turns, so you can use the device in any position, for example with
+the USB cable pointing away from you. Each detent clockwise turns the picture 90 degrees
+clockwise; after `270 deg` comes `0 deg` again. The dialog says `turn the knob` and
 `About marks the top`: the About segment is always at the top of the picture, so it shows where
 "up" is.
 
 Touch follows the picture: taps land where you see them, and swipes are named as you see them
 (see [the gestures](#the-gestures)).
 
-At `0 deg`, `90 deg`, `180 deg` and `270 deg` the display turns the picture itself at no cost.
-At the eight angles in between, TeeToTum has to turn every pixel, and the screen redraws more
-slowly.
+The display turns the picture itself, so a turned picture redraws as fast as an upright one.
 
 ### Theme
 

@@ -8,7 +8,7 @@ still only a datasheet claim, it says so.
 | Topic | What it covers |
 |---|---|
 | [Pins and the I²C bus](pins.md) | every pin measured, and the two chips that answer on I²C |
-| [Display](display.md) | the ST77916 over QSPI, what a frame costs, rotation, scaling |
+| [Display](display.md) | the ST77916 over QSPI, what a frame costs, orientation, scaling |
 | [Input](input.md) | touch in the mounting frame, the knob, the encoder on the other chip |
 | [Haptics](haptics.md) | an LRA at 161 Hz, an undocumented enable pin, one forbidden write |
 | [Audio](audio.md) | why the loudspeaker is out of the S3's reach |

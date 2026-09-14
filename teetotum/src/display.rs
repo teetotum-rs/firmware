@@ -114,7 +114,7 @@ unsafe impl DmaTxBuffer for Window<'_> {
 
         // The picture is written by the CPU through the cache and read by the DMA off the
         // external bus, so what the cache still holds has to go out first. Internal RAM needs
-        // none of this, and the staging buffer of the turned path is internal.
+        // none of this, and the staging buffer of the staged path is internal.
         let external = (self.bytes.as_ptr() as usize) < INTERNAL_RAM;
         if external {
             unsafe { cache_writeback(self.bytes.as_ptr() as u32, self.bytes.len() as u32) };
@@ -379,9 +379,8 @@ impl DisplayBus<'_> {
     /// A frame is 253 KiB and no DMA transfer is that large, so it goes out in pieces -- and
     /// the pieces have to stay inside one transaction, because the controller ends the pixel
     /// write when CS goes up. The three calls exist separately from [`send_frame`](Self::send_frame)
-    /// because a picture that is turned on its way out is not in memory as a whole: each band
-    /// is computed into a staging buffer just before it is pushed, and there is no slice to
-    /// hand over.
+    /// for a caller that decides how each piece reaches the bus -- read by the DMA where it
+    /// lies, or copied into a staging buffer first -- and so has to push the pieces itself.
     ///
     /// Every [`pixels_begin`](Self::pixels_begin) must be followed by a
     /// [`pixels_end`](Self::pixels_end), including when a push has failed.

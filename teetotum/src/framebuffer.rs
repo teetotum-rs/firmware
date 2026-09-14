@@ -10,7 +10,7 @@
 //! 360x360 pixels at two bytes each is **253 KiB**. The ESP32-S3 has 512 KiB of internal SRAM
 //! and this firmware already spends a large part of it on the Wi-Fi and Bluetooth stacks, so
 //! the framebuffer goes to the 8 MB of external PSRAM. That is not a compromise: the DMA on
-//! this chip reads external RAM directly, so an unrotated picture goes out with no copy in
+//! this chip reads external RAM directly, so a picture can go out with no copy in
 //! front of it -- 6.6 ms, which is the bus and nothing else. What it costs instead is writing
 //! the data cache back before each transfer, measured at 0.9 ms with every line of the picture
 //! dirty. See [`DisplayBus::pixels_push_direct`](crate::display::DisplayBus::pixels_push_direct).
@@ -108,8 +108,8 @@ impl Framebuffer {
 
     /// The colour at `(x, y)`, unpacked from the two bytes it is stored as.
     ///
-    /// The bounds are the caller's business; this is the inner loop of the rotating blit and
-    /// checking twice per pixel is visible in the frame time.
+    /// The bounds are the caller's business, so that a loop over every pixel does not pay for
+    /// checking each one twice.
     ///
     /// # Panics
     ///

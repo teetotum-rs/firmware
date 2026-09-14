@@ -2,39 +2,36 @@
 //!
 //! Everything up to here turned pixels. This turns the other direction: the glass says where a
 //! finger is in **its** frame, the panel is mounted half a turn round, and the picture on top of
-//! that may stand at any of twelve angles -- so a touch has to come back through both turns
+//! that may stand at any of four quarter turns -- so a touch has to come back through both turns
 //! before anything drawn into the framebuffer can claim to be under the fingertip.
 //!
 //! The two halves belong to two different modules.
 //! [`Contact::in_view`](teetotum::touch::Contact::in_view) undoes the mount, and
-//! [`Screen::picture_point`](teetotum::screen::Screen::picture_point) undoes the orientation,
-//! which is the same backwards mapping the rotating blit does per pixel. Neither knows about the
-//! other; this run is where they meet.
+//! [`Screen::picture_point`](teetotum::screen::Screen::picture_point) undoes the orientation.
+//! Neither knows about the other; this run is where they meet.
 //!
 //! **The ink is the check.** A stroke is drawn into the picture at the point the two turns say
 //! the finger was, so it is turned back out again on its way to the glass. If the mapping is
 //! right, the line grows under the fingertip and then **stays where it was put**: turn the knob
 //! and the drawing turns with the picture, mark unchanged, and drawing over an old stroke at a
 //! new angle lands on it. If the mapping is wrong, the ink appears somewhere else -- mirrored,
-//! a quarter off, or walking away from the finger as the angle grows -- and the shape of the
-//! error names the mistake.
+//! or a quarter turn off -- and the shape of the error names the mistake.
 //!
 //! In the hand:
 //!
 //! * **draw on the glass** -- ink, in the picture's coordinates;
-//! * **turn the knob** -- the picture and everything drawn on it turn, 30 degrees per detent;
+//! * **turn the knob** -- the picture and everything drawn on it turn, a quarter turn per detent;
 //! * **`c` in the monitor** -- clear the ink and start over;
 //! * **`0`** -- back upright.
 //!
 //! Slides are logged, not acted on, and logged three times over: as the controller codes them,
-//! as the viewer made them, and as the picture sees them at this orientation. The third one is
-//! rounded to a quarter, because four names cannot resolve thirty degrees.
+//! as the viewer made them, and as the picture sees them at this orientation.
 //!
-//! **The ink lands under the fingertip at a turned angle too**, not only upright, and it stays
+//! **The ink lands under the fingertip at a turned picture too**, not only upright, and it stays
 //! where it was put when the knob moves on. That the drawing turns with the picture proves
 //! nothing by itself -- it lies in the framebuffer and would turn whatever the mapping did; the
-//! check is drawing at an angle that is not zero and seeing the stroke grow under the finger
-//! rather than a quarter turn away from it.
+//! check is drawing at a quarter turn that is not zero and seeing the stroke grow under the
+//! finger rather than a quarter turn away from it.
 //!
 //! Run it in the monitor with a hand on it: `cargo run --release --bin finger`.
 
@@ -57,8 +54,7 @@ use esp_hal::usb_serial_jtag::UsbSerialJtag;
 use log::{error, info, warn};
 use teetotum::encoder::Encoder;
 use teetotum::framebuffer::{Framebuffer, HEIGHT, WIDTH};
-use teetotum::rotate::STEPS;
-use teetotum::screen::{Screen, ScreenPins};
+use teetotum::screen::{ORIENTATIONS, Screen, ScreenPins};
 use teetotum::touch::{Event, Gesture, Touch};
 
 /// How often the glass is asked. The controller has nothing to say most of the time, and a
@@ -161,8 +157,8 @@ fn main() -> ! {
         let detents = encoder.poll();
         if detents != 0 {
             let turned = screen.orientation() as i32 + detents;
-            screen.set_orientation(turned.rem_euclid(STEPS as i32) as usize);
-            info!("orientation {:3} deg", screen.orientation() * 30);
+            screen.set_orientation(turned.rem_euclid(ORIENTATIONS as i32) as usize);
+            info!("orientation {:3} deg", screen.orientation() * 90);
             changed = true;
         }
 
@@ -196,7 +192,7 @@ fn main() -> ! {
                                 .gesture
                                 .in_picture_mount()
                                 .in_picture(screen.picture_quarter()),
-                            screen.orientation() * 30,
+                            screen.orientation() * 90,
                         );
                     }
 
@@ -213,7 +209,7 @@ fn main() -> ! {
                                     vy,
                                     px,
                                     py,
-                                    screen.orientation() * 30
+                                    screen.orientation() * 90
                                 );
                                 down = true;
                             }
@@ -238,9 +234,7 @@ fn main() -> ! {
 
 /// Puts one dot of ink into the picture, and says whether it landed on it.
 ///
-/// A point off the picture is not a fault: the glass is round and its rim reaches past the
-/// corners of a turned square, so a finger on the rim at 30 degrees is asking for a pixel that
-/// does not exist. It is worth a line in the log and nothing more.
+/// Every point on the glass maps inside the picture, so a miss means the mapping is wrong.
 fn ink(frame: &mut Framebuffer, x: i32, y: i32) -> bool {
     if x < 0 || y < 0 || x >= WIDTH as i32 || y >= HEIGHT as i32 {
         return false;
@@ -265,7 +259,7 @@ fn draw_scene(frame: &mut Framebuffer) {
         .into_styled(dim)
         .draw(frame);
 
-    const MARKS: [(i32, i32); STEPS] = [
+    const MARKS: [(i32, i32); 12] = [
         (0, -1000),
         (500, -866),
         (866, -500),

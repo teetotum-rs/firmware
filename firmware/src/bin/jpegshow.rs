@@ -9,10 +9,10 @@
 //!
 //! # What it is here to settle
 //!
-//! **Which scaler a picture coming down to 360 pixels wants.** The rotating blit came out for
-//! [`Scaler::Nearest`]: at 30 degrees, bilinear was softer *and* visibly darker, because a
-//! one-pixel white line that falls between two output pixels goes to both at half brightness.
-//! That judgement was about a picture staying the same size. Coming **down** the question turns
+//! **Which scaler a picture coming down to 360 pixels wants.** A picture that keeps its size
+//! is best served by [`Scaler::Nearest`]: resampled with bilinear it came out softer *and*
+//! visibly darker, because a one-pixel white line that falls between two output pixels goes to
+//! both at half brightness. That judgement was about a picture staying the same size. Coming **down** the question turns
 //! over: nearest now throws away most of the source, and the third option -- averaging every
 //! source pixel an output pixel covers -- reads all of it.
 //!
@@ -20,9 +20,8 @@
 //!
 //! The nineteen JPEGs in the factory demo's `/PIC` are all **360x360**, cut for this panel. At
 //! 1:1 each output pixel lands on exactly one source pixel, so nearest, bilinear and box are not
-//! three answers but one, the same way tapping changed nothing at 90 degrees in
-//! `src/bin/turn.rs`. It is a free proof that the arithmetic sits on the grid, and it is not a
-//! judgement about scaling.
+//! three answers but one. It is a free proof that the arithmetic sits on the grid, and it is not
+//! a judgement about scaling.
 //!
 //! So the pictures that decide the question are compiled in ([`BUILTIN`]), and the card is
 //! optional. Two motifs at two reductions: a **zone plate**, whose local frequency climbs past
@@ -35,9 +34,7 @@
 //!
 //! * **turn the knob** -- the next picture: the four compiled-in ones first, then the card's;
 //! * **tap the glass** -- the next scaler, on the picture already decoded;
-//! * **slide** -- turn the picture 30 degrees, which is the rotating blit on top of a scaled
-//!   picture: two samplings, one after the other, and the second one is the one already
-//!   decided;
+//! * **slide** -- turn the picture a quarter turn;
 //! * **`s`** next scaler, **`r`** read and decode again, **`0`** upright.
 //!
 //! The green line reads `SOURCE>360 scaler`. Both halves matter: a scaler name over a picture
@@ -73,8 +70,7 @@ use teetotum::encoder::Encoder;
 use teetotum::fat::Volume;
 use teetotum::framebuffer::{HEIGHT, WIDTH};
 use teetotum::image::{self, Picture, Scaler};
-use teetotum::rotate::STEPS;
-use teetotum::screen::{Screen, ScreenPins};
+use teetotum::screen::{ORIENTATIONS, Screen, ScreenPins};
 use teetotum::sd::{self, SdCard};
 use teetotum::touch::{Gesture, Taps, Touch};
 
@@ -606,11 +602,11 @@ fn caption(screen: &mut Screen<'_>, name: &str, detail: &str, headline: &str) {
     .ok();
 }
 
-/// Turn the picture by `by` detents of 30 degrees.
+/// Turn the picture by `by` quarter turns.
 fn turn(screen: &mut Screen<'_>, by: i32) {
     let turned = screen.orientation() as i32 + by;
-    screen.set_orientation(turned.rem_euclid(STEPS as i32) as usize);
-    info!("orientation {:3} deg", screen.orientation() * 30);
+    screen.set_orientation(turned.rem_euclid(ORIENTATIONS as i32) as usize);
+    info!("orientation {:3} deg", screen.orientation() * 90);
 }
 
 /// Send the picture, and time it: a turned picture costs three times an upright one.

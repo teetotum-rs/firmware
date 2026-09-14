@@ -27,8 +27,7 @@
 //!
 //! * **turn the knob** -- the next background of the folder, re-read from the card and re-timed;
 //! * **tap the glass** -- swap the byte order of the picture;
-//! * **slide** -- turn the picture 30 degrees, which is the rotating blit working on a
-//!   photograph rather than on something we drew;
+//! * **slide** -- turn the picture a quarter turn;
 //! * **`r`** re-reads the same file, **`s`** swaps, **`0`** stands it upright.
 //!
 //! What it answers: **the picture is right as it is stored, and a tap turns it grey.** The
@@ -60,8 +59,7 @@ use log::{error, info, warn};
 use teetotum::encoder::Encoder;
 use teetotum::fat::Volume;
 use teetotum::framebuffer::{BYTES, HEIGHT, WIDTH};
-use teetotum::rotate::STEPS;
-use teetotum::screen::{Screen, ScreenPins};
+use teetotum::screen::{ORIENTATIONS, Screen, ScreenPins};
 use teetotum::sd::{self, SdCard};
 use teetotum::touch::{Gesture, Touch};
 
@@ -380,11 +378,11 @@ fn swap_pairs(pixels: &mut [u8]) {
     }
 }
 
-/// Turn the picture by `by` detents of 30 degrees and show it.
+/// Turn the picture by `by` quarter turns and show it.
 fn turn(screen: &mut Screen<'_>, by: i32) {
     let turned = screen.orientation() as i32 + by;
-    screen.set_orientation(turned.rem_euclid(STEPS as i32) as usize);
-    info!("orientation {:3} deg", screen.orientation() * 30);
+    screen.set_orientation(turned.rem_euclid(ORIENTATIONS as i32) as usize);
+    info!("orientation {:3} deg", screen.orientation() * 90);
     present(screen);
 }
 

@@ -15,7 +15,7 @@
 //! 2   calibration: feedback register
 //! 3   calibration: compensation
 //! 4   calibration: back-EMF
-//! 5   which of the twelve steps the picture stands at
+//! 5   the picture's quarter turns, 0 to 3              twelfths of a turn before version 12
 //! 6   the colour theme                                  since version 3
 //! 7   reserved, written 0 (was the face, see VERSION)   since version 4
 //! 8   reserved, written 0 (was removed plugins, see VERSION) since version 4
@@ -36,7 +36,7 @@ use teetotum::menu::{
     PALETTE, PALETTE_BLUE, PALETTE_CYAN, PALETTE_GREEN, PALETTE_GREY, PALETTE_INDIGO,
     PALETTE_MAGENTA, PALETTE_ORANGE, PALETTE_PINK, PALETTE_RED, PALETTE_VIOLET, Palette,
 };
-use teetotum::rotate::STEPS;
+use teetotum::screen::ORIENTATIONS;
 
 use crate::plugin::PluginId;
 
@@ -68,11 +68,15 @@ use crate::plugin::PluginId;
 /// in the firmware's list, so a plugin stays removed wherever it stands, and a signed plugin is
 /// told apart from another of the same name. Byte 8 is written 0, byte 17 counts the ids that
 /// follow. A version 10 record is read by looking its bits up in the list this build bundles.
-const VERSION: u8 = 11;
+///
+/// **From 11 to 12 the orientation counts quarter turns** instead of twelfths of a turn, the
+/// only turns the panel controller makes. An older orientation is rounded to the nearest quarter.
+const VERSION: u8 = 12;
 
 /// How many bytes an encoded record takes.
 pub const LEN: usize = LEN_10 + Settings::PLUGINS_MAX * PluginId::LEN;
 
+const VERSION_11: u8 = 11;
 const VERSION_10: u8 = 10;
 const LEN_10: usize = 18;
 
@@ -104,7 +108,7 @@ pub struct Settings {
     /// status of the run that produced them says something about that run, not about the chip
     /// now, and storing it would invite reading it as if it did.
     pub haptic: Option<StoredCalibration>,
-    /// Which of the twelve 30 degree steps the picture stands at.
+    /// How many quarter turns clockwise the picture stands at, 0 to 3.
     ///
     /// Zero is the default and means the picture stands the way the panel is mounted. There is
     /// no `Option` here because there is no difference worth keeping between "never chosen" and
@@ -658,8 +662,8 @@ impl Settings {
     pub fn decode(bytes: &[u8], bundled: &[Option<PluginId>]) -> Self {
         // Byte 7 of version 4 was the face, which the home menu chooses now.
         let (theme, bits, brightness, haptics) = match bytes.first() {
-            Some(&VERSION) | Some(&VERSION_10) | Some(&VERSION_9) | Some(&VERSION_8)
-            | Some(&VERSION_7) | Some(&VERSION_6)
+            Some(&VERSION) | Some(&VERSION_11) | Some(&VERSION_10) | Some(&VERSION_9)
+            | Some(&VERSION_8) | Some(&VERSION_7) | Some(&VERSION_6)
                 if bytes.len() >= LEN_6 =>
             {
                 (
@@ -701,8 +705,8 @@ impl Settings {
         };
         // Written before the cover's size could be chosen, so it stood as it does by default.
         let cover = match bytes.first() {
-            Some(&VERSION) | Some(&VERSION_10) | Some(&VERSION_9) | Some(&VERSION_8)
-            | Some(&VERSION_7)
+            Some(&VERSION) | Some(&VERSION_11) | Some(&VERSION_10) | Some(&VERSION_9)
+            | Some(&VERSION_8) | Some(&VERSION_7)
                 if bytes.len() >= LEN_7 =>
             {
                 CoverStyle::from_byte(bytes[11])
@@ -711,7 +715,8 @@ impl Settings {
         };
         // Written before the cloud could move, so it stood still.
         let motion = match bytes.first() {
-            Some(&VERSION) | Some(&VERSION_10) | Some(&VERSION_9) | Some(&VERSION_8)
+            Some(&VERSION) | Some(&VERSION_11) | Some(&VERSION_10) | Some(&VERSION_9)
+            | Some(&VERSION_8)
                 if bytes.len() >= LEN_8 =>
             {
                 Motion::from_byte(bytes[12])
@@ -720,7 +725,9 @@ impl Settings {
         };
         // Written before the cloud could be shaped, so it had the shape it was chosen with.
         let shape = match bytes.first() {
-            Some(&VERSION) | Some(&VERSION_10) | Some(&VERSION_9) if bytes.len() >= LEN_9 => {
+            Some(&VERSION) | Some(&VERSION_11) | Some(&VERSION_10) | Some(&VERSION_9)
+                if bytes.len() >= LEN_9 =>
+            {
                 CloudShape::from_bytes(&bytes[13..17])
             }
             _ => CloudShape::default(),
@@ -728,7 +735,7 @@ impl Settings {
         // Version 9 was written before a ring could page, and so before there could be more
         // than eight bundled plugins: the ones above the eighth were all installed.
         let removed = match bytes.first() {
-            Some(&VERSION) if bytes.len() >= LEN_10 => {
+            Some(&VERSION) | Some(&VERSION_11) if bytes.len() >= LEN_10 => {
                 Removed::read(&bytes[LEN_10..], bytes[17], bundled)
             }
             Some(&VERSION_10) if bytes.len() >= LEN_10 => {
@@ -742,13 +749,13 @@ impl Settings {
                 compensation: bytes[3],
                 back_emf: bytes[4],
             }),
-            // A stored step outside the dial is not an error worth a variant: it can only come
-            // from a record this build wrote, so the honest reading of one is that the picture
-            // stands where it started.
-            orientation: if (bytes[5] as usize) < STEPS {
-                bytes[5]
-            } else {
-                0
+            // A stored value outside the dial is not an error worth a variant: the honest
+            // reading of one is that the picture stands where it started.
+            orientation: match (bytes[0], bytes[5]) {
+                (VERSION, quarters) if usize::from(quarters) < ORIENTATIONS => quarters,
+                // Twelfths of a turn, rounded to the nearest quarter; 330 degrees is upright.
+                (version, step) if version != VERSION && step < 12 => (step + 1) / 3 % 4,
+                _ => 0,
             },
             theme,
             removed,

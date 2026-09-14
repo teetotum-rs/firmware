@@ -20,10 +20,8 @@
 //!
 //! Only the `present` is timed in each; the drawing is outside the clock.
 //!
-//! Both orientations are timed too, because they are different code: upright the picture goes
-//! out as it lies, and at 30 degrees it is turned into a staging buffer in internal RAM band by
-//! band, where the direct path saves only the copy out of *that* and no cache writeback is
-//! needed at all.
+//! The picture is timed upright only: a quarter turn is the panel's own, and the bytes go out
+//! the same way at every orientation.
 //!
 //! # And then the eye
 //!
@@ -145,32 +143,28 @@ fn main() -> ! {
         started.elapsed().as_micros()
     );
 
-    info!("path      turn  still    part     whole   (us per present)");
-    for step in [0usize, 1] {
-        for direct in [false, true] {
-            screen.set_orientation(step);
-            screen.set_path(if direct { Path::Direct } else { Path::Copied });
-            // The direct path is off by default since it struck stripes in the firmware; this
-            // run is what turns it on, and what says it is worth understanding.
+    info!("path      still    part     whole   (us per present)");
+    for direct in [false, true] {
+        screen.set_path(if direct { Path::Direct } else { Path::Copied });
+        // The direct path is off by default since it struck stripes in the firmware; this
+        // run is what turns it on, and what says it is worth understanding.
 
-            // Settle the panel and the cache: the first frame after a change of path pays for
-            // whatever the one before it left dirty, and that is not what is being measured.
-            draw_scene(screen.frame(), 0);
-            let _ = screen.present();
+        // Settle the panel and the cache: the first frame after a change of path pays for
+        // whatever the one before it left dirty, and that is not what is being measured.
+        draw_scene(screen.frame(), 0);
+        let _ = screen.present();
 
-            let still = time(&mut screen, FRAMES, |_frame, _n| {});
-            let part = time(&mut screen, FRAMES, draw_scene);
-            let whole = time(&mut screen, FRAMES, |frame, n| {
-                let _ = frame.clear(Rgb565::BLACK);
-                draw_scene(frame, n);
-            });
+        let still = time(&mut screen, FRAMES, |_frame, _n| {});
+        let part = time(&mut screen, FRAMES, draw_scene);
+        let whole = time(&mut screen, FRAMES, |frame, n| {
+            let _ = frame.clear(Rgb565::BLACK);
+            draw_scene(frame, n);
+        });
 
-            info!(
-                "{:8}  {:4}  {still:6}  {part:6}  {whole:6}",
-                if direct { "direct" } else { "copied" },
-                if step == 0 { "0" } else { "30" },
-            );
-        }
+        info!(
+            "{:8}  {still:6}  {part:6}  {whole:6}",
+            if direct { "direct" } else { "copied" },
+        );
     }
 
     info!("---");
@@ -180,7 +174,6 @@ fn main() -> ! {
         SLOW.as_mhz(),
         CLOCK.as_mhz()
     );
-    screen.set_orientation(0);
 
     let mut frames: u32 = 0;
     let mut slow = true;

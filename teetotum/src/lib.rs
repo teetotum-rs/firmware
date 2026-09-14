@@ -11,7 +11,6 @@ pub mod haptic;
 pub mod image;
 pub mod menu;
 pub mod panel;
-pub mod rotate;
 pub mod screen;
 pub mod sd;
 pub mod step;

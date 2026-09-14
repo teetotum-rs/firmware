@@ -61,7 +61,7 @@ use teetotum::menu::{
     Owner, RING_BYTES, Ring, SLOTS, fonts, icons, shade, shortened, text as menu_text,
     width as menu_width,
 };
-use teetotum::rotate::STEPS;
+use teetotum::screen::ORIENTATIONS;
 use teetotum::screen::{Path, Screen, ScreenPins};
 use teetotum::sd::{self, SdCard};
 use teetotum::store::Store;
@@ -335,9 +335,8 @@ const CARD_BACKGROUNDS: bool = false;
 /// inside every plugin, and a swipe is exactly what a plugin's own screen is likely to want for
 /// itself.
 ///
-/// The orientation is not a constant -- the knob turns it, the glass turns with it, and the
-/// `nvs` partition keeps it. `src/bin/turn.rs` is still the run that judges the eight of the
-/// twelve steps that cost a blit.
+/// The orientation is not a constant -- the knob turns it a quarter at a time, the glass turns
+/// with it, and the `nvs` partition keeps it.
 ///
 /// **A `const`, not the menu itself.** The plugin's entry is known only once its manifest has been
 /// read at boot, so `main` puts them in from [`PLUGIN_SLOT`] on and keeps the result for good.
@@ -1046,7 +1045,7 @@ mod overview {
         pub(super) peer: bool,
         /// Detents counted since boot, signed -- clockwise is positive.
         pub(super) detents: i32,
-        /// Which of the twelve 30 degree steps the picture stands at.
+        /// How many quarter turns clockwise the picture stands at.
         pub(super) orientation: usize,
         /// Which colours the settings are drawn in.
         pub(super) theme: Theme,
@@ -2452,8 +2451,7 @@ async fn main(spawner: Spawner) -> ! {
                     // In the settings the knob belongs to the menu: it walks the ring, or it
                     // turns whatever the open dialog sets. For the orientation that is the glass
                     // itself, and About at the top of the ring is the mark that shows it.
-                    // Clockwise steps the same way [`rotate_rows`] does, which is what makes the
-                    // two agree.
+                    // Clockwise, the way the panel controller turns the picture.
                     match menu.turn(detents) {
                         Outcome::Adjust {
                             id: SETTING_ORIENTATION,
@@ -2461,7 +2459,7 @@ async fn main(spawner: Spawner) -> ! {
                             detents,
                         } => {
                             let step = (settings.orientation as i32 + detents)
-                                .rem_euclid(STEPS as i32)
+                                .rem_euclid(ORIENTATIONS as i32)
                                 as u8;
                             settings.orientation = step;
                             state.orientation = step as usize;
@@ -3963,7 +3961,7 @@ fn home_state(state: &Overview, entry: &Entry) -> Option<String> {
             // Only what differs from how the device comes: an upright picture and clicks are
             // the ordinary case and would only make the line longer.
             if state.orientation != 0 {
-                line += &format!(" · {} deg", state.orientation * 30);
+                line += &format!(" · {} deg", state.orientation * 90);
             }
             if state.haptics.step() == 0 {
                 line += " · silent";
@@ -4017,7 +4015,7 @@ fn settings_screen(
 ) {
     const VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"));
 
-    let orientation = format!("{} deg", state.orientation * 30);
+    let orientation = format!("{} deg", state.orientation * 90);
     let brightness = format!("{} %", state.brightness.percent());
     let haptics = match state.haptics.step() {
         0 => String::from("Off"),

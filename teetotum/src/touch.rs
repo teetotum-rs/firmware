@@ -101,9 +101,8 @@ impl Gesture {
     ///
     /// The slide has to come the other way round than the picture went: the picture's own north
     /// mark points to the viewer's right once the picture is a quarter turn clockwise, so a
-    /// finger sliding to the viewer's right is sliding up the picture. Whole quarters only,
-    /// because four names cannot resolve thirty degrees --
-    /// [`rotate::source_quarter`](crate::rotate::source_quarter) does the rounding.
+    /// finger sliding to the viewer's right is sliding up the picture. The picture turns in
+    /// whole quarters, so every slide keeps a name.
     ///
     /// Nothing happens to a tap, and nothing happens at all when `quarters` is 0.
     pub fn in_picture(self, quarters: usize) -> Self {
