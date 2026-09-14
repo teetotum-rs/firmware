@@ -4,7 +4,7 @@
 
 A hobby project and a work in progress; interfaces change without notice until there is a release on crates.io. Licensed MIT OR Apache-2.0.
 
-The workspace has four parts: `teetotum/` (the library: screen, touch, knob, settings store, menu), `firmware/` (the binary, the plugin loader and the measurement programs in `firmware/src/bin/`), `teetotum-face/` (the plugin SDK with the `face!` macro) and `plugins/` (example plugins).
+The workspace has five parts: `teetotum/` (the library: screen, touch, knob, settings store, menu), `firmware/` (the binary, the plugin loader and the measurement programs in `firmware/src/bin/`), `teetotum-face/` (the plugin SDK with the `face!` macro), `teetotum-pack/` (signature checks shared by the firmware and the host tool that signs and packs plugins) and `plugins/` (example plugins).
 
 ## Docs
 
@@ -13,10 +13,12 @@ The workspace has four parts: `teetotum/` (the library: screen, touch, knob, set
 - [Using plugins](https://github.com/teetotum-rs/firmware/blob/main/docs/plugins.md): the bundled plugins, plugin settings, rights, memory and limits, installing more
 - [Writing plugins](https://github.com/teetotum-rs/firmware/blob/main/docs/plugin-development.md): the teetotum-face SDK, the manifest, events, drawing, host calls, resource limits, building and bundling
 - [Code quality](https://github.com/teetotum-rs/firmware/blob/main/docs/code-quality.md): the checks a push must pass — rustfmt, Clippy with every warning an error, the stack-frame lint, exceptions with a reason, the pre-push hook
+- [Changelog](https://github.com/teetotum-rs/firmware/blob/main/CHANGELOG.md): what changed for users and plugin authors, release by release
 
 ## Code
 
 - [Plugin SDK](https://github.com/teetotum-rs/firmware/tree/main/teetotum-face): the crate a plugin depends on
+- [Plugin tool](https://github.com/teetotum-rs/firmware/tree/main/teetotum-pack): checks, signs and packs a plugin
 - [Example plugins](https://github.com/teetotum-rs/firmware/tree/main/plugins): templates to start a plugin from
 - [Plugin loader](https://github.com/teetotum-rs/firmware/blob/main/firmware/src/plugin.rs): how the firmware checks, loads and runs a plugin
 

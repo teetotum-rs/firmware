@@ -62,6 +62,7 @@ Not there: sound of its own (the loudspeaker belongs to the other microcontrolle
 | [Using plugins](docs/plugins.md) | anyone who starts or removes plugins | the bundled three, rights, what "stopped" means, memory, installing more |
 | [Writing plugins](docs/plugin-development.md) | Rust developers | the `teetotum-face` SDK, the manifest, events, drawing, limits |
 | [Code quality](docs/code-quality.md) | anyone who changes the code | the checks a push must pass, and how to run them |
+| [Changelog](CHANGELOG.md) | anyone who updates | what changed for users and plugin authors, release by release |
 | [The hardware, as measured](docs/hardware/README.md) | anyone curious about the board | what the device answered when it was asked: pins, panel, touch, knob, haptics, audio, the companion link, the card, the radios |
 
 All of it is plain Markdown with no images to fetch, so it reads the same offline in a text
@@ -126,6 +127,7 @@ plugins use it by path.
 |---|---|
 | `teetotum/` | the SDK crate — glass, knob, touch, haptics, card, and the link to the other chip |
 | `teetotum-face/` | what a plugin (a *face*) is written against — the `face!` macro, events, colours, HID usages, icons; no dependencies, builds for wasm32 and Xtensa |
+| `teetotum-pack/` | checks, signs and packs a face — the same checks in the firmware and in the `teetotum-pack` command on the host |
 | `firmware/` | the firmware, and the bring-up runs in `firmware/src/bin` that measured the board |
 | `plugins/` | the three bundled faces, plus `dummy`, a do-nothing face whose nine copies show the menu pages; each built by its own `build.sh` |
 | `backup/` | how to get the factory firmware back, and what it contained |

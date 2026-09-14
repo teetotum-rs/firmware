@@ -5,10 +5,13 @@
 # builds it for the chip and reads manifests with exactly the code a face writes them with.
 [package]
 authors      = { workspace = true }
+categories   = ["embedded", "no-std::no-alloc", "wasm"]
 description  = "Write a face -- a plugin -- for the teetotum firmware on the Waveshare ESP32-S3 Knob Touch LCD 1.8"
 edition      = { workspace = true }
+keywords     = ["esp32", "knob", "plugin", "teetotum", "wasm"]
 license      = { workspace = true }
 name         = "teetotum-face"
+readme       = "README.md"
 repository   = { workspace = true }
 rust-version = { workspace = true }
 version      = { workspace = true }

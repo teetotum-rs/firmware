@@ -4,10 +4,13 @@
 # The manifest itself is read by `teetotum-face`; what needs Ed25519 lives here, out of every face.
 [package]
 authors      = { workspace = true }
+categories   = ["command-line-utilities", "embedded", "no-std::no-alloc"]
 description  = "Verify the signature and identity of a face -- a plugin -- for the teetotum firmware"
 edition      = { workspace = true }
+keywords     = ["ed25519", "esp32", "plugin", "signing", "teetotum"]
 license      = { workspace = true }
 name         = "teetotum-pack"
+readme       = "README.md"
 repository   = { workspace = true }
 rust-version = { workspace = true }
 version      = { workspace = true }

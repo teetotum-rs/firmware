@@ -98,10 +98,10 @@ pub mod abi;
 mod icon;
 pub mod manifest;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(target_arch = "wasm32", doc))]
 mod guest;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(target_arch = "wasm32", doc))]
 pub use guest::{arc, icon, nearby, pulse, random, send, text};
 pub use icon::Icon;
 pub use manifest::Rights;
