@@ -2002,9 +2002,18 @@ dependencies = [
  "static_cell",
  "teetotum",
  "teetotum-face",
+ "teetotum-pack",
  "trouble-host",
  "wasmi",
  "zune-jpeg",
+]
+
+[[package]]
+name = "teetotum-pack"
+version = "0.1.0"
+dependencies = [
+ "ed25519-compact",
+ "teetotum-face",
 ]
 
 [[package]]

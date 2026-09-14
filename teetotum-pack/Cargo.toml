@@ -1,0 +1,18 @@
+# Checks a face before any of its code runs: whether its signature holds, and who it is.
+#
+# `no_std` and without allocation, so the firmware and a tool on the host run the same checks.
+# The manifest itself is read by `teetotum-face`; what needs Ed25519 lives here, out of every face.
+[package]
+authors      = { workspace = true }
+description  = "Verify the signature and identity of a face -- a plugin -- for the teetotum firmware"
+edition      = { workspace = true }
+license      = { workspace = true }
+name         = "teetotum-pack"
+repository   = { workspace = true }
+rust-version = { workspace = true }
+version      = { workspace = true }
+
+[dependencies]
+teetotum-face = { workspace = true }
+
+ed25519-compact = { workspace = true }

@@ -5,7 +5,7 @@
 # ships is what makes a break in them fail the build here rather than in
 # somebody else's checkout.
 [workspace]
-members  = ["firmware", "teetotum", "teetotum-face"]
+members  = ["firmware", "teetotum", "teetotum-face", "teetotum-pack"]
 resolver = "3"
 # Plugins build for wasm32v1-none, and cargo takes the target per invocation, not per package.
 exclude = ["plugins"]
@@ -25,6 +25,7 @@ version      = "0.1.0"
 [workspace.dependencies]
 teetotum      = { path = "teetotum", version = "0.1.0" }
 teetotum-face = { path = "teetotum-face", version = "0.1.0" }
+teetotum-pack = { path = "teetotum-pack", version = "0.1.0" }
 
 bt-hci                 = "0.8.0"
 critical-section       = "1.2.0"

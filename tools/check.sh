@@ -1,7 +1,7 @@
 #!/bin/sh
 # Runs every check a push must pass, stopping at the first failure:
-# rustfmt and Clippy over the firmware workspace and each plugin, the release build, the
-# signatures of the bundled plugins and the third-party notice.
+# rustfmt and Clippy over the firmware workspace and each plugin, the release build, the host
+# tests of teetotum-pack, the signatures of the bundled plugins and the third-party notice.
 #
 #     tools/check.sh
 #
@@ -21,6 +21,11 @@ export TEETOTUM_DUMMY_NAME="${TEETOTUM_DUMMY_NAME:-Dummy 1}"
 
 step() { printf '\n==> %s\n' "$*"; }
 
+# Host crates run under stable: `+stable` ignores the `[unstable]` build-std of .cargo/config.toml,
+# `RUSTFLAGS=` overrides its `-nostartfiles`, and target/host keeps the two compilers' builds apart.
+HOST=$(rustc +stable -vV | sed -n 's/^host: //p')
+host() { RUSTFLAGS='' CARGO_TARGET_DIR=target/host cargo +stable "$@" --target "$HOST"; }
+
 step "rustfmt: workspace"
 cargo fmt --all --check
 
@@ -39,6 +44,9 @@ done
 
 step "build: firmware"
 cargo build --release
+
+step "host tests: teetotum-pack"
+host test -p teetotum-pack
 
 step "signatures: bundled plugins"
 set --

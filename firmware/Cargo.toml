@@ -27,6 +27,7 @@ path = "./src/bin/main.rs"
 [dependencies]
 teetotum      = { workspace = true }
 teetotum-face = { workspace = true }
+teetotum-pack = { workspace = true }
 
 bt-hci                 = { workspace = true }
 critical-section       = { workspace = true }
