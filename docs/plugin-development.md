@@ -14,8 +14,9 @@ If you want to know what the bundled plugins do or how a user removes one, read
 
 > **Not stable yet.** Everything below describes the code as it stands in this repository.
 >
-> - `teetotum-face` is **not published on crates.io**. A plugin depends on it by path.
-> - The API and the manifest format may change without notice. The manifest is at format 3, and
+> - `teetotum-face` is on crates.io at 0.1, for host ABI 1. The examples in this repository
+>   depend on it by path, so a break in it fails the build here.
+> - The API and the manifest format may still change; each change a face would notice is a new minor version of the crate. The manifest is at format 3, and
 >   formats 1 and 2 are no longer read.
 > - **Plugins come from two places:** the list `BUNDLED` in `firmware/src/bin/main.rs`, which
 >   embeds each `.wasm` file in the firmware image with `include_bytes!`, and the sixteen slots of
@@ -173,12 +174,11 @@ cp target/wasm32v1-none/release/my_face.wasm "$out/my-face.wasm"
 echo "$out/my-face.wasm: $(wc -c < "$out/my-face.wasm") bytes"
 ```
 
-If the plugin lives **outside** this repository, point the dependency at the SDK by absolute or
-relative path, for example:
+If the plugin lives **outside** this repository, depend on the published SDK instead:
 
 ```toml
 [dependencies]
-teetotum-face = { path = "/path/to/knob-display-rust/teetotum-face" }
+teetotum-face = "0.1"
 ```
 
 ### 2. Write the face
@@ -291,14 +291,15 @@ This is a plain `cargo build --release` (the target and linker flags come from
 `.cargo/config.toml`), a copy of the result to `firmware/assets/plugins/my-face.wasm` and a
 signature. It prints the size and the start of the signing key. Outside the repository,
 `cargo build --release` leaves the module at `target/wasm32v1-none/release/my_face.wasm`, and
-you sign it yourself, with `tools/teetotum-pack` from a copy of this repository:
+you sign it yourself, with `teetotum-pack` from crates.io:
 
 ```sh
-tools/teetotum-pack sign my_face.wasm     # sign (again)
-tools/teetotum-pack check my_face.wasm    # verify, as the firmware does
+cargo install teetotum-pack --features cli
+teetotum-pack sign my_face.wasm     # sign (again)
+teetotum-pack check my_face.wasm    # verify, as the firmware does
 ```
 
-`tools/teetotum-pack` builds the host tool in `teetotum-pack/` and runs it. It needs the `stable`
+Inside this repository, `tools/teetotum-pack` builds the host tool in `teetotum-pack/` and runs it. It needs the `stable`
 Rust toolchain next to the `esp` one (`rustup toolchain install stable`).
 
 **The firmware loads only signed plugins.** `teetotum-pack sign` appends your Ed25519 key and a
@@ -430,7 +431,7 @@ strip         = true
 | Setting | Why |
 |---|---|
 | `crate-type = ["cdylib"]` | Produces a `.wasm` module with the exports `on_event` and `draw`, instead of an rlib. |
-| `teetotum-face` by `path` | The SDK is not on crates.io yet. It has no dependencies of its own. |
+| `teetotum-face` by `path` | Inside this repository, so a change to the SDK is built against every example at once. Outside it, `teetotum-face = "0.1"` from crates.io. It has no dependencies of its own. |
 | `opt-level = "z"`, `lto`, `codegen-units = 1` | Size. Every byte of module costs internal RAM when it is loaded (see [Resource limits](#8-resource-limits)). |
 | `panic = "abort"` | No unwinding. The `face!` macro brings the panic handler, which executes `unreachable`, a trap. |
 | `strip = true` | Drops the name and debug sections. The manifest section survives; all three bundled modules are stripped and carry it. |
@@ -1432,8 +1433,8 @@ Two conventions of this project that a contributed plugin should keep:
   surveillance or attack tooling: the radio API is called `nearby`, not "sniff", "scan",
   "track" or "target".
 
-**There is no plugin repository or catalogue.** The SDK is not on crates.io and its API is not
-stable; the examples in `plugins/` are the reference and the regression test for the API.
+**There is no plugin repository or catalogue.** The SDK is on crates.io at 0.x, so its API is not
+stable yet; the examples in `plugins/` are the reference and the regression test for the API.
 
 ## 13. API reference
 

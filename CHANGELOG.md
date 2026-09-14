@@ -7,6 +7,8 @@ of `teetotum-face`.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-14
+
 The first release.
 
 ### Added
@@ -24,4 +26,5 @@ The first release.
 - `teetotum-pack` 0.1.0, which checks, signs and packs plugins, as a library and a command-line
   tool for Linux, macOS and Windows.
 
-[Unreleased]: https://github.com/teetotum-rs/firmware/commits/main
+[Unreleased]: https://github.com/teetotum-rs/firmware/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/teetotum-rs/firmware/releases/tag/v0.1.0

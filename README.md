@@ -120,8 +120,8 @@ because a face builds for `wasm32v1-none` and cargo takes the target per invocat
 ## Layout
 
 The repository is a Cargo workspace, cut along the crate rather than along the code: what a
-plugin author will build against is `teetotum-face`, once it is on crates.io; until then the bundled
-plugins use it by path.
+plugin author builds against is `teetotum-face` from crates.io; the bundled plugins use it by
+path.
 
 | | |
 |---|---|

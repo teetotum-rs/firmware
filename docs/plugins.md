@@ -538,7 +538,8 @@ What you need:
 
 - The plugin's `.wasm` file, signed by its author. How to build and sign one is described in
   [plugin development](plugin-development.md).
-- A copy of this repository for `tools/teetotum-pack`, which needs the `stable` Rust toolchain, and
+- `teetotum-pack`, from crates.io with `cargo install teetotum-pack --features cli`, or
+  `tools/teetotum-pack` in a copy of this repository, which needs the `stable` Rust toolchain, and
   `espflash`, as in
   [Building and flashing it yourself](user-guide.md#9-building-and-flashing-it-yourself).
 - A Knob running TeeToTum with the partition table from `partitions.csv`. `cargo run --release`
@@ -551,6 +552,9 @@ Connect the board so that the ESP32-S3 is on USB, then, from the repository root
 ```
 tools/teetotum-pack pack my-face.wasm --slot 0 --write
 ```
+
+The tool installed from crates.io runs anywhere, given the partition table:
+`teetotum-pack pack my-face.wasm --slot 0 --write --partitions path/to/partitions.csv`.
 
 The tool checks the plugin's manifest and signature, writes `my-face.slot` next to the file (a short header, then the
 plugin) and hands it to `espflash write-bin` at the slot's address. Without `--write` it only

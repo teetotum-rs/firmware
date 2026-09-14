@@ -2,7 +2,7 @@
 
 > no_std Rust firmware with esp-hal for the Waveshare ESP32-S3 1.8" Knob Display: a round 360x360 screen with a rotary knob, a haptic motor and a second microcontroller for Bluetooth audio. The firmware is a ring menu turned with the knob, plus a host for plugins — small WebAssembly modules, run under wasmi, that get a screen of their own.
 
-A hobby project and a work in progress; interfaces change without notice until there is a release on crates.io. Licensed MIT OR Apache-2.0.
+A hobby project and a work in progress; `teetotum-face` and `teetotum-pack` are on crates.io at 0.1, and interfaces may still change between minor versions. Licensed MIT OR Apache-2.0.
 
 The workspace has five parts: `teetotum/` (the library: screen, touch, knob, settings store, menu), `firmware/` (the binary, the plugin loader and the measurement programs in `firmware/src/bin/`), `teetotum-face/` (the plugin SDK with the `face!` macro), `teetotum-pack/` (signature checks shared by the firmware and the host tool that signs and packs plugins) and `plugins/` (example plugins).
 
