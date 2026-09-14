@@ -299,6 +299,10 @@ pub enum CoverSize {
     Disc(usize),
 }
 
+/// Internal heap the decoder holds at its peak for one cover: 37 060 bytes measured for a 200x200
+/// cover, rounded up for another encoder's tables.
+pub const DECODE_HEAP: usize = 40_000;
+
 /// Decodes a finished cover, draws it at `size` and keeps it as the backdrop.
 ///
 /// `pixels` is where it is unpacked, three bytes to a pixel of the picture's own size -- so a

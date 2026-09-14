@@ -2393,7 +2393,14 @@ async fn main(spawner: Spawner) -> ! {
             // A finished cover is decoded **once**, here rather than where its last packet
             // arrived: it costs a few hundred milliseconds, and it ends up in the backdrop, so
             // every frame after this one is a 21 ms copy instead.
+            //
+            // Decoding holds [`cover::DECODE_HEAP`] of internal heap for a moment, and the plugin
+            // that ran last may leave less. It gives way then, unless its face is on the glass:
+            // the cover waits until the face is left.
+            let face_running = shown_index(state.face)
+                .is_some_and(|n| running.as_ref().is_some_and(|(m, _)| *m == n));
             if cover_waiting
+                && !(face_running && heap_room() < cover::DECODE_HEAP)
                 && let (Some(cover), Some(pixels), Some(screen)) =
                     (cover.as_ref(), cover_pixels.as_mut(), screen.as_mut())
                 && let Some(bytes) = cover.image()
@@ -2405,7 +2412,19 @@ async fn main(spawner: Spawner) -> ! {
                 // keep showing the old sleeve. The same line covers a picture that failed to
                 // decode, which leaves the frame cleared and wanting whatever was there before.
                 shown = None;
-                if let Some(art) = cover::show(screen, bytes, pixels, settings.cover.size(), None) {
+                if heap_room() < cover::DECODE_HEAP && running.is_some() {
+                    stop_plugin(&mut running, &mut page, &mut state.plugins);
+                    info!("Cover: the plugin was unloaded to make room for decoding");
+                }
+                let room = heap_room();
+                if room < cover::DECODE_HEAP {
+                    warn!(
+                        "Cover: {room} bytes of heap in one region, {} needed -- not decoded",
+                        cover::DECODE_HEAP
+                    );
+                } else if let Some(art) =
+                    cover::show(screen, bytes, pixels, settings.cover.size(), None)
+                {
                     state.backdrop = Some(Backdrop::Cover {
                         width: art.width,
                         height: art.height,
@@ -3456,6 +3475,18 @@ fn start_plugin(
             view.fault = Some(why);
         }
     }
+}
+
+/// The most internal heap free in any one region: an allocation cannot span two.
+fn heap_room() -> usize {
+    esp_alloc::HEAP
+        .stats()
+        .region_stats
+        .iter()
+        .flatten()
+        .map(|region| region.free)
+        .max()
+        .unwrap_or(0)
 }
 
 /// Unloads the plugin that is running, if one is, and takes its page back for the next.
