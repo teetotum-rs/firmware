@@ -18,3 +18,4 @@ pub mod qr;
 pub mod settings;
 pub mod shot;
 pub mod slots;
+pub mod upload;

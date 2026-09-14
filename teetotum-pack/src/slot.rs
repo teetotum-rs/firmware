@@ -128,12 +128,46 @@ impl Header {
     }
 }
 
+impl Header {
+    /// Whether `len` bytes hashed into `digest` are the module this header describes. The id is
+    /// not checked: that takes the whole module, see [`Header::matches`].
+    pub fn matches_digest(&self, len: usize, digest: Digest) -> Result<(), Error> {
+        if len != self.len || digest.finish() != self.hash {
+            return Err(Error::Hash);
+        }
+        Ok(())
+    }
+}
+
 /// The first [`HASH`] bytes of the module's SHA-512.
 pub fn digest(module: &[u8]) -> [u8; HASH] {
-    let mut hash = sha512::Hash::new();
-    hash.update(module);
-    let full = hash.finalize();
-    let mut out = [0; HASH];
-    out.copy_from_slice(&full[..HASH]);
-    out
+    let mut digest = Digest::new();
+    digest.update(module);
+    digest.finish()
+}
+
+/// [`digest`] for a module that arrives in pieces.
+pub struct Digest(sha512::Hash);
+
+impl Digest {
+    pub fn new() -> Self {
+        Self(sha512::Hash::new())
+    }
+
+    pub fn update(&mut self, bytes: &[u8]) {
+        self.0.update(bytes);
+    }
+
+    pub fn finish(self) -> [u8; HASH] {
+        let full = self.0.finalize();
+        let mut out = [0; HASH];
+        out.copy_from_slice(&full[..HASH]);
+        out
+    }
+}
+
+impl Default for Digest {
+    fn default() -> Self {
+        Self::new()
+    }
 }

@@ -41,6 +41,33 @@ pub enum Error {
     Flash(NorFlashErrorKind),
 }
 
+/// A module on its way into a slot, from [`Slots::begin`] to [`Slots::finish`]. Dropping it
+/// leaves the slot without a header, which reads as empty.
+pub struct Upload {
+    slot: usize,
+    header: Header,
+    received: usize,
+    digest: slot::Digest,
+    carry: [u8; TAIL],
+    carried: usize,
+}
+
+impl Upload {
+    pub fn slot(&self) -> usize {
+        self.slot
+    }
+
+    /// Bytes of the module written so far.
+    pub fn received(&self) -> usize {
+        self.received
+    }
+
+    /// Bytes of the module in all.
+    pub fn total(&self) -> usize {
+        self.header.len
+    }
+}
+
 /// The slots of one partition.
 pub struct Slots<F> {
     flash: F,
@@ -146,6 +173,105 @@ impl<F: NorFlash> Slots<F> {
                 .map_err(flash_error)?;
         }
 
+        let raw = Aligned(header.encode());
+        self.flash.write(start, &raw.0).map_err(flash_error)?;
+        Ok(header)
+    }
+
+    /// The first slot that holds no plugin.
+    pub fn free(&mut self) -> Result<Option<usize>, Error> {
+        for n in 0..self.count() {
+            if self.header(n)?.is_none() {
+                return Ok(Some(n));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Erases slot `n` for the module `header` describes, which [`Slots::feed`] then writes as
+    /// it arrives and [`Slots::finish`] completes.
+    pub fn begin(&mut self, n: usize, header: Header) -> Result<Upload, Error> {
+        let unit = F::WRITE_SIZE;
+        if unit > TAIL || !HEADER.is_multiple_of(unit) {
+            return Err(Error::WriteSize);
+        }
+        if header.len > MODULE_MAX {
+            return Err(Error::Module(slot::Error::TooLong));
+        }
+        self.erase(n)?;
+        let mut header = header;
+        header.accepted = false;
+        Ok(Upload {
+            slot: n,
+            header,
+            received: 0,
+            digest: slot::Digest::new(),
+            carry: [0xff; TAIL],
+            carried: 0,
+        })
+    }
+
+    /// Writes the next bytes of `upload`'s module. Whole write units go to flash straight away;
+    /// what is left of one waits for the next piece.
+    pub fn feed(&mut self, upload: &mut Upload, bytes: &[u8]) -> Result<(), Error> {
+        if upload.received + bytes.len() > upload.header.len {
+            return Err(Error::Module(slot::Error::TooLong));
+        }
+        let unit = F::WRITE_SIZE;
+        let body = self.start(upload.slot)? + HEADER as u32;
+        upload.digest.update(bytes);
+        let mut rest = bytes;
+        if upload.carried > 0 {
+            let take = (unit - upload.carried).min(rest.len());
+            upload.carry[upload.carried..upload.carried + take].copy_from_slice(&rest[..take]);
+            upload.carried += take;
+            rest = &rest[take..];
+            if upload.carried == unit {
+                let at = body + (upload.received + take - unit) as u32;
+                self.flash
+                    .write(at, &upload.carry[..unit])
+                    .map_err(flash_error)?;
+                upload.carry = [0xff; TAIL];
+                upload.carried = 0;
+            }
+        }
+        let at = body + (upload.received + bytes.len() - rest.len()) as u32;
+        let whole = rest.len() / unit * unit;
+        if whole > 0 {
+            self.flash.write(at, &rest[..whole]).map_err(flash_error)?;
+        }
+        // Bytes left over here mean the carry was flushed above; none left may mean it still
+        // fills, and then it stays as it is.
+        let left = rest.len() - whole;
+        if left > 0 {
+            upload.carry[..left].copy_from_slice(&rest[whole..]);
+            upload.carried = left;
+        }
+        upload.received += bytes.len();
+        Ok(())
+    }
+
+    /// Writes the last bytes of `upload`'s module and, if all of them came and match the hash,
+    /// the header. The id is checked when the slot is read.
+    pub fn finish(&mut self, upload: Upload) -> Result<Header, Error> {
+        let Upload {
+            slot: n,
+            header,
+            received,
+            digest,
+            carry,
+            carried,
+        } = upload;
+        header
+            .matches_digest(received, digest)
+            .map_err(Error::Module)?;
+        let start = self.start(n)?;
+        if carried > 0 {
+            let at = start + (HEADER + received - carried) as u32;
+            self.flash
+                .write(at, &carry[..F::WRITE_SIZE])
+                .map_err(flash_error)?;
+        }
         let raw = Aligned(header.encode());
         self.flash.write(start, &raw.0).map_err(flash_error)?;
         Ok(header)

@@ -20,8 +20,11 @@ use bt_hci::param::LeAdvReportsIter;
 use critical_section::Mutex;
 use embassy_executor::Spawner;
 use embassy_futures::join::join4;
-use embassy_futures::select::{Either, select};
+use embassy_futures::select::{Either3, select3};
 use embassy_futures::yield_now;
+use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+use embassy_sync::channel::Channel;
+use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Instant, Timer};
 use embedded_graphics::pixelcolor::Rgb565;
 use embedded_graphics::prelude::*;
@@ -77,7 +80,8 @@ use teetotum_firmware::settings::{
     self, Brightness, CloudShape, CoverStyle, Haptics, Motion, Part, Settings, Theme,
 };
 use teetotum_firmware::shot;
-use teetotum_firmware::slots::{self, Slots};
+use teetotum_firmware::slots::{self, Slots, Upload};
+use teetotum_firmware::upload::{self, Command, Status as UploadStatus};
 use trouble_host::connection::ScanConfig as BleScanConfig;
 use trouble_host::prelude::*;
 use trouble_host::scan::Scanner;
@@ -158,8 +162,17 @@ static PEER_CONNECTED: AtomicBool = AtomicBool::new(false);
 /// Networks seen in the most recent Wi-Fi scan, published over GATT.
 static WIFI_NETWORKS: AtomicU8 = AtomicU8::new(0);
 
+/// Whether the receive dialog is open, the only time an upload is taken.
+///
+/// Set by the device loop, read by the advertising loop.
+static RECEIVING: AtomicBool = AtomicBool::new(false);
+
 /// How often the connected peer's view of the characteristics is refreshed.
 const GATT_REFRESH: Duration = Duration::from_secs(1);
+
+/// How long the knob waits after an upload before it restarts: long enough for the status to
+/// reach the sender.
+const UPLOAD_RESTART: Duration = Duration::from_millis(500);
 
 /// How long the loop sleeps before coming round again.
 ///
@@ -460,6 +473,8 @@ const SETTING_ACCENT: Id = Id(12);
 const SETTING_QR: u16 = 13;
 /// The install dialog, past the QR codes.
 const SETTING_INSTALL: Id = Id(SETTING_QR + LINKS.len() as u16);
+/// The receive dialog: while it is open, a plugin can be uploaded over BLE.
+const SETTING_RECEIVE: Id = Id(SETTING_INSTALL.0 + 1);
 
 /// Where the install dialog stands: a menu of one entry, left by its buttons or a long press.
 static INSTALL_MENU: Menu = Menu::new(
@@ -648,7 +663,7 @@ const fn pages_for(count: usize, first: usize) -> usize {
 const _: () = assert!(FACES_ON_FIRST_HOME_PAGE > 0 && PLUGINS_ON_FIRST_SETTINGS_PAGE > 0);
 // And the pages have to fit what `Navigator::hide` can address and what the record can count.
 const _: () = assert!(pages_for(PLUGINS_MAX, FACES_ON_FIRST_HOME_PAGE) <= MAX_PAGES);
-const _: () = assert!(pages_for(PLUGINS_MAX, PLUGINS_ON_FIRST_SETTINGS_PAGE) <= MAX_PAGES);
+const _: () = assert!(pages_for(PLUGINS_MAX + 1, PLUGINS_ON_FIRST_SETTINGS_PAGE) <= MAX_PAGES);
 const _: () = assert!(BUNDLED.len() <= PLUGINS_MAX);
 
 /// How many plugins the rings hold, bundled and installed together: as many as the settings
@@ -670,6 +685,8 @@ fn bundled_ids() -> [Option<PluginId>; BUNDLED.len()] {
 struct Waiting {
     slot: usize,
     wasm: &'static [u8],
+    /// Whether a plugin with the same id is there already, bundled or from a slot.
+    update: bool,
 }
 
 type WaitingSlots = [Option<Waiting>; PLUGINS_MAX];
@@ -764,6 +781,7 @@ fn gather_modules(
                             waiting[waits] = Some(Waiting {
                                 slot: n,
                                 wasm: module,
+                                update: false,
                             });
                             waits += 1;
                             info!(
@@ -791,6 +809,10 @@ fn gather_modules(
             Ok(None) => {}
             Err(e) => error!("Plugin: slot {n} refused -- {e:?}"),
         }
+    }
+    // Only now are all plugins known that a waiting one can update.
+    for waits in waiting.iter_mut().flatten() {
+        waits.update = PluginId::of(waits.wasm).is_ok_and(|id| ids[..count].contains(&Some(id)));
     }
     (modules, count, waiting, from_slot, Some(spare))
 }
@@ -1086,6 +1108,8 @@ mod overview {
         pub(super) plugins: [Option<PluginView>; PLUGINS_MAX],
         /// The plugin the install dialog offers, while it is open.
         pub(super) offer: Option<Offer>,
+        /// How the upload stands that the receive dialog shows.
+        pub(super) received: Received,
         /// Counted up whenever the plugin asks to be drawn again. What it shows lives in its own
         /// memory, where the comparison that decides a redraw cannot look, so this stands in for it.
         pub(super) plugin_frame: u32,
@@ -1093,6 +1117,26 @@ mod overview {
 }
 
 use overview::Overview;
+
+/// How an upload over BLE stands, as the receive dialog shows it.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+struct Received {
+    status: UploadStatus,
+    slot: usize,
+    received: usize,
+    total: usize,
+}
+
+impl Received {
+    fn of(status: UploadStatus, upload: &Upload) -> Self {
+        Self {
+            status,
+            slot: upload.slot(),
+            received: upload.received(),
+            total: upload.total(),
+        }
+    }
+}
 
 /// What the settings know about the bundled plugin.
 #[derive(Clone, PartialEq, Eq)]
@@ -1119,6 +1163,8 @@ struct PluginView {
 #[derive(Clone, PartialEq, Eq)]
 struct Offer {
     slot: usize,
+    /// Whether it replaces a plugin with the same id once accepted.
+    update: bool,
     name: &'static str,
     version: Version,
     /// The first bytes of the author's key, which tell two authors apart on the glass.
@@ -1145,6 +1191,7 @@ impl Offer {
         key.copy_from_slice(&signed.key[..8]);
         Some(Self {
             slot: waiting.slot,
+            update: waiting.update,
             name: manifest.name(),
             version: manifest.version(),
             key,
@@ -1210,6 +1257,145 @@ fn offer_next(
     }
 }
 
+/// Erases the other slots that hold an accepted plugin with slot `n`'s id. An update is written
+/// into a slot of its own, and the plugin it replaces goes only once the update is accepted.
+fn replace_older<F: NorFlash>(slots: &mut Slots<F>, n: usize) {
+    let Ok(Some(new)) = slots.header(n) else {
+        return;
+    };
+    for m in (0..slots.count()).filter(|&m| m != n) {
+        if let Ok(Some(old)) = slots.header(m)
+            && old.accepted
+            && old.id == new.id
+        {
+            match slots.erase(m) {
+                Ok(()) => info!("Plugin: slot {m} erased, slot {n} replaces it"),
+                Err(e) => error!("Plugin: slot {m} not erased -- {e:?}"),
+            }
+        }
+    }
+}
+
+/// Takes one command of an upload over BLE, through the flash the settings store holds, and
+/// says how the upload stands after it.
+#[expect(
+    clippy::large_stack_frames,
+    reason = "a piece and the hash under way are a few hundred bytes each; the main stack has room, see the note at the top"
+)]
+fn receive(
+    store: Option<&mut Store<Region<'_, '_>>>,
+    table: &mut [u8; TABLE_SCRATCH],
+    upload: &mut Option<Upload>,
+    command: Command,
+) -> Received {
+    let failed = |status| Received {
+        status,
+        ..Received::default()
+    };
+    let Some(store) = store else {
+        error!("Plugin: upload refused, no flash to write to");
+        return failed(UploadStatus::Flash);
+    };
+    let Ok(region) = flash::plugins(store.flash_mut().storage(), table) else {
+        error!("Plugin: upload refused, no plugins partition");
+        return failed(UploadStatus::Flash);
+    };
+    let mut slots = Slots::new(region);
+    match command {
+        Command::Begin(header) => {
+            // A second begin replaces the upload under way, whose slot stays empty.
+            *upload = None;
+            let n = match slots.free() {
+                Ok(Some(n)) => n,
+                Ok(None) => {
+                    warn!("Plugin: upload refused, every slot holds a plugin");
+                    return failed(UploadStatus::NoSlot);
+                }
+                Err(e) => {
+                    error!("Plugin: upload refused -- {e:?}");
+                    return failed(UploadStatus::Flash);
+                }
+            };
+            let len = header.len;
+            match slots.begin(n, header) {
+                Ok(begun) => {
+                    info!("Plugin: receiving {len} bytes into slot {n}");
+                    let received = Received::of(UploadStatus::Ready, &begun);
+                    *upload = Some(begun);
+                    received
+                }
+                Err(slots::Error::Module(e)) => {
+                    warn!("Plugin: upload refused -- {e}");
+                    failed(UploadStatus::Mismatch)
+                }
+                Err(e) => {
+                    error!("Plugin: upload refused -- {e:?}");
+                    failed(UploadStatus::Flash)
+                }
+            }
+        }
+        Command::Piece { offset, len, bytes } => {
+            let Some(current) = upload.as_mut() else {
+                return failed(UploadStatus::Refused);
+            };
+            if offset != current.received() {
+                warn!(
+                    "Plugin: piece at {offset} refused, {} bytes received",
+                    current.received()
+                );
+                return Received::of(UploadStatus::OutOfOrder, current);
+            }
+            match slots.feed(current, &bytes[..len]) {
+                Ok(()) => Received::of(UploadStatus::Ready, current),
+                Err(e) => {
+                    error!(
+                        "Plugin: upload into slot {} failed -- {e:?}",
+                        current.slot()
+                    );
+                    let status = match e {
+                        slots::Error::Module(_) => UploadStatus::Mismatch,
+                        _ => UploadStatus::Flash,
+                    };
+                    let received = Received::of(status, current);
+                    *upload = None;
+                    received
+                }
+            }
+        }
+        Command::Commit => {
+            let Some(done) = upload.take() else {
+                return failed(UploadStatus::Refused);
+            };
+            let last = Received::of(UploadStatus::Written, &done);
+            match slots.finish(done) {
+                Ok(header) => {
+                    info!(
+                        "Plugin: slot {} written, {} bytes, id {:02x?}",
+                        last.slot,
+                        header.len,
+                        header.id.bytes()
+                    );
+                    last
+                }
+                Err(e) => {
+                    warn!("Plugin: slot {} not written -- {e:?}", last.slot);
+                    let status = match e {
+                        slots::Error::Module(_) => UploadStatus::Mismatch,
+                        _ => UploadStatus::Flash,
+                    };
+                    Received { status, ..last }
+                }
+            }
+        }
+        Command::Abort => {
+            if let Some(dropped) = upload.take() {
+                info!("Plugin: upload into slot {} aborted", dropped.slot());
+            }
+            Received::default()
+        }
+    }
+}
+
 /// Marks a waiting slot accepted, through the flash the settings store holds; says whether it
 /// took.
 fn accept_slot(
@@ -1222,7 +1408,12 @@ fn accept_slot(
         return false;
     };
     let accepted = match flash::plugins(store.flash_mut().storage(), table) {
-        Ok(region) => Slots::new(region).accept(slot),
+        Ok(region) => {
+            let mut slots = Slots::new(region);
+            slots
+                .accept(slot)
+                .inspect(|()| replace_older(&mut slots, slot))
+        }
         Err(_) => Err(slots::Error::NoSlot),
     };
     match accepted {
@@ -1270,6 +1461,29 @@ mod gatt {
     #[gatt_server]
     pub(super) struct Server {
         pub(super) knob: KnobService,
+        pub(super) upload: UploadService,
+    }
+
+    /// Where a plugin is uploaded into a slot; the protocol is [`upload`]'s.
+    #[gatt_service(uuid = "4a729af2-063c-451a-8c73-60e5fab61ccb")]
+    pub(super) struct UploadService {
+        /// A command: begin with a slot header, commit or abort.
+        #[characteristic(
+            uuid = "19792d5c-9458-40ba-b233-c82b87d3dd4e",
+            write,
+            value = [0; upload::CONTROL_MAX]
+        )]
+        pub(super) control: [u8; upload::CONTROL_MAX],
+        /// A piece of the module, after its offset.
+        #[characteristic(
+            uuid = "81bcd10c-d2eb-4f6a-b4db-e196026f9f7c",
+            write,
+            value = [0; upload::DATA_MAX]
+        )]
+        pub(super) data: [u8; upload::DATA_MAX],
+        /// How the upload stands, from [`upload::Status::encode`].
+        #[characteristic(uuid = "1236b81e-8a6e-49bf-817a-210b74ac7990", read, notify)]
+        pub(super) status: [u8; upload::STATUS_LEN],
     }
 
     /// A service exposing what the firmware currently knows about itself.
@@ -1939,6 +2153,11 @@ async fn main(spawner: Spawner) -> ! {
     }))
     .expect("the GATT server does not fit its attribute table");
 
+    // An upload's commands go from the advertising loop to the device loop, which holds the
+    // flash, and its status comes back.
+    let uploads: Channel<NoopRawMutex, Command, 2> = Channel::new();
+    let upload_status: Signal<NoopRawMutex, [u8; upload::STATUS_LEN]> = Signal::new();
+
     let advertising = async {
         // Flags, appearance and the name come to 17 of the 31 bytes; the 128-bit service UUID
         // alone is 18 and has to travel in the scan response instead. Scanning here is active,
@@ -2009,8 +2228,14 @@ async fn main(spawner: Spawner) -> ! {
             info!("BLE: a device connected");
 
             loop {
-                match select(connection.next(), Timer::after(GATT_REFRESH)).await {
-                    Either::First(GattConnectionEvent::Disconnected { reason }) => {
+                match select3(
+                    connection.next(),
+                    Timer::after(GATT_REFRESH),
+                    upload_status.wait(),
+                )
+                .await
+                {
+                    Either3::First(GattConnectionEvent::Disconnected { reason }) => {
                         info!(
                             "BLE: the device disconnected after {} s, reason {:?}",
                             since.elapsed().as_secs(),
@@ -2018,12 +2243,45 @@ async fn main(spawner: Spawner) -> ! {
                         );
                         break;
                     }
-                    Either::First(GattConnectionEvent::Gatt { event }) => match event.accept() {
-                        Ok(reply) => reply.send().await,
-                        Err(err) => error!("BLE could not answer a GATT request: {err:?}"),
-                    },
-                    Either::First(_) => {}
-                    Either::Second(()) => {
+                    Either3::First(GattConnectionEvent::Gatt { event }) => {
+                        // An upload's writes go to the device loop. The reply waits until it has
+                        // room for them, which paces the sender.
+                        let command = match &event {
+                            GattEvent::Write(write)
+                                if write.handle() == server.upload.control.handle =>
+                            {
+                                Some(Command::control(write.data()))
+                            }
+                            GattEvent::Write(write)
+                                if write.handle() == server.upload.data.handle =>
+                            {
+                                Some(Command::data(write.data()))
+                            }
+                            _ => None,
+                        };
+                        let reply = match command {
+                            None => event.accept(),
+                            Some(_) if !RECEIVING.load(Ordering::Relaxed) => {
+                                event.reject(AttErrorCode::WRITE_NOT_PERMITTED)
+                            }
+                            Some(None) => event.reject(AttErrorCode::VALUE_NOT_ALLOWED),
+                            Some(Some(command)) => {
+                                uploads.send(command).await;
+                                event.accept()
+                            }
+                        };
+                        match reply {
+                            Ok(reply) => reply.send().await,
+                            Err(err) => error!("BLE could not answer a GATT request: {err:?}"),
+                        }
+                    }
+                    Either3::First(_) => {}
+                    Either3::Third(status) => {
+                        if let Err(err) = server.upload.status.notify(&connection, &status).await {
+                            warn!("BLE: upload status not sent -- {err:?}");
+                        }
+                    }
+                    Either3::Second(()) => {
                         // Keep the published values current for whoever is reading them.
                         let uptime = Instant::now().as_secs() as u32;
                         let _ = server.set(&server.knob.uptime, &uptime);
@@ -2082,7 +2340,8 @@ async fn main(spawner: Spawner) -> ! {
         let on_home = |n: &usize| listed(n) && ids[*n].is_some_and(|id| settings.installed(id));
         let settings_count = (0..PLUGINS_MAX).filter(listed).count();
         let home_count = (0..PLUGINS_MAX).filter(on_home).count();
-        let settings_pages = pages_for(settings_count, PLUGINS_ON_FIRST_SETTINGS_PAGE);
+        // One more entry than plugins: receiving one comes after them.
+        let settings_pages = pages_for(settings_count + 1, PLUGINS_ON_FIRST_SETTINGS_PAGE);
         let mut settings_next: Option<&'static Menu> = None;
         for page in (0..settings_pages).rev() {
             let mut menu = match page {
@@ -2097,6 +2356,18 @@ async fn main(spawner: Spawner) -> ! {
                 if let (true, Some(manifest)) = (at == page, manifests[n]) {
                     menu = menu.with(slot, Entry::plugin(manifest.name(), &icons[n], &menus[n]));
                 }
+            }
+            let (at, slot) = place(settings_count, PLUGINS_ON_FIRST_SETTINGS_PAGE, PLUGIN_SLOT);
+            if at == page {
+                menu = menu.with(
+                    slot,
+                    Entry::setting(
+                        "Receive plugin",
+                        &icons::PLUGIN,
+                        SETTING_RECEIVE,
+                        Buttons::Ok,
+                    ),
+                );
             }
             if let Some(next) = settings_next {
                 menu = menu.then(next);
@@ -2176,6 +2447,9 @@ async fn main(spawner: Spawner) -> ! {
         // happen where the last packet arrives: it costs a few hundred milliseconds, and the
         // link is what that pass is for.
         let mut cover_waiting = false;
+        // The upload under way over BLE, and when the knob restarts after one was written.
+        let mut upload: Option<Upload> = None;
+        let mut restart_at: Option<Instant> = None;
         // What the glass is currently showing. The picture is sent only when the gathered
         // state differs from it, which makes the redraw rate a consequence of what changed
         // rather than a timer: `uptime` moves once a second and everything else on demand.
@@ -3079,6 +3353,39 @@ async fn main(spawner: Spawner) -> ! {
             state.uptime = Instant::now().as_secs() as u32;
             state.networks = WIFI_NETWORKS.load(Ordering::Relaxed);
             state.peer = PEER_CONNECTED.load(Ordering::Relaxed);
+
+            // Uploads are taken only while the receive dialog is open. Closing it drops one
+            // under way, and its slot stays empty.
+            let receiving = matches!(
+                state.menu.as_ref().and_then(Navigator::opened),
+                Some((SETTING_RECEIVE, Owner::Firmware))
+            );
+            RECEIVING.store(receiving, Ordering::Relaxed);
+            if !receiving {
+                if let Some(dropped) = upload.take() {
+                    info!("Plugin: upload into slot {} dropped", dropped.slot());
+                }
+                state.received = Received::default();
+            }
+            while let Ok(command) = uploads.try_receive() {
+                if !receiving {
+                    continue;
+                }
+                state.received = receive(store.as_mut(), table, &mut upload, command);
+                upload_status.signal(
+                    state
+                        .received
+                        .status
+                        .encode(state.received.slot, state.received.received),
+                );
+                if state.received.status == UploadStatus::Written {
+                    restart_at = Some(Instant::now() + UPLOAD_RESTART);
+                }
+            }
+            if restart_at.is_some_and(|at| Instant::now() >= at) {
+                info!("Plugin: uploaded -- restarting");
+                software_reset();
+            }
 
             if shown.as_ref() != Some(&state) {
                 if let Some(screen) = screen.as_mut() {
@@ -4220,6 +4527,35 @@ fn settings_screen(
         }
         // A waiting plugin as its module describes it. An unknown key is said as such: it is
         // what tells a stranger's plugin from the project's.
+        Some((SETTING_RECEIVE, Owner::Firmware)) => {
+            let received = &state.received;
+            line(-42, "Receive", heading);
+            match received.status {
+                UploadStatus::Idle if state.peer => line(-4, "connected", detail),
+                UploadStatus::Idle => {
+                    line(-4, "waiting for a sender", detail);
+                    line(16, BLE_DEVICE_NAME, quiet);
+                }
+                UploadStatus::Ready => {
+                    let percent = received.received * 100 / received.total.max(1);
+                    line(-14, &format!("{percent} %"), reading);
+                    line(
+                        16,
+                        &format!("{} of {} bytes", received.received, received.total),
+                        detail,
+                    );
+                    line(34, &format!("into slot {}", received.slot), quiet);
+                }
+                UploadStatus::Written => {
+                    line(-14, "written", reading);
+                    line(16, "restarting", quiet);
+                }
+                failed => {
+                    line(-14, failed.reason(), (&fonts::SMALL, Rgb565::CSS_ORANGE));
+                    line(16, "send it again", quiet);
+                }
+            }
+        }
         Some((SETTING_INSTALL, Owner::Firmware)) => {
             if let Some(offer) = state.offer.as_ref() {
                 let kb = |bytes: usize| format!("{}.{}", bytes / 1000, bytes % 1000 / 100);
@@ -4235,7 +4571,11 @@ fn settings_screen(
                     format!("too large: {} KB heap", kb(offer.heap))
                 };
                 line(-42, offer.name, heading);
-                line(-20, owner, owner_style);
+                if offer.update {
+                    line(-20, &format!("update, {owner}"), owner_style);
+                } else {
+                    line(-20, owner, owner_style);
+                }
                 line(-4, &format!("key {key}"), detail);
                 line(12, &format!("rights {}", offer.rights), detail);
                 line(
