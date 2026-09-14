@@ -580,7 +580,7 @@ impl Face {
     }
 }
 
-/// The plugins that come with the firmware, each signed (`tools/sign-face.py`).
+/// The plugins that come with the firmware, each signed (`tools/teetotum-pack sign`).
 ///
 /// **Three so far, taking turns in one page of external RAM** -- see [`start_plugin`]. The HID
 /// remote (`plugins/hid-remote`), the teetotum (`plugins/teetotum-plugin`) and Nearby
@@ -589,7 +589,7 @@ impl Face {
 /// removing it takes its face off home, not its bytes out of flash.
 ///
 /// **More come from the `plugins` partition**, without a firmware build: see [`gather_modules`]
-/// and `tools/pack-slot.py`.
+/// and `tools/teetotum-pack pack`.
 ///
 /// **The order decides only where each stands in the rings.** The settings record names removed
 /// plugins by [`PluginId`]; records before version 11 named them by place here, so the first

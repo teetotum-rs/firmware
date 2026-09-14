@@ -47,8 +47,8 @@ tools/check.sh
 It needs what building the firmware needs: the `esp` toolchain from `espup` (the channel is set
 in `rust-toolchain.toml`, so Clippy and rustfmt come from the same toolchain as the compiler).
 If `xtensa-esp32s3-elf-gcc` is not on `PATH`, the script sources `$HOME/export-esp.sh`, the file
-`espup` writes by default. It also needs `python3` and `openssl` 3.0 or later for the last two
-steps.
+`espup` writes by default. The host steps need the `stable` Rust toolchain as well, and the last
+step needs `python3`.
 
 The steps run in this order, each announced by a `==>` line, and the first failure stops the
 script with a non-zero exit code:
@@ -60,8 +60,10 @@ script with a non-zero exit code:
 | 3 | lint, workspace | `cargo clippy --release --workspace -- -D warnings` |
 | 4 | lint, each plugin | `cargo clippy --release -- -D warnings` in every `plugins/*/` |
 | 5 | build | `cargo build --release` |
-| 6 | signatures | `tools/sign-face.py --check` over the bundled plugins |
-| 7 | third-party list | `tools/third-party.py --check` |
+| 6 | host tests | `cargo +stable test -p teetotum-pack --features std`, for the host |
+| 7 | host lint | `cargo +stable clippy -p teetotum-pack --features cli --all-targets -- -D warnings`, for the host |
+| 8 | signatures | `tools/teetotum-pack check` over the bundled plugins |
+| 9 | third-party list | `tools/third-party.py --check` |
 
 With a warm build cache the whole run takes a little over a minute. From an empty `target/` the
 full firmware build comes on top.
@@ -236,7 +238,7 @@ sign and bundle one is in [Writing plugins](plugin-development.md).
 
 ## 7. Signatures and the third-party list
 
-**Signatures.** `tools/sign-face.py --check` verifies the last section, `teetotum.signature`, of
+**Signatures.** `tools/teetotum-pack check` reads the manifest and verifies the last section, `teetotum.signature`, of
 each bundled plugin: `hid-remote`, `nearby` and `teetotum-plugin`, listed as `BUNDLED` in
 `tools/check.sh`. Ed25519 signatures are deterministic, so rebuilding an unchanged plugin gives
 the same file; a changed one needs signing again, which its `build.sh` does. A plugin that

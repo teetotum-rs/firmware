@@ -29,7 +29,7 @@ fn bundled_faces_verify() {
 }
 
 /// The settings record names faces by these ids; a changed derivation would orphan them.
-/// Computed independently by `tools/pack-slot.py`.
+/// Computed outside this crate, from SHA-512 over key and name.
 #[test]
 fn ids_are_pinned() {
     let id = |hex| PluginId::from_bytes(from_hex(hex));
@@ -102,7 +102,7 @@ fn from_hex<const N: usize>(hex: &str) -> [u8; N] {
     bytes
 }
 
-/// The header `tools/pack-slot.py` wrote for nearby.wasm; flash already holds slots in this format.
+/// The header for nearby.wasm, computed outside this crate; flash already holds slots in this format.
 const NEARBY_HEADER: &str = "5454505301ff0000a699c0784d62a9df621c00008c538adce20e63b9\
                              43090f8f26f25d875280eebbf6191e3ef28dcedd8f000e49000000000000000000000000";
 

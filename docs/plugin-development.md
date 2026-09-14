@@ -19,7 +19,7 @@ If you want to know what the bundled plugins do or how a user removes one, read
 >   formats 1 and 2 are no longer read.
 > - **Plugins come from two places:** the list `BUNDLED` in `firmware/src/bin/main.rs`, which
 >   embeds each `.wasm` file in the firmware image with `include_bytes!`, and the sixteen slots of
->   the `plugins` partition, written over USB with `tools/pack-slot.py` and accepted on the glass
+>   the `plugins` partition, written over USB with `tools/teetotum-pack pack` and accepted on the glass
 >   (see [Quick start](#2-quick-start)). Loading a plugin from the SD card, over Wi-Fi or over
 >   Bluetooth is not implemented.
 
@@ -291,17 +291,20 @@ This is a plain `cargo build --release` (the target and linker flags come from
 `.cargo/config.toml`), a copy of the result to `firmware/assets/plugins/my-face.wasm` and a
 signature. It prints the size and the start of the signing key. Outside the repository,
 `cargo build --release` leaves the module at `target/wasm32v1-none/release/my_face.wasm`, and
-you sign it yourself:
+you sign it yourself, with `tools/teetotum-pack` from a copy of this repository:
 
 ```sh
-tools/sign-face.py my_face.wasm            # sign (again)
-tools/sign-face.py --check my_face.wasm    # verify
+tools/teetotum-pack sign my_face.wasm     # sign (again)
+tools/teetotum-pack check my_face.wasm    # verify, as the firmware does
 ```
 
-**The firmware loads only signed plugins.** `tools/sign-face.py` appends your Ed25519 key and a
-signature over the module as its last section, `teetotum.signature`; it needs `openssl` 3.0 or
-later. The key is a PEM file: `--key`, else `$TEETOTUM_KEY`, else
-`~/.config/teetotum/face-key.pem`, created on first use. **Keep it and back it up.** Your key and
+`tools/teetotum-pack` builds the host tool in `teetotum-pack/` and runs it. It needs the `stable`
+Rust toolchain next to the `esp` one (`rustup toolchain install stable`).
+
+**The firmware loads only signed plugins.** `teetotum-pack sign` appends your Ed25519 key and a
+signature over the module as its last section, `teetotum.signature`, replacing an earlier one.
+The key is an Ed25519 private key in PEM, as `openssl genpkey -algorithm ed25519` writes it:
+`--key`, else `$TEETOTUM_KEY`, else `~/.config/teetotum/face-key.pem`, created on first use. **Keep it and back it up.** Your key and
 the plugin's name together are the plugin's identity: the Knob remembers a removed plugin by
 it, and a build signed with another key is a different plugin. There is no central authority;
 any key is accepted, but the bytes must be the ones that key signed.
@@ -320,10 +323,10 @@ If the Knob already runs TeeToTum, the plugin needs no firmware build: write it 
 [user guide](user-guide.md) about the cable orientation), from the repository root:
 
 ```sh
-tools/pack-slot.py firmware/assets/plugins/my-face.wasm --slot 0 --write
+tools/teetotum-pack pack firmware/assets/plugins/my-face.wasm --slot 0 --write
 ```
 
-`pack-slot.py` checks the signature, writes `my-face.slot` next to the module (a 64-byte header
+`pack` checks the manifest and the signature, writes `my-face.slot` next to the module (a 64-byte header
 with a magic, the plugin's id, the length and the start of the module's SHA-512, then the module)
 and calls `espflash write-bin -B 921600` at the slot's address from `partitions.csv`. espflash
 restarts the board, and the firmware asks on the glass before the plugin gets a place (step 5).
@@ -485,7 +488,7 @@ out=../../firmware/assets/plugins
 mkdir -p "$out"
 cargo build --release -q
 cp target/wasm32v1-none/release/hid_remote.wasm "$out/hid-remote.wasm"
-../../tools/sign-face.py "$out/hid-remote.wasm"
+../../tools/teetotum-pack sign "$out/hid-remote.wasm"
 ```
 
 Nothing more than a build, a copy into `firmware/assets/plugins/`, where `BUNDLED` embeds it
@@ -588,8 +591,8 @@ A second custom section, `teetotum.signature`, 96 bytes: the author's Ed25519 pu
 then the signature (64) over every byte of the module before this section. It must be the
 module's **last** section, so nothing can be appended to a signed module. The key is not in the
 manifest because it is not part of the source: the same source signed by someone else is someone
-else's plugin. `tools/sign-face.py` writes the section; `teetotum_face::manifest::Signed` reads
-it without checking the signature, which the firmware does with `ed25519-compact`.
+else's plugin. `teetotum-pack sign` writes the section; `teetotum_face::manifest::Signed` reads
+it without checking the signature, which `teetotum-pack` does, on the host and in the firmware.
 
 ### Rights
 
@@ -1304,7 +1307,7 @@ The face stays on Home; opening it shows "stopped" and the reason, and the log s
 | `manifest too short` | shorter than 163 bytes |
 | `manifest format N, this firmware reads 3` | built against another version of the SDK |
 | `built for host ABI N, this firmware offers N` | built against a newer SDK than this firmware |
-| `not signed` | no `teetotum.signature` section: run `tools/sign-face.py` |
+| `not signed` | no `teetotum.signature` section: run `tools/teetotum-pack sign` |
 | `signature section malformed or not last` | something was appended after signing, or the section is not 96 bytes |
 | `signature does not match its bytes and key` | the module changed after it was signed, or was signed with another key than the one it names |
 | `manifest name empty, too long or not UTF-8` | |

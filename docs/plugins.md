@@ -538,7 +538,7 @@ What you need:
 
 - The plugin's `.wasm` file, signed by its author. How to build and sign one is described in
   [plugin development](plugin-development.md).
-- A copy of this repository for `tools/pack-slot.py` (Python 3 and `openssl` 3.0 or later), and
+- A copy of this repository for `tools/teetotum-pack`, which needs the `stable` Rust toolchain, and
   `espflash`, as in
   [Building and flashing it yourself](user-guide.md#9-building-and-flashing-it-yourself).
 - A Knob running TeeToTum with the partition table from `partitions.csv`. `cargo run --release`
@@ -549,10 +549,10 @@ What you need:
 Connect the board so that the ESP32-S3 is on USB, then, from the repository root:
 
 ```
-tools/pack-slot.py my-face.wasm --slot 0 --write
+tools/teetotum-pack pack my-face.wasm --slot 0 --write
 ```
 
-The tool checks the signature, writes `my-face.slot` next to the file (a short header, then the
+The tool checks the plugin's manifest and signature, writes `my-face.slot` next to the file (a short header, then the
 plugin) and hands it to `espflash write-bin` at the slot's address. Without `--write` it only
 writes the file and prints the espflash command. The Knob restarts when espflash is done.
 
@@ -606,7 +606,7 @@ plugin's code**:
   espflash erase-region -B 921600 0x810000 0x10000
   ```
 
-  That is slot 0. Slot N starts at `0x810000` plus N times `0x10000`; `tools/pack-slot.py`
+  That is slot 0. Slot N starts at `0x810000` plus N times `0x10000`; `tools/teetotum-pack pack`
   prints the address of the slot it writes. At the next start the plugin is gone from Home and
   from the settings.
 
