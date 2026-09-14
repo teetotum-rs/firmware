@@ -1,0 +1,62 @@
+#!/bin/sh
+# Refuses a push that fails tools/check.sh or carries private material.
+#
+#     git config core.hooksPath tools/hooks
+#
+# Private material is looked for in the outgoing commits only: working notes by file name, home
+# directory paths in added lines, and the patterns in
+# ${TEETOTUM_PRIVATE_PATTERNS:-$HOME/.config/teetotum/private-patterns} (one extended regex per
+# line, matched without case; a line starting with `!` is a fixed string that is allowed). That
+# file never lives in the repository, or the scan would publish what it looks for; without it
+# the hook refuses. LICENSE, CITATION.cff and `authors` lines carry the author's name by design.
+# `git push --no-verify` skips all of this.
+set -eu
+cd "$(git rev-parse --show-toplevel)"
+
+patterns=${TEETOTUM_PRIVATE_PATTERNS:-$HOME/.config/teetotum/private-patterns}
+if [ ! -r "$patterns" ]; then
+    echo "pre-push: $patterns is missing; refusing rather than scanning for nothing" >&2
+    exit 1
+fi
+
+regexes=$(mktemp)
+trap 'rm -f "$regexes"' EXIT
+grep -v -e '^!' -e '^$' "$patterns" > "$regexes" || true
+
+zero=0000000000000000000000000000000000000000
+found=0
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+    [ "$local_sha" = "$zero" ] && continue
+    if [ "$remote_sha" = "$zero" ]; then
+        range="$local_sha --not --remotes"
+    else
+        range="$remote_sha..$local_sha"
+    fi
+
+    # shellcheck disable=SC2086
+    names=$(git log --format= --name-only $range | sort -u)
+    hits=$(printf '%s\n' "$names" \
+        | grep -E '(^|/)(CLAUDE\.md|transcripts/|scratch-findings/|\.obsidian/)' || true)
+    if [ -n "$hits" ]; then
+        printf 'pre-push: private files in outgoing commits:\n%s\n' "$hits" >&2
+        found=1
+    fi
+
+    # shellcheck disable=SC2086
+    added=$(git log --format= -p $range -- . ':!LICENSE*' ':!CITATION.cff' \
+        | grep '^+' | grep -v '^+++' | grep -v '^+authors' || true)
+    allow=$(sed -n 's/^!//p' "$patterns")
+    if [ -n "$allow" ]; then
+        added=$(printf '%s\n' "$added" | grep -v -F "$allow" || true)
+    fi
+    hits=$( (printf '%s\n' "$added" | grep -E '/home/[a-z_][a-z0-9_-]*/'
+             printf '%s\n' "$added" | grep -i -E -f "$regexes") | sort -u || true)
+    if [ -n "$hits" ]; then
+        printf 'pre-push: private text in outgoing commits:\n%s\n' "$hits" >&2
+        found=1
+    fi
+done
+
+[ "$found" = 0 ] || exit 1
+
+exec tools/check.sh
