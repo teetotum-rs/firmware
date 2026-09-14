@@ -10,6 +10,8 @@ use core::fmt;
 use ed25519_compact::{PublicKey, Signature, sha512};
 pub use teetotum_face::manifest::{self, Manifest, Signed};
 
+pub mod slot;
+
 /// Who a face is, in the eight bytes the settings record keeps of it.
 ///
 /// **The author's key and the face's name, hashed together**, so a face of the same name signed

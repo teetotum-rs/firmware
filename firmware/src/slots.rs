@@ -1,54 +1,26 @@
 //! Plugin slots in the `plugins` partition.
 //!
-//! The partition is cut into slots of [`SLOT`] bytes, one plugin each: a [`HEADER`]-byte header,
-//! then the module. The header holds a magic, the format, the [`PluginId`], the module's length
-//! and the first 32 bytes of its SHA-512.
+//! What a slot holds -- a header, then the module -- is [`teetotum_pack::slot`]'s. This reads
+//! and writes it on flash.
 //!
 //! **The header is written last**, so a write cut short leaves a slot that reads as empty or
 //! fails its hash -- never one that passes as a plugin with half its bytes.
 //!
-//! **A written slot waits to be accepted.** Header byte 5 is `0xff` as written and `0x00` once
-//! the user has accepted the plugin on the glass; any other value reads as accepted. Accepting
-//! only clears bits, so it needs no erase, and a slot written again waits again.
+//! **A written slot waits to be accepted** until the user accepts the plugin on the glass. Only
+//! bits are cleared then, so it needs no erase, and a slot written again waits again.
 //!
 //! Reading copies the module into the caller's buffer and checks hash and id. The signature is
 //! [`crate::plugin`]'s to check, before anything runs.
 
-use ed25519_compact::sha512;
 use embedded_storage::nor_flash::{NorFlash, NorFlashError, NorFlashErrorKind};
+pub use teetotum_pack::slot::{self, HEADER, Header, MODULE_MAX, SLOT};
 
-use crate::plugin::PluginId;
-
-/// Bytes per slot.
-pub const SLOT: usize = 64 * 1024;
-/// Bytes of header in front of each module.
-pub const HEADER: usize = 64;
-/// The largest module a slot holds.
-pub const MODULE_MAX: usize = SLOT - HEADER;
-
-const MAGIC: [u8; 4] = *b"TTPS";
-const FORMAT: u8 = 1;
-const HASH: usize = 32;
-/// Where in the header the slot says whether its plugin was accepted.
-const STATE: usize = 5;
-const PENDING: u8 = 0xff;
-const ACCEPTED: u8 = 0x00;
-/// Bytes read and written to change [`STATE`].
+/// Bytes read and written to change [`slot::STATE`].
 const WORD: usize = 4;
 /// The largest write size a module's last bytes can be padded to.
 const TAIL: usize = 16;
 /// Bytes per read of a module.
 const BOUNCE: usize = 1024;
-
-/// What a slot's header says about the module behind it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Header {
-    pub id: PluginId,
-    pub len: usize,
-    /// Whether the user accepted the plugin; one that waits is not loaded.
-    pub accepted: bool,
-    hash: [u8; HASH],
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
@@ -56,20 +28,16 @@ pub enum Error {
     NoSlot,
     /// The slot holds no plugin.
     Empty,
-    /// The module is longer than [`MODULE_MAX`].
-    TooLong,
     /// The buffer is shorter than the module.
     Buffer {
         need: usize,
     },
     /// The flash reads in units that do not divide [`BOUNCE`].
     ReadSize,
-    /// The module names no id, or not the one in its header.
-    Id,
-    /// The module's bytes do not match the hash in its header.
-    Hash,
     /// The flash writes in units larger than [`TAIL`].
     WriteSize,
+    /// The module does not go with its header, or would not fit a slot.
+    Module(slot::Error),
     Flash(NorFlashErrorKind),
 }
 
@@ -100,25 +68,7 @@ impl<F: NorFlash> Slots<F> {
         let start = self.start(n)?;
         let mut raw = Aligned([0u8; HEADER]);
         self.flash.read(start, &mut raw.0).map_err(flash_error)?;
-        let raw = &raw.0;
-
-        if raw[0..4] != MAGIC || raw[4] != FORMAT {
-            return Ok(None);
-        }
-        let len = u32::from_le_bytes([raw[16], raw[17], raw[18], raw[19]]) as usize;
-        if len > MODULE_MAX {
-            return Ok(None);
-        }
-        let mut id = [0; PluginId::LEN];
-        id.copy_from_slice(&raw[8..16]);
-        let mut hash = [0; HASH];
-        hash.copy_from_slice(&raw[20..20 + HASH]);
-        Ok(Some(Header {
-            id: PluginId::from_bytes(id),
-            len,
-            accepted: raw[STATE] != PENDING,
-            hash,
-        }))
+        Ok(Header::decode(&raw.0))
     }
 
     /// Marks slot `n`'s plugin accepted. Only bits are cleared: nothing is erased, and module
@@ -133,10 +83,10 @@ impl<F: NorFlash> Slots<F> {
         if !WORD.is_multiple_of(F::READ_SIZE) {
             return Err(Error::ReadSize);
         }
-        let at = self.start(n)? + (STATE / WORD * WORD) as u32;
+        let at = self.start(n)? + (slot::STATE / WORD * WORD) as u32;
         let mut word = Aligned([0u8; WORD]);
         self.flash.read(at, &mut word.0).map_err(flash_error)?;
-        word.0[STATE % WORD] = ACCEPTED;
+        word.0[slot::STATE % WORD] = slot::ACCEPTED;
         self.flash.write(at, &word.0).map_err(flash_error)
     }
 
@@ -166,32 +116,17 @@ impl<F: NorFlash> Slots<F> {
             at += chunk.len() as u32;
         }
 
-        let module = &buf[..header.len];
-        if digest(module) != header.hash {
-            return Err(Error::Hash);
-        }
-        if PluginId::of(module).ok() != Some(header.id) {
-            return Err(Error::Id);
-        }
+        header.matches(&buf[..header.len]).map_err(Error::Module)?;
         Ok(Some(header))
     }
 
     /// Erases slot `n` and writes `wasm` into it, the header last.
     pub fn write(&mut self, n: usize, wasm: &[u8]) -> Result<Header, Error> {
-        if wasm.len() > MODULE_MAX {
-            return Err(Error::TooLong);
-        }
+        let header = Header::of(wasm).map_err(Error::Module)?;
         let unit = F::WRITE_SIZE;
         if unit > TAIL || !HEADER.is_multiple_of(unit) {
             return Err(Error::WriteSize);
         }
-        let id = PluginId::of(wasm).map_err(|_| Error::Id)?;
-        let header = Header {
-            id,
-            len: wasm.len(),
-            accepted: false,
-            hash: digest(wasm),
-        };
 
         let start = self.start(n)?;
         self.erase(n)?;
@@ -211,13 +146,7 @@ impl<F: NorFlash> Slots<F> {
                 .map_err(flash_error)?;
         }
 
-        let mut raw = Aligned([0u8; HEADER]);
-        raw.0[0..4].copy_from_slice(&MAGIC);
-        raw.0[4] = FORMAT;
-        raw.0[STATE] = PENDING;
-        raw.0[8..16].copy_from_slice(&id.bytes());
-        raw.0[16..20].copy_from_slice(&(wasm.len() as u32).to_le_bytes());
-        raw.0[20..20 + HASH].copy_from_slice(&header.hash);
+        let raw = Aligned(header.encode());
         self.flash.write(start, &raw.0).map_err(flash_error)?;
         Ok(header)
     }
@@ -241,15 +170,6 @@ impl<F: NorFlash> Slots<F> {
 
 #[repr(align(4))]
 struct Aligned<const N: usize>([u8; N]);
-
-fn digest(module: &[u8]) -> [u8; HASH] {
-    let mut hash = sha512::Hash::new();
-    hash.update(module);
-    let full = hash.finalize();
-    let mut out = [0; HASH];
-    out.copy_from_slice(&full[..HASH]);
-    out
-}
 
 fn flash_error<E: NorFlashError>(e: E) -> Error {
     Error::Flash(e.kind())

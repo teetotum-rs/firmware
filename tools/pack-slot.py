@@ -5,7 +5,7 @@
     tools/pack-slot.py my-face.wasm --slot 0 --write
 
 Writes `<module>.slot` next to the module: the slot header, then the module, in the format of
-firmware/src/slots.rs. With `--write` it hands that file to `espflash write-bin` at the slot's
+teetotum-pack/src/slot.rs. With `--write` it hands that file to `espflash write-bin` at the slot's
 address in partitions.csv; espflash resets the board, and the firmware picks the slot up at boot.
 The slot waits to be accepted: at boot the firmware asks on the glass before the face gets a place.
 A slot holding a bundled face's id takes that face's place. Sign first with tools/sign-face.py.
@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PARTITIONS = ROOT / "partitions.csv"
 PARTITION = "plugins"
 
-# firmware/src/slots.rs
+# teetotum-pack/src/slot.rs
 SLOT = 64 * 1024
 HEADER = 64
 MAGIC = b"TTPS"

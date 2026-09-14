@@ -23,7 +23,7 @@ use esp_storage::FlashStorage;
 use log::{error, info};
 use teetotum_firmware::flash::{self, TABLE_SCRATCH};
 use teetotum_firmware::plugin::{self, PluginId};
-use teetotum_firmware::slots::{self, Error, Slots};
+use teetotum_firmware::slots::{self, Error, Slots, slot};
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
@@ -174,7 +174,7 @@ fn main() -> ! {
     let damaged = slots.read(last, &mut buf.0);
     info!("read after damage: {damaged:?}");
     check(
-        damaged == Err(Error::Hash),
+        damaged == Err(Error::Module(slot::Error::Hash)),
         "damaged module fails its hash",
         &mut failed,
     );
