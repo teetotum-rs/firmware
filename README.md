@@ -79,10 +79,10 @@ wrong way round.
             round glass set into the ring's face, which falls slightly towards it, and the ring
             standing proud of the body. The openings in the base are drawn glowing blue:
             microphone, USB-C socket, headphone jack and power switch.">
-  <br>
-  <sub>The blue glow is not real. It only marks the openings in the base, which are black on
-  black on the device: microphone, USB-C, headphone jack and power switch.</sub>
 </p>
+
+<p align="center"><em>The blue glow is not real. It only marks the openings in the base, which
+are black on black on the device: microphone, USB-C, headphone jack and power switch.</em></p>
 
 This firmware runs on the S3. It talks to the other chip over a UART at 921600 baud and leaves
 its factory firmware in place. Details, and everything else measured on this board, are in
