@@ -4434,12 +4434,12 @@ fn settings_screen(
             } else {
                 "hid not connected"
             };
-            line(-45, "Music Player", (&fonts::BODY, palette.name));
-            line(-24, "through the other chip", quiet);
-            line(-6, &backdrop, detail);
-            line(12, &companion, detail);
-            line(30, stream, detail);
-            line(48, hid, detail);
+            line(-48, "Music Player", (&fonts::BODY, palette.name));
+            line(-28, "through the other chip", quiet);
+            line(-10, &backdrop, detail);
+            line(8, &companion, detail);
+            line(26, stream, detail);
+            line(44, hid, detail);
         }
         Some((SETTING_BACKGROUND_ABOUT, Owner::Firmware)) => {
             let shape = state.shape;
@@ -4587,8 +4587,8 @@ fn settings_screen(
                 && let Some(view) = state.plugins[n].as_ref()
             {
                 // One fact a line: a shared line did not fit a load time of three digits.
-                // Small lines are 18 px tall, so six of them under a BODY heading fill the band
-                // between the dialog's name and its buttons exactly.
+                // Small lines are 18 px tall, so six of them under a BODY heading end on the lower
+                // edge of the body, clear of the buttons.
                 let (run, cost) = match (&view.fault, view.loaded) {
                     (Some(fault), _) => (String::from("stopped"), fault.clone()),
                     (None, Some((us, heap))) => (
@@ -4597,15 +4597,15 @@ fn settings_screen(
                     ),
                     (None, None) => (String::from("not loaded"), String::new()),
                 };
-                line(-45, view.name, heading);
+                line(-48, view.name, heading);
                 match view.slot {
-                    Some(slot) => line(-24, &format!("from slot {slot}"), quiet),
-                    None => line(-24, "bundled with the firmware", quiet),
+                    Some(slot) => line(-28, &format!("from slot {slot}"), quiet),
+                    None => line(-28, "bundled with the firmware", quiet),
                 }
-                line(-6, &format!("{} bytes", view.bytes), detail);
-                line(12, &format!("rights {}", view.rights), detail);
-                line(30, &run, detail);
-                line(48, &cost, detail);
+                line(-10, &format!("{} bytes", view.bytes), detail);
+                line(8, &format!("rights {}", view.rights), detail);
+                line(26, &run, detail);
+                line(44, &cost, detail);
             }
         }
         Some((id, Owner::Firmware)) => {
