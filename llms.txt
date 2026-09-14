@@ -20,6 +20,7 @@ The workspace has five parts: `teetotum/` (the library: screen, touch, knob, set
 - [Plugin SDK](https://github.com/teetotum-rs/firmware/tree/main/teetotum-face): the crate a plugin depends on
 - [Plugin tool](https://github.com/teetotum-rs/firmware/tree/main/teetotum-pack): checks, signs and packs a plugin
 - [Example plugins](https://github.com/teetotum-rs/firmware/tree/main/plugins): templates to start a plugin from
+- [Plugin repository](https://github.com/teetotum-rs/plugins): the cargo-generate template for a new plugin and the index of known plugins
 - [Plugin loader](https://github.com/teetotum-rs/firmware/blob/main/firmware/src/plugin.rs): how the firmware checks, loads and runs a plugin
 
 ## Optional

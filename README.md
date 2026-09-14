@@ -121,7 +121,9 @@ because a face builds for `wasm32v1-none` and cargo takes the target per invocat
 
 The repository is a Cargo workspace, cut along the crate rather than along the code: what a
 plugin author builds against is `teetotum-face` from crates.io; the bundled plugins use it by
-path.
+path. A plugin of your own starts from the template in
+[teetotum-rs/plugins](https://github.com/teetotum-rs/plugins), which also keeps the index of known
+plugins.
 
 | | |
 |---|---|

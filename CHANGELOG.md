@@ -7,6 +7,11 @@ of `teetotum-face`.
 
 ## [Unreleased]
 
+### Added
+
+- [teetotum-rs/plugins](https://github.com/teetotum-rs/plugins): a template for `cargo generate`, an
+  example face and `index.json`, the list of known faces with where to fetch them, checked by CI.
+
 ## [0.1.0] - 2026-09-14
 
 The first release.

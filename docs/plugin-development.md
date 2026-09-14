@@ -181,6 +181,15 @@ If the plugin lives **outside** this repository, depend on the published SDK ins
 teetotum-face = "0.1"
 ```
 
+Outside the repository, the quickest start is the template in
+[teetotum-rs/plugins](https://github.com/teetotum-rs/plugins): it sets up the target, the linker
+flags and a `build.sh` that builds, signs and checks.
+
+```sh
+cargo install cargo-generate
+cargo generate teetotum-rs/plugins template
+```
+
 ### 2. Write the face
 
 Replace `src/lib.rs` with this counter. The knob counts, a tap resets, a wipe changes the
@@ -1433,8 +1442,11 @@ Two conventions of this project that a contributed plugin should keep:
   surveillance or attack tooling: the radio API is called `nearby`, not "sniff", "scan",
   "track" or "target".
 
-**There is no plugin repository or catalogue.** The SDK is on crates.io at 0.x, so its API is not
-stable yet; the examples in `plugins/` are the reference and the regression test for the API.
+**Plugins are collected in [teetotum-rs/plugins](https://github.com/teetotum-rs/plugins):** the
+template, faces built and checked by CI, and `index.json`, which lists every known face with where
+to fetch its signed module. Its `CONTRIBUTING.md` describes how to add a face there or list one
+from a repository of your own. The SDK is on crates.io at 0.x, so its API is not stable yet; the
+examples in `plugins/` are the reference and the regression test for the API.
 
 ## 13. API reference
 
