@@ -1,0 +1,59 @@
+name: Pages
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  push:
+    branches: [main]
+    paths: ["web/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Web flasher
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.firmware.outputs.ready }}
+    steps:
+      - uses: actions/checkout@v5
+      # Release downloads carry no CORS headers, so the page serves the binaries itself.
+      - name: Fetch the latest release
+        id: firmware
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p site/firmware
+          cp web/* site/
+          if ! gh release download --dir site/firmware --pattern '*.bin' --pattern manifest.json --pattern SHA256SUMS; then
+            echo "::notice::No release with firmware binaries yet; nothing to deploy."
+            exit 0
+          fi
+          (cd site/firmware && sha256sum -c SHA256SUMS)
+          echo ready=true >> "$GITHUB_OUTPUT"
+      - if: steps.firmware.outputs.ready == 'true'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    if: needs.build.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

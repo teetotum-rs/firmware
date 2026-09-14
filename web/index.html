@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TeeToTum flasher</title>
+<meta name="description" content="Install the TeeToTum firmware on the Waveshare ESP32-S3 Knob Touch LCD 1.8 from the browser.">
+<script type="module" src="https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module"></script>
+<style>
+  :root {
+    --bg: #fbfaf7; --fg: #1d1e20; --muted: #5d6066; --line: #dcd9d2; --accent: #1f6feb; --warn: #9a3b00;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1d1e20; --fg: #dadadb; --muted: #9b9ca1; --line: #3a3b3f; --accent: #58a6ff; --warn: #f0a060; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 system-ui, sans-serif; }
+  main { max-width: 42rem; margin: 0 auto; padding: 2.5rem 1rem 4rem; }
+  h1 { font-size: 2rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1.15rem; margin: 2.25rem 0 .5rem; }
+  p, li { color: var(--fg); }
+  .lead { color: var(--muted); margin-top: 0; }
+  a { color: var(--accent); }
+  code { font: .9em ui-monospace, monospace; }
+  .install { margin: 2rem 0; padding: 1.5rem; border: 1px solid var(--line); border-radius: 10px; }
+  .install p { margin: .75rem 0 0; color: var(--muted); font-size: .95rem; }
+  esp-web-install-button button {
+    font: inherit; font-weight: 600; padding: .7rem 1.4rem; border: 0; border-radius: 8px;
+    background: var(--accent); color: #fff; cursor: pointer;
+  }
+  .warn { color: var(--warn); }
+  .table { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: .95rem; }
+  th, td { text-align: left; padding: .35rem .75rem .35rem 0; border-bottom: 1px solid var(--line); }
+  footer { margin-top: 3rem; color: var(--muted); font-size: .9rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>TeeToTum</h1>
+  <p class="lead">Install the firmware on the Waveshare ESP32-S3 Knob Touch LCD 1.8 from this page.
+    No toolchain, no command line.</p>
+
+  <div class="install">
+    <esp-web-install-button manifest="firmware/manifest.json">
+      <button slot="activate">Connect and install</button>
+      <span slot="unsupported">This browser cannot talk to serial ports. Use desktop Chrome, Edge or
+        Opera; Firefox and Safari cannot.</span>
+      <span slot="not-allowed">Serial ports are only available on a page served over HTTPS.</span>
+    </esp-web-install-button>
+    <p id="version">Firmware version: see <code>firmware/manifest.json</code></p>
+  </div>
+
+  <h2>Before you start</h2>
+  <ul>
+    <li><strong>Plug in the ESP32-S3, not the second chip.</strong> Which of the board's two chips is on
+      USB depends on which way round the USB-C plug is inserted. The port to pick is
+      <code>USB JTAG/serial debug unit</code> (<code>303a:1001</code>). If only a
+      <code>USB2.0-Serial</code> or CH340 port appears, turn the plug over.</li>
+    <li><strong>Updating keeps your data.</strong> Settings, the haptics calibration and plugins installed
+      in the flash slots stay where they are.</li>
+    <li class="warn"><strong>The first install replaces the factory demo for good.</strong> Nothing on this
+      page can bring it back. If you want to keep that option, read an image of the flash first, as
+      described in <a href="https://github.com/teetotum-rs/firmware/blob/main/docs/user-guide.md#restoring-the-factory-firmware">Restoring the factory firmware</a>.</li>
+    <li>On a first install the dialog offers to <strong>erase the device</strong>. That clears the whole
+      flash, including what the factory firmware left behind; it is the clean start.</li>
+  </ul>
+
+  <h2>What gets written</h2>
+  <div class="table">
+    <table>
+      <thead><tr><th>Part</th><th>Offset</th></tr></thead>
+      <tbody>
+        <tr><td>Bootloader</td><td><code>0x0</code></td></tr>
+        <tr><td>Partition table</td><td><code>0x8000</code></td></tr>
+        <tr><td>Blank <code>otadata</code>, so the board starts the new app</td><td><code>0xe000</code></td></tr>
+        <tr><td>TeeToTum</td><td><code>0x10000</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>The same files, with checksums, are attached to each
+    <a href="https://github.com/teetotum-rs/firmware/releases">release on GitHub</a>.</p>
+
+  <h2>More</h2>
+  <ul>
+    <li><a href="https://github.com/teetotum-rs/firmware/blob/main/docs/user-guide.md">User guide</a></li>
+    <li><a href="https://github.com/teetotum-rs/firmware/blob/main/docs/plugins.md">Plugins</a> and
+      <a href="https://github.com/teetotum-rs/plugins">the plugin repository</a></li>
+    <li><a href="https://github.com/teetotum-rs/firmware">Source code</a></li>
+  </ul>
+
+  <footer>TeeToTum is open source under MIT or Apache-2.0. Flashing uses
+    <a href="https://github.com/esphome/esp-web-tools">ESP Web Tools</a>.</footer>
+</main>
+<script>
+  fetch("firmware/manifest.json")
+    .then((r) => r.json())
+    .then((m) => { document.getElementById("version").textContent = "Firmware version " + m.version; })
+    .catch(() => {});
+</script>
+</body>
+</html>

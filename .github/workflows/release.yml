@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build and attach firmware binaries to
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  firmware:
+    name: Firmware binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.TAG }}
+      # The image script comes from the workflow's own revision, so older tags can be released too.
+      - uses: actions/checkout@v5
+        with:
+          path: current
+          sparse-checkout: tools/firmware-images
+          sparse-checkout-cone-mode: false
+      - uses: esp-rs/xtensa-toolchain@v1.7.0
+        with:
+          default: true
+          buildtargets: esp32s3
+          version: 1.97.0.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Install espflash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v4.5.0 -R esp-rs/espflash -p espflash-x86_64-unknown-linux-musl.zip -D "$RUNNER_TEMP"
+          unzip -o "$RUNNER_TEMP/espflash-x86_64-unknown-linux-musl.zip" -d "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Build
+        run: cargo build --release
+      - name: Make images
+        run: |
+          cp current/tools/firmware-images tools/firmware-images
+          sh tools/firmware-images target/xtensa-esp32s3-none-elf/release/teetotum-firmware "$TAG" dist
+      - name: Release notes from the changelog
+        run: |
+          awk -v v="${TAG#v}" '
+            index($0, "## [" v "]") == 1 { on = 1; next }
+            on && /^## \[/ { exit }
+            on { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          cat >> "$RUNNER_TEMP/notes.md" <<'EOF'
+
+          ### Firmware binaries
+
+          Install them from the browser at https://teetotum-rs.github.io/firmware/, or write the four
+          parts at the offsets listed in `manifest.json`. Settings and plugin slots are kept.
+          EOF
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$TAG" > /dev/null 2>&1 ||
+            gh release create "$TAG" --verify-tag --title "TeeToTum $TAG" --notes-file "$RUNNER_TEMP/notes.md"
+          gh release upload "$TAG" dist/* --clobber

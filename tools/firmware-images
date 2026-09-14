@@ -1,0 +1,47 @@
+#!/bin/sh
+# Turns the firmware ELF into the files a release carries and the web flasher writes:
+#   tools/firmware-images <elf> <tag> <out-dir>
+# Parts, not one merged image: a merged image fills nvs with 0xFF and would erase the settings.
+# otadata is written blank so the bootloader starts ota_0, where the app goes.
+set -eu
+
+elf=$1
+tag=$2
+out=$3
+version=${tag#v}
+root=$(cd "$(dirname "$0")/.." && pwd)
+name=teetotum-$tag
+
+mkdir -p "$out"
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+espflash save-image -S --chip esp32s3 -s 16mb --partition-table "$root/partitions.csv" \
+    --merge --skip-padding "$elf" "$work/merged.bin"
+
+head -c 32768 "$work/merged.bin" > "$out/$name-bootloader.bin"
+tail -c +32769 "$work/merged.bin" | head -c 4096 > "$out/$name-partition-table.bin"
+head -c 8192 /dev/zero | tr '\0' '\377' > "$out/$name-otadata.bin"
+tail -c +65537 "$work/merged.bin" > "$out/$name-app.bin"
+
+cat > "$out/manifest.json" <<EOF
+{
+  "name": "TeeToTum",
+  "version": "$version",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        { "path": "$name-bootloader.bin", "offset": 0 },
+        { "path": "$name-partition-table.bin", "offset": 32768 },
+        { "path": "$name-otadata.bin", "offset": 57344 },
+        { "path": "$name-app.bin", "offset": 65536 }
+      ]
+    }
+  ]
+}
+EOF
+
+(cd "$out" && sha256sum "$name"-*.bin manifest.json > SHA256SUMS)
+ls -l "$out"
