@@ -21,17 +21,18 @@
 //! Exits 0 when every module passes, 1 when one does not, 2 on a usage error.
 //! From this repository, `tools/teetotum-pack` runs it under stable Rust.
 
+#[cfg(unix)]
+use std::os::unix::fs::{DirBuilderExt as _, OpenOptionsExt as _};
 use std::{
     env,
     fmt::Write as _,
-    fs::{self, DirBuilder, File, OpenOptions},
-    io::{ErrorKind, Read as _, Write as _},
-    os::unix::fs::{DirBuilderExt as _, OpenOptionsExt as _},
+    fs::{self, DirBuilder, OpenOptions},
+    io::{ErrorKind, Write as _},
     path::{Path, PathBuf},
     process::{Command, ExitCode},
 };
 
-use ed25519_compact::{KeyPair, Seed};
+use ed25519_compact::KeyPair;
 use teetotum_pack::{Error, Manifest, PluginId, Signed, slot, verify};
 
 const USAGE: &str = "usage: teetotum-pack check <wasm>...
@@ -142,7 +143,9 @@ fn key_path(given: Option<&str>) -> Result<PathBuf, String> {
     if let Some(path) = env::var_os("TEETOTUM_KEY").filter(|p| !p.is_empty()) {
         return Ok(path.into());
     }
-    let home = env::var_os("HOME").ok_or("no --key, no $TEETOTUM_KEY and no $HOME")?;
+    let home = env::var_os("HOME")
+        .or_else(|| env::var_os("USERPROFILE"))
+        .ok_or("no --key, no $TEETOTUM_KEY and no home directory")?;
     Ok(Path::new(&home).join(".config/teetotum/face-key.pem"))
 }
 
@@ -155,25 +158,23 @@ fn load_key(path: &Path) -> Result<KeyPair, String> {
     }
 }
 
-/// A new key from the system's randomness, readable by its owner only, never over another file.
+/// A new key from the system's randomness, never over another file. On Unix only its owner may
+/// read it; elsewhere it takes the permissions of the directory it lands in.
 fn create_key(path: &Path) -> Result<KeyPair, String> {
-    let mut seed = [0; Seed::BYTES];
-    File::open("/dev/urandom")
-        .and_then(|mut random| random.read_exact(&mut seed))
-        .map_err(|e| format!("/dev/urandom: {e}"))?;
-    let key = KeyPair::from_seed(Seed::new(seed));
+    let key = KeyPair::generate();
     let failed = |e: std::io::Error| format!("{}: {e}", path.display());
     if let Some(dir) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
-        DirBuilder::new()
-            .recursive(true)
-            .mode(0o700)
-            .create(dir)
-            .map_err(failed)?;
+        let mut dirs = DirBuilder::new();
+        dirs.recursive(true);
+        #[cfg(unix)]
+        dirs.mode(0o700);
+        dirs.create(dir).map_err(failed)?;
     }
-    OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    options.mode(0o600);
+    options
         .open(path)
         .and_then(|mut file| file.write_all(key.sk.to_pem().as_bytes()))
         .map_err(failed)?;

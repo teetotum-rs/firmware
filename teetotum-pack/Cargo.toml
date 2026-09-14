@@ -15,8 +15,8 @@ version      = { workspace = true }
 [features]
 # Signing, which allocates. Off by default, so the firmware's Xtensa build never meets `std`.
 std = ["ed25519-compact/std"]
-# The command-line tool, which also reads and writes PEM keys.
-cli = ["std", "ed25519-compact/pem"]
+# The command-line tool, which also reads and writes PEM keys and makes new ones.
+cli = ["std", "ed25519-compact/pem", "ed25519-compact/random"]
 
 [[bin]]
 name              = "teetotum-pack"
