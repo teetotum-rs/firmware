@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TeeToTum plugins</title>
+<meta name="description" content="Send plugins to the Waveshare ESP32-S3 Knob Touch LCD 1.8 running TeeToTum, over Bluetooth from the browser.">
+<style>
+  :root {
+    --bg: #fbfaf7; --fg: #1d1e20; --muted: #5d6066; --line: #dcd9d2; --accent: #1f6feb; --warn: #9a3b00;
+    --ok: #1a7f37;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1d1e20; --fg: #dadadb; --muted: #9b9ca1; --line: #3a3b3f; --accent: #58a6ff; --warn: #f0a060;
+      --ok: #56d364; }
+  }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 system-ui, sans-serif; }
+  main { max-width: 42rem; margin: 0 auto; padding: 2.5rem 1rem 4rem; }
+  h1 { font-size: 2rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1.15rem; margin: 2.25rem 0 .5rem; }
+  .lead { color: var(--muted); margin-top: 0; }
+  a { color: var(--accent); }
+  code { font: .9em ui-monospace, monospace; }
+  .warn { color: var(--warn); }
+  .ok { color: var(--ok); }
+  .plugin { margin: 1rem 0; padding: 1.1rem 1.25rem; border: 1px solid var(--line); border-radius: 10px; }
+  .plugin h3 { margin: 0; font-size: 1.1rem; }
+  .plugin .summary { margin: .15rem 0 .5rem; }
+  .plugin .facts { margin: 0; color: var(--muted); font-size: .9rem; }
+  .plugin .facts code { overflow-wrap: anywhere; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; margin-top: .85rem; }
+  button {
+    font: inherit; font-weight: 600; padding: .55rem 1.1rem; border: 0; border-radius: 8px;
+    background: var(--accent); color: #fff; cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  .status { font-size: .95rem; color: var(--muted); }
+  progress { width: 10rem; max-width: 100%; }
+  footer { margin-top: 3rem; color: var(--muted); font-size: .9rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>TeeToTum plugins</h1>
+  <p class="lead">Send a plugin to the knob over Bluetooth, from this page. The knob checks its
+    signature and asks you before it installs anything.</p>
+
+  <p id="unsupported" class="warn" hidden>This browser cannot talk to Bluetooth devices. Use Chrome, Edge
+    or Opera on the desktop or Chrome on Android; Firefox and Safari cannot. On Linux, Chrome offers
+    Bluetooth only with a flag: open <code>chrome://flags/#enable-web-bluetooth</code>, set
+    <em>Web Bluetooth</em> to <em>Enabled</em> and restart the browser.</p>
+
+  <h2>Before you start</h2>
+  <ol>
+    <li><strong>The knob needs a firmware that can receive:</strong> its Settings ring has a
+      <em>Receive</em> entry. Firmware releases after 0.1.0 have it; the
+      <a href="./">firmware installer</a> installs the latest release.</li>
+    <li><strong>Open Settings &gt; Receive on the knob</strong> and leave it open. The knob takes a
+      plugin only while that dialog is on the glass.</li>
+    <li><strong>Pick a plugin below and choose <em>Send to knob</em>.</strong> The browser lists the knob
+      as <code>TeeToTum</code>.</li>
+    <li>The knob writes the plugin to a free slot and restarts. <strong>Confirm the install dialog on the
+      glass</strong>; it shows who signed the plugin and what it may use.</li>
+  </ol>
+
+  <h2>Catalogue</h2>
+  <p id="catalogue-status" class="status">Reading the catalogue&hellip;</p>
+  <div id="catalogue"></div>
+
+  <h2>A file of your own</h2>
+  <p>A plugin you built and signed yourself, as a <code>.wasm</code> file. See
+    <a href="https://github.com/teetotum-rs/plugins">the plugin repository</a> for the template.</p>
+  <div class="plugin">
+    <input id="file" type="file" accept=".wasm,application/wasm">
+    <div id="file-about" class="facts"></div>
+    <div class="row">
+      <button id="file-send" disabled>Send to knob</button>
+      <progress id="file-progress" max="1" value="0" hidden></progress>
+      <span id="file-status" class="status"></span>
+    </div>
+  </div>
+
+  <h2>What this page does not check</h2>
+  <ul>
+    <li><strong>The signature.</strong> This page only reads which key a plugin names. Whether the
+      signature holds is checked by the knob, before it offers the install.</li>
+    <li><strong>Whether you trust the author.</strong> The catalogue lists plugins; it does not vouch
+      for them. The key shown here and on the glass is the author's; the TeeToTum project signs with a
+      key starting <code>f6aca85edc3547d4</code>.</li>
+  </ul>
+
+  <footer>TeeToTum is open source under MIT or Apache-2.0.
+    <a href="https://github.com/teetotum-rs/firmware/blob/main/docs/plugins.md">Plugins</a> &middot;
+    <a href="https://github.com/teetotum-rs/firmware">Source code</a> &middot;
+    <a href="./">Firmware installer</a></footer>
+</main>
+<script type="module">
+  import { describe, hex, sha256, supported, upload, MODULE_MAX } from "./upload.js";
+
+  const INDEX = "https://raw.githubusercontent.com/teetotum-rs/plugins/main/index.json";
+  const $ = (id) => document.getElementById(id);
+  const canSend = supported();
+  $("unsupported").hidden = canSend;
+  let busy = false;
+
+  function element(tag, attributes = {}, ...children) {
+    const e = document.createElement(tag);
+    Object.assign(e, attributes);
+    e.append(...children);
+    return e;
+  }
+
+  function facts(p) {
+    return element("p", { className: "facts" },
+      `version ${p.version} · ${p.size} bytes · uses ${p.rights.length ? p.rights.join(", ") : "nothing"} · key `,
+      element("code", {}, p.key.slice(0, 16)));
+  }
+
+  // Runs one upload with its own button, progress bar and status line.
+  async function send(button, bar, status, load) {
+    if (busy) return;
+    busy = true;
+    document.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    status.className = "status";
+    bar.hidden = false;
+    bar.value = 0;
+    try {
+      const wasm = await load();
+      await upload(wasm, (text, fraction) => {
+        status.textContent = text;
+        bar.value = fraction;
+      });
+      status.className = "status ok";
+    } catch (e) {
+      bar.hidden = true;
+      status.className = "status warn";
+      status.textContent = e.name === "NotFoundError" ? "no knob chosen" : e.message;
+    } finally {
+      busy = false;
+      document.querySelectorAll("button[data-ready]").forEach((b) => (b.disabled = !canSend));
+    }
+  }
+
+  async function fetchChecked(p) {
+    const response = await fetch(p.url);
+    if (!response.ok) throw new Error(`download failed: HTTP ${response.status}`);
+    const wasm = new Uint8Array(await response.arrayBuffer());
+    if (wasm.length !== p.size || (await sha256(wasm)) !== p.sha256) {
+      throw new Error("the download does not match the catalogue");
+    }
+    const about = await describe(wasm);
+    if (hex(about.id) !== p.id || about.key !== p.key) {
+      throw new Error("the plugin names another id or key than the catalogue");
+    }
+    return wasm;
+  }
+
+  async function catalogue() {
+    const response = await fetch(INDEX, { cache: "no-cache" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const index = await response.json();
+    if (index.format !== 1) throw new Error(`catalogue format ${index.format}, this page reads 1`);
+    for (const p of index.plugins) {
+      const button = element("button", { disabled: !canSend }, "Send to knob");
+      button.dataset.ready = "";
+      const bar = element("progress", { max: 1, value: 0, hidden: true });
+      const status = element("span", { className: "status" });
+      button.addEventListener("click", () => send(button, bar, status, () => fetchChecked(p)));
+      $("catalogue").append(element("div", { className: "plugin" },
+        element("h3", {}, p.name),
+        element("p", { className: "summary" }, p.summary),
+        facts(p),
+        element("p", { className: "facts" }, element("a", { href: p.source }, "source"), ` · ${p.license}`),
+        element("div", { className: "row" }, button, bar, status)));
+    }
+    $("catalogue-status").textContent = `${index.plugins.length} plugins, from the plugin repository's index.json.`;
+  }
+
+  catalogue().catch((e) => {
+    $("catalogue-status").className = "status warn";
+    $("catalogue-status").textContent = `The catalogue could not be read: ${e.message}`;
+  });
+
+  let chosen = null;
+  $("file").addEventListener("change", async () => {
+    chosen = null;
+    const button = $("file-send");
+    button.disabled = true;
+    $("file-status").textContent = "";
+    $("file-about").replaceChildren();
+    const file = $("file").files[0];
+    if (!file) return;
+    try {
+      if (file.size > MODULE_MAX) throw new Error(`longer than ${MODULE_MAX} bytes`);
+      const wasm = new Uint8Array(await file.arrayBuffer());
+      const about = await describe(wasm);
+      $("file-about").replaceChildren(
+        element("h3", {}, about.name), element("p", { className: "summary" }, about.summary), facts(about));
+      chosen = wasm;
+      button.dataset.ready = "";
+      button.disabled = !canSend;
+    } catch (e) {
+      $("file-status").className = "status warn";
+      $("file-status").textContent = e.message;
+    }
+  });
+  $("file-send").addEventListener("click", () =>
+    send($("file-send"), $("file-progress"), $("file-status"), async () => chosen));
+</script>
+</body>
+</html>
