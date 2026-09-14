@@ -18,7 +18,9 @@ WebAssembly modules that get a screen of their own. Three come with it.
 
 <p align="center"><em>Renders, not photographs: the model is a script,
 <a href="tools/render-device.py"><code>tools/render-device.py</code></a>, and the screen content
-is drawn to the same layout rules the firmware uses.</em></p>
+is drawn to the same layout rules the firmware uses. To turn the model yourself, open the
+<a href="https://claude.ai/code/artifact/c43887fa-525f-4301-9c40-cbf3d53552ab">3D view in the
+browser</a>.</em></p>
 
 > **A hobby project, and a work in progress.** It runs on one device, the author's. Nothing here
 > is a product, a roadmap or a promise; interfaces change without notice until there is a
