@@ -6,8 +6,10 @@
 # `+stable` ignores the build-std of .cargo/config.toml, `RUSTFLAGS=` overrides its linker flags,
 # and target/host keeps this build apart from the firmware's. It builds from the repository root,
 # so the cargo settings of the directory it is called from -- a plugin's -- do not reach it.
+# `pack` gets this repository's partition table unless told otherwise.
 set -eu
 repo=$(cd "$(dirname "$0")/.." && pwd)
+export TEETOTUM_PARTITIONS="${TEETOTUM_PARTITIONS:-$repo/partitions.csv}"
 host=$(rustc +stable -vV | sed -n 's/^host: //p')
 (cd "$repo" && RUSTFLAGS='' CARGO_TARGET_DIR=target/host \
     cargo +stable build -q -p teetotum-pack --features cli --target "$host")

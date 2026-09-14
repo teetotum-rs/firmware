@@ -4,12 +4,19 @@
 //! teetotum-pack check <wasm>...              # manifest and signature, as the firmware reads them
 //! teetotum-pack sign [--key <pem>] <wasm>...  # sign in place, replacing any signature
 //! teetotum-pack id <wasm>                     # the eight bytes the settings record knows the face by
+//! teetotum-pack pack <wasm> --slot <n> [--write] [--partitions <csv>]
 //! ```
 //!
 //! The key is `--key`, else `$TEETOTUM_KEY`, else `~/.config/teetotum/face-key.pem`, an Ed25519
 //! private key in PEM, as `openssl genpkey -algorithm ed25519` writes it. It is created on first
 //! use. Keep it: key and name are a face's identity, and an update signed with another key is
 //! another face.
+//!
+//! `pack` writes `<wasm>.slot` next to the module, the slot header and then the module, and with
+//! `--write` hands it to `espflash write-bin` at the slot's address in the partition table:
+//! `--partitions`, else `$TEETOTUM_PARTITIONS`, else `partitions.csv` here. The firmware asks on
+//! the glass at the next boot whether the face gets a place; one with a bundled face's id takes
+//! that face's place.
 //!
 //! Exits 0 when every module passes, 1 when one does not, 2 on a usage error.
 //! From this repository, `tools/teetotum-pack` runs it under stable Rust.
@@ -21,15 +28,16 @@ use std::{
     io::{ErrorKind, Read as _, Write as _},
     os::unix::fs::{DirBuilderExt as _, OpenOptionsExt as _},
     path::{Path, PathBuf},
-    process::ExitCode,
+    process::{Command, ExitCode},
 };
 
 use ed25519_compact::{KeyPair, Seed};
-use teetotum_pack::{Error, Manifest, PluginId, Signed, verify};
+use teetotum_pack::{Error, Manifest, PluginId, Signed, slot, verify};
 
 const USAGE: &str = "usage: teetotum-pack check <wasm>...
        teetotum-pack sign [--key <pem>] <wasm>...
-       teetotum-pack id <wasm>";
+       teetotum-pack id <wasm>
+       teetotum-pack pack <wasm> --slot <n> [--write] [--partitions <csv>]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();
@@ -53,6 +61,13 @@ fn main() -> ExitCode {
             sign(key, modules)
         }
         Some((command, [module])) if command == "id" => id(Path::new(module)),
+        Some((command, rest)) if command == "pack" => match Pack::parse(rest) {
+            Some(pack) => pack.run(),
+            None => {
+                eprintln!("{USAGE}");
+                ExitCode::from(2)
+            }
+        },
         _ => {
             eprintln!("{USAGE}");
             ExitCode::from(2)
@@ -167,6 +182,127 @@ fn create_key(path: &Path) -> Result<KeyPair, String> {
         path.display()
     );
     Ok(key)
+}
+
+struct Pack<'a> {
+    module: &'a Path,
+    slot: usize,
+    write: bool,
+    partitions: Option<&'a str>,
+}
+
+impl<'a> Pack<'a> {
+    fn parse(args: &'a [String]) -> Option<Self> {
+        let (mut module, mut slot, mut write, mut partitions) = (None, None, false, None);
+        let mut args = args.iter();
+        while let Some(arg) = args.next() {
+            match arg.as_str() {
+                "--slot" => slot = Some(args.next()?.parse().ok()?),
+                "--write" => write = true,
+                "--partitions" => partitions = Some(args.next()?.as_str()),
+                flag if flag.starts_with('-') => return None,
+                _ if module.is_some() => return None,
+                path => module = Some(Path::new(path)),
+            }
+        }
+        Some(Self {
+            module: module?,
+            slot: slot?,
+            write,
+            partitions,
+        })
+    }
+
+    fn run(&self) -> ExitCode {
+        match self.pack() {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("teetotum-pack: {e}");
+                ExitCode::FAILURE
+            }
+        }
+    }
+
+    fn pack(&self) -> Result<(), String> {
+        let table = self
+            .partitions
+            .map(PathBuf::from)
+            .or_else(|| {
+                env::var_os("TEETOTUM_PARTITIONS")
+                    .filter(|p| !p.is_empty())
+                    .map(PathBuf::from)
+            })
+            .unwrap_or_else(|| "partitions.csv".into());
+        let (offset, size) = plugins_partition(&table)?;
+        if self.slot >= size / slot::SLOT {
+            return Err(format!(
+                "slot {}, the partition has {}",
+                self.slot,
+                size / slot::SLOT
+            ));
+        }
+        let wasm = fs::read(self.module).map_err(|e| io_failed(self.module, e))?;
+        describe(&wasm).map_err(|e| format!("{}: {e}", self.module.display()))?;
+        let header =
+            slot::Header::of(&wasm).map_err(|e| format!("{}: {e}", self.module.display()))?;
+
+        let out = self.module.with_extension("slot");
+        let mut image = header.encode().to_vec();
+        image.extend_from_slice(&wasm);
+        fs::write(&out, &image).map_err(|e| io_failed(&out, e))?;
+        let address = offset + self.slot * slot::SLOT;
+        println!(
+            "{}: {} bytes, id {}, slot {} at {address:#x}",
+            out.display(),
+            image.len(),
+            hex(&header.id.bytes()),
+            self.slot
+        );
+
+        let mut espflash = Command::new("espflash");
+        espflash
+            .args(["write-bin", "-B", "921600", &format!("{address:#x}")])
+            .arg(&out);
+        if !self.write {
+            println!(
+                "espflash write-bin -B 921600 {address:#x} {}",
+                out.display()
+            );
+            return Ok(());
+        }
+        match espflash.status() {
+            Ok(status) if status.success() => Ok(()),
+            Ok(status) => Err(format!("espflash {status}")),
+            Err(e) => Err(format!("espflash: {e}")),
+        }
+    }
+}
+
+fn io_failed(path: &Path, e: std::io::Error) -> String {
+    format!("{}: {e}", path.display())
+}
+
+/// Offset and size of the `plugins` partition in an ESP-IDF partition table.
+fn plugins_partition(table: &Path) -> Result<(usize, usize), String> {
+    let text = fs::read_to_string(table).map_err(|e| format!("{}: {e}", table.display()))?;
+    let number = |field: &str| {
+        let field = field.trim();
+        match field.strip_prefix("0x") {
+            Some(hex) => usize::from_str_radix(hex, 16).ok(),
+            None => field.parse().ok(),
+        }
+    };
+    text.lines()
+        .filter(|line| !line.trim_start().starts_with('#'))
+        .map(|line| line.split(',').collect::<Vec<_>>())
+        .find(|fields| fields.len() >= 5 && fields[0].trim() == "plugins")
+        .and_then(|fields| Some((number(fields[3])?, number(fields[4])?)))
+        .ok_or_else(|| {
+            format!(
+                "{}: no plugins partition with offset and size",
+                table.display()
+            )
+        })
 }
 
 fn exit(passed: bool) -> ExitCode {
