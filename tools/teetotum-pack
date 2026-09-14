@@ -4,9 +4,11 @@
 #     tools/teetotum-pack check firmware/assets/plugins/nearby.wasm
 #
 # `+stable` ignores the build-std of .cargo/config.toml, `RUSTFLAGS=` overrides its linker flags,
-# and target/host keeps this build apart from the firmware's.
+# and target/host keeps this build apart from the firmware's. It builds from the repository root,
+# so the cargo settings of the directory it is called from -- a plugin's -- do not reach it.
 set -eu
 repo=$(cd "$(dirname "$0")/.." && pwd)
 host=$(rustc +stable -vV | sed -n 's/^host: //p')
-RUSTFLAGS='' CARGO_TARGET_DIR="$repo/target/host" exec cargo +stable run -q \
-    --manifest-path "$repo/teetotum-pack/Cargo.toml" --features cli --target "$host" -- "$@"
+(cd "$repo" && RUSTFLAGS='' CARGO_TARGET_DIR=target/host \
+    cargo +stable build -q -p teetotum-pack --features cli --target "$host")
+exec "$repo/target/host/$host/debug/teetotum-pack" "$@"

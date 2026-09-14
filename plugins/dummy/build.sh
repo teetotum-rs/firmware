@@ -13,5 +13,5 @@ mkdir -p "$out"
 for n in 1 2 3 4 5 6 7 8 9; do
   TEETOTUM_DUMMY_NAME="Dummy $n" cargo build --release -q
   cp target/wasm32v1-none/release/dummy.wasm "$out/dummy-$n.wasm"
-  ../../tools/sign-face.py "$out/dummy-$n.wasm"
+  ../../tools/teetotum-pack sign "$out/dummy-$n.wasm"
 done

@@ -51,7 +51,7 @@ step "build: firmware"
 cargo build --release
 
 step "host tests: teetotum-pack"
-host test -p teetotum-pack
+host test -p teetotum-pack --features std
 
 step "host clippy: teetotum-pack"
 host clippy -p teetotum-pack --features cli --all-targets -- -D warnings

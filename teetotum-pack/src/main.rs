@@ -1,18 +1,35 @@
 //! Checks faces on the host with the code the firmware checks them with.
 //!
 //! ```sh
-//! teetotum-pack check <wasm>...   # manifest and signature, as the firmware reads them before loading
-//! teetotum-pack id <wasm>         # the eight bytes the settings record knows the face by
+//! teetotum-pack check <wasm>...              # manifest and signature, as the firmware reads them
+//! teetotum-pack sign [--key <pem>] <wasm>...  # sign in place, replacing any signature
+//! teetotum-pack id <wasm>                     # the eight bytes the settings record knows the face by
 //! ```
+//!
+//! The key is `--key`, else `$TEETOTUM_KEY`, else `~/.config/teetotum/face-key.pem`, an Ed25519
+//! private key in PEM, as `openssl genpkey -algorithm ed25519` writes it. It is created on first
+//! use. Keep it: key and name are a face's identity, and an update signed with another key is
+//! another face.
 //!
 //! Exits 0 when every module passes, 1 when one does not, 2 on a usage error.
 //! From this repository, `tools/teetotum-pack` runs it under stable Rust.
 
-use std::{env, fmt::Write, fs, path::Path, process::ExitCode};
+use std::{
+    env,
+    fmt::Write as _,
+    fs::{self, DirBuilder, File, OpenOptions},
+    io::{ErrorKind, Read as _, Write as _},
+    os::unix::fs::{DirBuilderExt as _, OpenOptionsExt as _},
+    path::{Path, PathBuf},
+    process::ExitCode,
+};
 
+use ed25519_compact::{KeyPair, Seed};
 use teetotum_pack::{Error, Manifest, PluginId, Signed, verify};
 
-const USAGE: &str = "usage: teetotum-pack check <wasm>...\n       teetotum-pack id <wasm>";
+const USAGE: &str = "usage: teetotum-pack check <wasm>...
+       teetotum-pack sign [--key <pem>] <wasm>...
+       teetotum-pack id <wasm>";
 
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();
@@ -22,11 +39,18 @@ fn main() -> ExitCode {
             for module in modules {
                 passed &= check(Path::new(module));
             }
-            if passed {
-                ExitCode::SUCCESS
-            } else {
-                ExitCode::FAILURE
+            exit(passed)
+        }
+        Some((command, rest)) if command == "sign" => {
+            let (key, modules) = match rest {
+                [flag, key, modules @ ..] if flag == "--key" => (Some(key.as_str()), modules),
+                _ => (None, rest),
+            };
+            if modules.is_empty() || modules.iter().any(|m| m.starts_with('-')) {
+                eprintln!("{USAGE}");
+                return ExitCode::from(2);
             }
+            sign(key, modules)
         }
         Some((command, [module])) if command == "id" => id(Path::new(module)),
         _ => {
@@ -60,6 +84,97 @@ fn describe(wasm: &[u8]) -> Result<String, Error> {
         hex(&PluginId::new(key, manifest.name()).bytes()),
         hex(&key[..PluginId::LEN]),
     ))
+}
+
+fn sign(key: Option<&str>, modules: &[String]) -> ExitCode {
+    let key = match key_path(key).and_then(|path| load_key(&path)) {
+        Ok(key) => key,
+        Err(e) => {
+            eprintln!("teetotum-pack: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let mut passed = true;
+    for module in modules {
+        let path = Path::new(module);
+        let result = fs::read(path)
+            .map_err(|e| e.to_string())
+            .and_then(|wasm| teetotum_pack::sign(&wasm, &key).map_err(|e| e.to_string()))
+            .and_then(|signed| {
+                fs::write(path, &signed)
+                    .map(|()| signed.len())
+                    .map_err(|e| e.to_string())
+            });
+        match result {
+            Ok(len) => println!(
+                "{}: {len} bytes, signed by {}",
+                path.display(),
+                hex(&key.pk[..PluginId::LEN])
+            ),
+            Err(e) => {
+                eprintln!("{}: {e}", path.display());
+                passed = false;
+            }
+        }
+    }
+    exit(passed)
+}
+
+fn key_path(given: Option<&str>) -> Result<PathBuf, String> {
+    if let Some(path) = given {
+        return Ok(path.into());
+    }
+    if let Some(path) = env::var_os("TEETOTUM_KEY").filter(|p| !p.is_empty()) {
+        return Ok(path.into());
+    }
+    let home = env::var_os("HOME").ok_or("no --key, no $TEETOTUM_KEY and no $HOME")?;
+    Ok(Path::new(&home).join(".config/teetotum/face-key.pem"))
+}
+
+fn load_key(path: &Path) -> Result<KeyPair, String> {
+    match fs::read_to_string(path) {
+        Ok(pem) => KeyPair::from_pem(&pem)
+            .map_err(|_| format!("{}: not an Ed25519 private key in PEM", path.display())),
+        Err(e) if e.kind() == ErrorKind::NotFound => create_key(path),
+        Err(e) => Err(format!("{}: {e}", path.display())),
+    }
+}
+
+/// A new key from the system's randomness, readable by its owner only, never over another file.
+fn create_key(path: &Path) -> Result<KeyPair, String> {
+    let mut seed = [0; Seed::BYTES];
+    File::open("/dev/urandom")
+        .and_then(|mut random| random.read_exact(&mut seed))
+        .map_err(|e| format!("/dev/urandom: {e}"))?;
+    let key = KeyPair::from_seed(Seed::new(seed));
+    let failed = |e: std::io::Error| format!("{}: {e}", path.display());
+    if let Some(dir) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
+        DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(dir)
+            .map_err(failed)?;
+    }
+    OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(path)
+        .and_then(|mut file| file.write_all(key.sk.to_pem().as_bytes()))
+        .map_err(failed)?;
+    eprintln!(
+        "created a new signing key at {} -- back it up, it is the faces' identity",
+        path.display()
+    );
+    Ok(key)
+}
+
+fn exit(passed: bool) -> ExitCode {
+    if passed {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
 }
 
 fn id(path: &Path) -> ExitCode {

@@ -7,4 +7,4 @@ out=../../firmware/assets/plugins
 mkdir -p "$out"
 cargo build --release -q
 cp target/wasm32v1-none/release/teetotum_plugin.wasm "$out/teetotum-plugin.wasm"
-../../tools/sign-face.py "$out/teetotum-plugin.wasm"
+../../tools/teetotum-pack sign "$out/teetotum-plugin.wasm"

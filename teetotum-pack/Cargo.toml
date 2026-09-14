@@ -13,8 +13,10 @@ rust-version = { workspace = true }
 version      = { workspace = true }
 
 [features]
-# The command-line tool. Off by default, so the firmware's Xtensa build never meets a `std` binary.
-cli = []
+# Signing, which allocates. Off by default, so the firmware's Xtensa build never meets `std`.
+std = ["ed25519-compact/std"]
+# The command-line tool, which also reads and writes PEM keys.
+cli = ["std", "ed25519-compact/pem"]
 
 [[bin]]
 name              = "teetotum-pack"

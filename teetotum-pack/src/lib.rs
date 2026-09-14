@@ -2,8 +2,9 @@
 //!
 //! The manifest and the signature section are read by [`teetotum_face::manifest`], with the code
 //! a face writes them with. What takes Ed25519 and SHA-512 is here, so a face does not carry it.
-//! Nothing allocates: the firmware and a tool on the host run the same checks.
-#![no_std]
+//! Checking allocates nothing, so the firmware and a tool on the host run the same checks;
+//! signing, with the `std` feature, is for the host.
+#![cfg_attr(not(feature = "std"), no_std)]
 
 use core::fmt;
 
@@ -79,4 +80,37 @@ pub fn verify(wasm: &[u8]) -> Result<(), Error> {
     PublicKey::new(*signed.key)
         .verify(signed.message, &Signature::new(*signed.signature))
         .map_err(|_| Error::Signature)
+}
+
+/// The module without its signature section, if it has one: the bytes a signature is made over.
+pub fn unsigned(wasm: &[u8]) -> Result<&[u8], Error> {
+    match Signed::read(wasm) {
+        Ok(signed) => Ok(signed.message),
+        Err(manifest::Error::Unsigned) => Ok(wasm),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// The module signed by `key`, with its key and signature as the last section.
+///
+/// A signature the module already has is replaced, not added to. Ed25519 signs without chance,
+/// so the same bytes and key always give the same file.
+#[cfg(feature = "std")]
+pub fn sign(wasm: &[u8], key: &ed25519_compact::KeyPair) -> Result<Vec<u8>, Error> {
+    const NAME: &[u8] = manifest::SIGNATURE.as_bytes();
+    const BODY: usize = 1 + NAME.len() + manifest::KEY_LEN + manifest::SIGNATURE_LEN;
+    const {
+        assert!(
+            BODY < 0x80,
+            "section and name lengths fit one LEB128 byte each"
+        )
+    };
+    let message = unsigned(wasm)?;
+    let mut signed = Vec::with_capacity(message.len() + 2 + BODY);
+    signed.extend_from_slice(message);
+    signed.extend_from_slice(&[0, BODY as u8, NAME.len() as u8]);
+    signed.extend_from_slice(NAME);
+    signed.extend_from_slice(&key.pk[..]);
+    signed.extend_from_slice(&key.sk.sign(message, None)[..]);
+    Ok(signed)
 }

@@ -7,4 +7,4 @@ out=../../firmware/assets/plugins
 mkdir -p "$out"
 cargo build --release -q
 cp target/wasm32v1-none/release/nearby.wasm "$out/nearby.wasm"
-../../tools/sign-face.py "$out/nearby.wasm"
+../../tools/teetotum-pack sign "$out/nearby.wasm"
