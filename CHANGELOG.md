@@ -14,6 +14,10 @@ of `teetotum-face`.
 - Firmware files attached to each GitHub release — bootloader, partition table, blank `otadata`,
   app, checksums — and a [web installer](https://teetotum-rs.github.io/firmware/) that writes them
   from the browser without touching settings or plugins.
+- Plugins uploaded over BLE while Settings > Receive plugin is open: the knob writes the module
+  into a free flash slot, restarts and offers it in the install dialog, which marks an update of an
+  installed plugin. `tools/ble-upload.py` sends one from a computer.
+- `teetotum-pack`: `slot::Digest` and `Header::matches_digest`, for a module that arrives in pieces.
 
 ## [0.1.0] - 2026-09-14
 
