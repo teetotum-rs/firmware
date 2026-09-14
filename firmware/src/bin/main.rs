@@ -2361,12 +2361,7 @@ async fn main(spawner: Spawner) -> ! {
             if at == page {
                 menu = menu.with(
                     slot,
-                    Entry::setting(
-                        "Receive plugin",
-                        &icons::PLUGIN,
-                        SETTING_RECEIVE,
-                        Buttons::Ok,
-                    ),
+                    Entry::setting("Receive", &icons::PLUGIN, SETTING_RECEIVE, Buttons::Ok),
                 );
             }
             if let Some(next) = settings_next {
@@ -4529,7 +4524,7 @@ fn settings_screen(
         // what tells a stranger's plugin from the project's.
         Some((SETTING_RECEIVE, Owner::Firmware)) => {
             let received = &state.received;
-            line(-42, "Receive", heading);
+            line(-42, "a plugin over BLE", quiet);
             match received.status {
                 UploadStatus::Idle if state.peer => line(-4, "connected", detail),
                 UploadStatus::Idle => {
