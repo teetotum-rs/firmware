@@ -44,7 +44,8 @@ jobs:
           unzip -o "$RUNNER_TEMP/espflash-x86_64-unknown-linux-musl.zip" -d "$HOME/.local/bin"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Build
-        run: cargo build --release
+        # Only the firmware: some measurement programs embed test images that are not in the repository.
+        run: cargo build --release --bin teetotum-firmware
       - name: Make images
         run: |
           cp current/tools/firmware-images tools/firmware-images
