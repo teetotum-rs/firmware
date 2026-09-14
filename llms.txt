@@ -12,6 +12,7 @@ The workspace has four parts: `teetotum/` (the library: screen, touch, knob, set
 - [User guide](https://github.com/teetotum-rs/firmware/blob/main/docs/user-guide.md): the controls, Home, the Music Player, every setting, troubleshooting, building and flashing
 - [Using plugins](https://github.com/teetotum-rs/firmware/blob/main/docs/plugins.md): the bundled plugins, plugin settings, rights, memory and limits, installing more
 - [Writing plugins](https://github.com/teetotum-rs/firmware/blob/main/docs/plugin-development.md): the teetotum-face SDK, the manifest, events, drawing, host calls, resource limits, building and bundling
+- [Code quality](https://github.com/teetotum-rs/firmware/blob/main/docs/code-quality.md): the checks a push must pass — rustfmt, Clippy with every warning an error, the stack-frame lint, exceptions with a reason, the pre-push hook
 
 ## Code
 
