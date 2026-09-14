@@ -5,6 +5,8 @@
     reason = "mem::forget is generally not safe to do with esp_hal types, especially those \
     holding buffers for the duration of a data transfer."
 )]
+// Frames over the 1024-byte threshold are expected one by one, each with its reason. The main
+// stack is 88 KiB and peaks at 60 KiB, measured while a cover decodes.
 #![deny(clippy::large_stack_frames)]
 
 use alloc::format;
@@ -490,6 +492,10 @@ const QR_ICONS: [&Icon; LINKS.len()] = [
     &qr::icons::BUG,
 ];
 
+#[expect(
+    clippy::large_stack_frames,
+    reason = "a const fn evaluated at compile time for `QR_MENU`; it never runs on the device"
+)]
 const fn qr_menu() -> Menu {
     assert!(
         LINKS[0].slot == 0,
@@ -680,6 +686,10 @@ type WaitingSlots = [Option<Waiting>; PLUGINS_MAX];
 ///
 /// Runs before the heap exists, so nothing here allocates. The modules take at most half of
 /// `spare`; the page, the ring and the cover come off the rest.
+#[expect(
+    clippy::large_stack_frames,
+    reason = "runs once at boot and returns the module tables by value; the main stack has room, see the note at the top"
+)]
 fn gather_modules(
     region: Option<Region<'_, '_>>,
     spare: Option<&'static mut [u8]>,
@@ -1011,68 +1021,78 @@ impl Run {
     }
 }
 
-/// What the status screen knows, gathered from all five sources.
-///
-/// Kept apart from the drawing so that redrawing is a pure function of it: the picture is only
-/// sent to the glass when one of these fields actually moved.
-#[derive(Clone, Default, PartialEq, Eq)]
-struct Overview {
-    /// Where the user is in the menus while they are up -- home after boot -- and `None` while a
-    /// face is on the glass.
-    menu: Option<Navigator>,
-    /// Seconds since boot.
-    uptime: u32,
-    /// Networks found in the most recent Wi-Fi scan.
-    networks: u8,
-    /// Whether a BLE peer is connected right now.
-    peer: bool,
-    /// Detents counted since boot, signed -- clockwise is positive.
-    detents: i32,
-    /// Which of the twelve 30 degree steps the picture stands at.
-    orientation: usize,
-    /// Which colours the settings are drawn in.
-    theme: Theme,
-    /// How bright the glass is.
-    brightness: Brightness,
-    /// How hard the motor clicks.
-    haptics: Haptics,
-    /// The other chip's volume, 0-127, or `None` while it does not answer.
-    volume: Option<u8>,
-    /// Whether the other chip says its own encoder reporting is switched on.
-    companion_encoder: bool,
-    /// Whether audio streams to the knob, which is when the other chip takes volume steps.
-    streaming: bool,
-    /// Whether a phone is connected over BLE HID, as the other chip says.
-    hid: bool,
-    /// How big the cover stands behind the player.
-    cover: CoverStyle,
-    /// Whether the cloud moves.
-    motion: Motion,
-    /// How the cloud looks.
-    shape: CloudShape,
-    /// The track the other chip last named.
-    title: String,
-    artist: String,
-    /// How far the long lines stand shifted while their one run lasts, from [`Run::offset`].
-    run: Option<i32>,
-    /// Which frame of the moving cloud is up, counted in [`CLOUD_FRAME`]s since boot, or 0
-    /// while it stands still or is not on the glass. A new frame is a change like any other,
-    /// so it is what makes the moving cloud redraw.
-    cloud: u32,
-    /// The picture currently laid behind the text, if there is one.
-    backdrop: Option<Backdrop>,
-    /// What the glass shows while the menus are not up. [`Face::Plugin`] only while that plugin
-    /// is installed; if loading it was refused, its face says why.
-    face: Face,
-    /// The plugins as the settings show them, each `None` if its manifest could not be read,
-    /// and `None` past the last.
-    plugins: [Option<PluginView>; PLUGINS_MAX],
-    /// The plugin the install dialog offers, while it is open.
-    offer: Option<Offer>,
-    /// Counted up whenever the plugin asks to be drawn again. What it shows lives in its own
-    /// memory, where the comparison that decides a redraw cannot look, so this stands in for it.
-    plugin_frame: u32,
+#[expect(
+    clippy::large_stack_frames,
+    reason = "fires in the `Clone` and `PartialEq` that `derive` generates; the main stack has room, see the note at the top"
+)]
+mod overview {
+    use super::*;
+
+    /// What the status screen knows, gathered from all five sources.
+    ///
+    /// Kept apart from the drawing so that redrawing is a pure function of it: the picture is only
+    /// sent to the glass when one of these fields actually moved.
+    #[derive(Clone, Default, PartialEq, Eq)]
+    pub(super) struct Overview {
+        /// Where the user is in the menus while they are up -- home after boot -- and `None` while a
+        /// face is on the glass.
+        pub(super) menu: Option<Navigator>,
+        /// Seconds since boot.
+        pub(super) uptime: u32,
+        /// Networks found in the most recent Wi-Fi scan.
+        pub(super) networks: u8,
+        /// Whether a BLE peer is connected right now.
+        pub(super) peer: bool,
+        /// Detents counted since boot, signed -- clockwise is positive.
+        pub(super) detents: i32,
+        /// Which of the twelve 30 degree steps the picture stands at.
+        pub(super) orientation: usize,
+        /// Which colours the settings are drawn in.
+        pub(super) theme: Theme,
+        /// How bright the glass is.
+        pub(super) brightness: Brightness,
+        /// How hard the motor clicks.
+        pub(super) haptics: Haptics,
+        /// The other chip's volume, 0-127, or `None` while it does not answer.
+        pub(super) volume: Option<u8>,
+        /// Whether the other chip says its own encoder reporting is switched on.
+        pub(super) companion_encoder: bool,
+        /// Whether audio streams to the knob, which is when the other chip takes volume steps.
+        pub(super) streaming: bool,
+        /// Whether a phone is connected over BLE HID, as the other chip says.
+        pub(super) hid: bool,
+        /// How big the cover stands behind the player.
+        pub(super) cover: CoverStyle,
+        /// Whether the cloud moves.
+        pub(super) motion: Motion,
+        /// How the cloud looks.
+        pub(super) shape: CloudShape,
+        /// The track the other chip last named.
+        pub(super) title: String,
+        pub(super) artist: String,
+        /// How far the long lines stand shifted while their one run lasts, from [`Run::offset`].
+        pub(super) run: Option<i32>,
+        /// Which frame of the moving cloud is up, counted in [`CLOUD_FRAME`]s since boot, or 0
+        /// while it stands still or is not on the glass. A new frame is a change like any other,
+        /// so it is what makes the moving cloud redraw.
+        pub(super) cloud: u32,
+        /// The picture currently laid behind the text, if there is one.
+        pub(super) backdrop: Option<Backdrop>,
+        /// What the glass shows while the menus are not up. [`Face::Plugin`] only while that plugin
+        /// is installed; if loading it was refused, its face says why.
+        pub(super) face: Face,
+        /// The plugins as the settings show them, each `None` if its manifest could not be read,
+        /// and `None` past the last.
+        pub(super) plugins: [Option<PluginView>; PLUGINS_MAX],
+        /// The plugin the install dialog offers, while it is open.
+        pub(super) offer: Option<Offer>,
+        /// Counted up whenever the plugin asks to be drawn again. What it shows lives in its own
+        /// memory, where the comparison that decides a redraw cannot look, so this stands in for it.
+        pub(super) plugin_frame: u32,
+    }
 }
+
+use overview::Overview;
 
 /// What the settings know about the bundled plugin.
 #[derive(Clone, PartialEq, Eq)]
@@ -1348,6 +1368,10 @@ async fn pause(slow: Duration, fast: Duration) {
 ///
 /// It began as the proof that the radio transmits and receives rather than merely
 /// initialising, and became what a face with `Rights::RADIO` hears.
+#[allow(
+    clippy::large_stack_frames,
+    reason = "many small locals in the task's future, none over 120 bytes; the main stack has room, see the note at the top"
+)]
 #[embassy_executor::task]
 async fn wifi_scan(mut controller: WifiController<'static>) {
     // Scanning needs station mode. `set_config` starts the driver as a side effect -- there is
@@ -1412,7 +1436,7 @@ esp_bootloader_esp_idf::esp_app_desc!();
 
 #[allow(
     clippy::large_stack_frames,
-    reason = "it's not unusual to allocate larger buffers etc. in main"
+    reason = "everything the firmware owns is set up here and lives for as long as it runs; the main stack has room, see the note at the top"
 )]
 #[esp_rtos::main]
 async fn main(spawner: Spawner) -> ! {
@@ -3279,6 +3303,10 @@ fn set_haptics(haptic: &mut Haptic<'_>, i2c: &mut I2c<'_, Blocking>, haptics: Ha
 ///
 /// Anything else in the folder is passed over without a word: a card is the user's, and what is
 /// on it is none of the firmware's business beyond what it can show.
+#[expect(
+    clippy::large_stack_frames,
+    reason = "`fat::Entries` is 800 bytes; card backgrounds are switched off by `CARD_BACKGROUNDS`"
+)]
 fn background_names(volume: &mut Volume<'_>) -> Vec<String> {
     let mut names = Vec::new();
     let dir = match volume.dir(BACKGROUND_FOLDER) {
@@ -3333,6 +3361,10 @@ fn header_bytes(size: u32) -> Option<usize> {
 /// The pixels go from the card straight into external RAM: the demo's files are RGB565 with the
 /// high byte first, which is the panel's order and this firmware's, so there is no pass over
 /// them. It costs about 130 ms, which is why it happens on a swipe and not on a frame.
+#[expect(
+    clippy::large_stack_frames,
+    reason = "a `fat::File` result is 536 bytes; card backgrounds are switched off by `CARD_BACKGROUNDS`"
+)]
 fn load_background(volume: &mut Volume<'_>, screen: &mut Screen<'_>, name: &str) -> Option<String> {
     let backdrop = screen.backdrop_mut()?;
     let path = format!("{BACKGROUND_FOLDER}/{name}");
@@ -3388,6 +3420,10 @@ fn load_background(volume: &mut Volume<'_>, screen: &mut Screen<'_>, name: &str)
 /// going home and back to the same face finds it as it was left, and starting the player does
 /// not unload it. A plugin that has been stopped is loaded anew, which is the way back from a
 /// trap.
+#[expect(
+    clippy::large_stack_frames,
+    reason = "a `Plugin` is 968 bytes and moves by value, and boxing it would spend internal heap, which runs out first; the main stack has room, see the note at the top"
+)]
 fn start_plugin(
     n: usize,
     modules: &Modules,
@@ -3423,6 +3459,10 @@ fn start_plugin(
 }
 
 /// Unloads the plugin that is running, if one is, and takes its page back for the next.
+#[expect(
+    clippy::large_stack_frames,
+    reason = "a `Plugin` is 968 bytes and moves by value, and boxing it would spend internal heap, which runs out first; the main stack has room, see the note at the top"
+)]
 fn stop_plugin(
     running: &mut Option<(usize, Plugin)>,
     page: &mut Option<Page>,
@@ -3444,6 +3484,10 @@ fn stop_plugin(
 
 /// Loads a plugin into the page, if the page is free, and says what that cost:
 /// microseconds, and bytes of internal heap -- or why it was refused, in words for the glass.
+#[expect(
+    clippy::large_stack_frames,
+    reason = "a `Plugin` is 968 bytes and moves by value, and boxing it would spend internal heap, which runs out first; the main stack has room, see the note at the top"
+)]
 fn load_plugin(
     wasm: &'static [u8],
     page: &mut Option<Page>,
@@ -3929,6 +3973,10 @@ const REPO: &str = "look at github.com:\nteetotum-rs/firmware";
 /// **The orientation needs no mark of its own any more.** Until the ring, a green dot at twelve
 /// o'clock was what made 180 degrees distinguishable from 0 on round glass. About is the top
 /// segment of every menu and turns with the picture, so it is that mark now.
+#[expect(
+    clippy::large_stack_frames,
+    reason = "many small `format!` values and draw calls, none over 36 bytes; the main stack has room, see the note at the top"
+)]
 fn settings_screen(
     frame: &mut Framebuffer,
     state: &Overview,
