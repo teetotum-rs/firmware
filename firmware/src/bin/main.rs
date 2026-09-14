@@ -4371,7 +4371,7 @@ fn settings_screen(
     // Green and large, like every other value on this device that is there to be read off the
     // glass rather than merely displayed.
     let (heading, reading, detail, quiet) = (
-        (&fonts::LARGE, palette.name),
+        (&fonts::BODY, palette.name),
         (&fonts::LARGE, palette.value),
         (&fonts::SMALL, Rgb565::CSS_LIGHT_GRAY),
         (&fonts::SMALL, palette.quiet),
@@ -4434,12 +4434,12 @@ fn settings_screen(
             } else {
                 "hid not connected"
             };
-            line(-42, "Music Player", (&fonts::BODY, palette.name));
-            line(-22, "through the other chip", quiet);
-            line(-4, &backdrop, detail);
+            line(-45, "Music Player", (&fonts::BODY, palette.name));
+            line(-24, "through the other chip", quiet);
+            line(-6, &backdrop, detail);
             line(12, &companion, detail);
-            line(28, stream, detail);
-            line(44, hid, detail);
+            line(30, stream, detail);
+            line(48, hid, detail);
         }
         Some((SETTING_BACKGROUND_ABOUT, Owner::Firmware)) => {
             let shape = state.shape;
@@ -4560,25 +4560,20 @@ fn settings_screen(
                 } else {
                     ("unknown key", (&fonts::SMALL, Rgb565::CSS_ORANGE))
                 };
-                let heap = if offer.heap <= offer.free {
-                    format!("{} KB heap of {} free", kb(offer.heap), kb(offer.free))
+                let cost = if offer.heap <= offer.free {
+                    format!("v{}  {} KB heap", offer.version, kb(offer.heap))
                 } else {
                     format!("too large: {} KB heap", kb(offer.heap))
                 };
-                line(-42, offer.name, heading);
+                line(-45, offer.name, heading);
                 if offer.update {
-                    line(-20, &format!("update, {owner}"), owner_style);
+                    line(-24, &format!("update, {owner}"), owner_style);
                 } else {
-                    line(-20, owner, owner_style);
+                    line(-24, owner, owner_style);
                 }
-                line(-4, &format!("key {key}"), detail);
+                line(-6, &format!("key {key}"), detail);
                 line(12, &format!("rights {}", offer.rights), detail);
-                line(
-                    28,
-                    &format!("v{}  {} bytes", offer.version, offer.bytes),
-                    detail,
-                );
-                line(44, &heap, detail);
+                line(30, &cost, detail);
             }
         }
         // What the manifest says, and what loading cost -- read without running the plugin,
@@ -4591,10 +4586,9 @@ fn settings_screen(
             } else if let Some((n, PluginSetting::About)) = PluginSetting::of(id)
                 && let Some(view) = state.plugins[n].as_ref()
             {
-                // One fact a line. Size and rights, and time and heap, shared a line each until
-                // the teetotum: "2518 bytes  rights knob random" and a load time of two digits
-                // only just fitted the glass, and a third digit would not have. The six lines
-                // stand where the firmware's About has its six, which is known to fit.
+                // One fact a line: a shared line did not fit a load time of three digits.
+                // Small lines are 18 px tall, so six of them under a BODY heading fill the band
+                // between the dialog's name and its buttons exactly.
                 let (run, cost) = match (&view.fault, view.loaded) {
                     (Some(fault), _) => (String::from("stopped"), fault.clone()),
                     (None, Some((us, heap))) => (
@@ -4603,15 +4597,15 @@ fn settings_screen(
                     ),
                     (None, None) => (String::from("not loaded"), String::new()),
                 };
-                line(-42, view.name, heading);
+                line(-45, view.name, heading);
                 match view.slot {
-                    Some(slot) => line(-20, &format!("from slot {slot}"), quiet),
-                    None => line(-20, "bundled with the firmware", quiet),
+                    Some(slot) => line(-24, &format!("from slot {slot}"), quiet),
+                    None => line(-24, "bundled with the firmware", quiet),
                 }
-                line(-4, &format!("{} bytes", view.bytes), detail);
+                line(-6, &format!("{} bytes", view.bytes), detail);
                 line(12, &format!("rights {}", view.rights), detail);
-                line(28, &run, detail);
-                line(44, &cost, detail);
+                line(30, &run, detail);
+                line(48, &cost, detail);
             }
         }
         Some((id, Owner::Firmware)) => {
