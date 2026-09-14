@@ -1417,6 +1417,9 @@ A plugin draws text in the firmware's fonts but does not contain them. The fonts
 from U8g2, under the notice in [`teetotum/LICENSE-FONTS`](../teetotum/LICENSE-FONTS), which
 travels with the firmware.
 
+A contributed plugin passes the same checks as the firmware: rustfmt and Clippy with every
+warning an error. [Code quality](code-quality.md) describes them and the script that runs them.
+
 Two conventions of this project that a contributed plugin should keep:
 
 - **A plugin that shows what the radio hears nearby carries a note on the law** in its

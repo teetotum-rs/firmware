@@ -34,7 +34,7 @@ is drawn to the same layout rules the firmware uses.</em></p>
 - **Home is a ring** of twelve segments: turn the knob to a segment, tap to choose, tap the
   centre to open. Holding a finger on the glass goes back to Home; in an open dialog it cancels
   first. Holding on Home itself opens a ring of QR codes: the firmware, the hardware, the plugin
-  guide, the projects it is built on and where to report a problem.
+  guide, the code-quality guide, the projects it is built on and where to report a problem.
 - **A music player** for whatever the phone is playing — title, artist, cover art and a volume
   arc — over the classic ESP32 next to the S3, which is the chip the phone is paired with.
 - **Settings that survive a power cut**: eleven colour themes, the picture's orientation in
@@ -59,6 +59,7 @@ Not there: sound of its own (the loudspeaker belongs to the other microcontrolle
 | [User guide](docs/user-guide.md) | anyone with a Knob running TeeToTum | the controls, Home, the player, every setting, troubleshooting |
 | [Using plugins](docs/plugins.md) | anyone who starts or removes plugins | the bundled three, rights, what "stopped" means, memory, installing more |
 | [Writing plugins](docs/plugin-development.md) | Rust developers | the `teetotum-face` SDK, the manifest, events, drawing, limits |
+| [Code quality](docs/code-quality.md) | anyone who changes the code | the checks a push must pass, and how to run them |
 | [The hardware, as measured](docs/hardware/README.md) | anyone curious about the board | what the device answered when it was asked: pins, panel, touch, knob, haptics, audio, the companion link, the card, the radios |
 
 All of it is plain Markdown with no images to fetch, so it reads the same offline in a text

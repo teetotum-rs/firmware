@@ -16,7 +16,7 @@ pub struct Link {
     pub url: &'static str,
 }
 
-pub const LINKS: [Link; 9] = [
+pub const LINKS: [Link; 10] = [
     Link {
         slot: 0,
         name: "TeeToTum",
@@ -46,7 +46,7 @@ pub const LINKS: [Link; 9] = [
         url: "https://www.espressif.com/",
     },
     Link {
-        slot: 9,
+        slot: 8,
         name: "Author's blog",
         caption: "the author's blog",
         host: "stefangruehn.github.io",
@@ -60,7 +60,7 @@ pub const LINKS: [Link; 9] = [
         url: "https://github.com/wasmi-labs/wasmi",
     },
     Link {
-        slot: 11,
+        slot: 10,
         name: "Plugin guide",
         caption: "writing a plugin",
         host: "github.com",
@@ -74,10 +74,17 @@ pub const LINKS: [Link; 9] = [
         url: "https://github.com/esp-rs",
     },
     Link {
-        slot: 10,
+        slot: 9,
         name: "Issues",
         caption: "report a problem",
         host: "github.com",
         url: "https://github.com/teetotum-rs/firmware/issues",
+    },
+    Link {
+        slot: 11,
+        name: "Code quality",
+        caption: "code quality",
+        host: "github.com",
+        url: "https://github.com/teetotum-rs/firmware/blob/main/docs/code-quality.md",
     },
 ];

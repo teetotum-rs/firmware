@@ -260,10 +260,10 @@ camera, which is quicker than spelling out a web address.
 ```
                           TeeToTum
                            12
-      Plugin guide  11           1  Claude Code
-         Issues  10                 2  Waveshare
-  Author's blog  9                     3  Espressif
-                  8                  4  wasmi
+      Code quality  11           1  Claude Code
+   Plugin guide  10                 2  Waveshare
+         Issues  9                     3  Espressif
+   Author's blog  8                  4  wasmi
                    7              5  esp-rs
                            6
 ```
@@ -279,6 +279,7 @@ camera, which is quicker than spelling out a web address.
 | `Author's blog` | the author's blog, `stefangruehn.github.io` |
 | `Issues` | where to report a problem with the firmware, `github.com/teetotum-rs/firmware/issues` |
 | `Plugin guide` | the guide to writing a plugin, in this firmware's repository, `github.com/teetotum-rs/firmware/blob/main/docs/plugin-development.md` |
+| `Code quality` | the checks a change must pass, in this firmware's repository, `github.com/teetotum-rs/firmware/blob/main/docs/code-quality.md` |
 
 - **A first tap selects a segment, a second one opens its code.** The code fills the middle of the
   screen, black on white. Below it always stands the site it leads to (for example `github.com`), and
