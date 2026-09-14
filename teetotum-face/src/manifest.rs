@@ -356,8 +356,8 @@ impl<'a> Manifest<'a> {
 
     pub fn icon(&self) -> Icon {
         let mut rows = [0u32; Icon::SIZE];
-        for (row, bytes) in rows.iter_mut().zip(self.icon.chunks_exact(4)) {
-            *row = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        for (row, bytes) in rows.iter_mut().zip(self.icon.as_chunks::<4>().0) {
+            *row = u32::from_le_bytes(*bytes);
         }
         Icon::from_rows(rows)
     }

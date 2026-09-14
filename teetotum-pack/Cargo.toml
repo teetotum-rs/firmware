@@ -12,6 +12,15 @@ repository   = { workspace = true }
 rust-version = { workspace = true }
 version      = { workspace = true }
 
+[features]
+# The command-line tool. Off by default, so the firmware's Xtensa build never meets a `std` binary.
+cli = []
+
+[[bin]]
+name              = "teetotum-pack"
+path              = "src/main.rs"
+required-features = ["cli"]
+
 [dependencies]
 teetotum-face = { workspace = true }
 

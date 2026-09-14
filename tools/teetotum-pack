@@ -1,0 +1,12 @@
+#!/bin/sh
+# Runs teetotum-pack from this repository under stable Rust, from any directory:
+#
+#     tools/teetotum-pack check firmware/assets/plugins/nearby.wasm
+#
+# `+stable` ignores the build-std of .cargo/config.toml, `RUSTFLAGS=` overrides its linker flags,
+# and target/host keeps this build apart from the firmware's.
+set -eu
+repo=$(cd "$(dirname "$0")/.." && pwd)
+host=$(rustc +stable -vV | sed -n 's/^host: //p')
+RUSTFLAGS='' CARGO_TARGET_DIR="$repo/target/host" exec cargo +stable run -q \
+    --manifest-path "$repo/teetotum-pack/Cargo.toml" --features cli --target "$host" -- "$@"

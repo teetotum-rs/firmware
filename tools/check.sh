@@ -1,7 +1,7 @@
 #!/bin/sh
 # Runs every check a push must pass, stopping at the first failure:
 # rustfmt and Clippy over the firmware workspace and each plugin, the release build, the host
-# tests of teetotum-pack, the signatures of the bundled plugins and the third-party notice.
+# tests and Clippy of teetotum-pack, the signatures of the bundled plugins and the third-party notice.
 #
 #     tools/check.sh
 #
@@ -24,7 +24,12 @@ step() { printf '\n==> %s\n' "$*"; }
 # Host crates run under stable: `+stable` ignores the `[unstable]` build-std of .cargo/config.toml,
 # `RUSTFLAGS=` overrides its `-nostartfiles`, and target/host keeps the two compilers' builds apart.
 HOST=$(rustc +stable -vV | sed -n 's/^host: //p')
-host() { RUSTFLAGS='' CARGO_TARGET_DIR=target/host cargo +stable "$@" --target "$HOST"; }
+# The target goes right after the subcommand, ahead of any `--` and the arguments beyond it.
+host() {
+    cmd=$1
+    shift
+    RUSTFLAGS='' CARGO_TARGET_DIR=target/host cargo +stable "$cmd" --target "$HOST" "$@"
+}
 
 step "rustfmt: workspace"
 cargo fmt --all --check
@@ -48,10 +53,13 @@ cargo build --release
 step "host tests: teetotum-pack"
 host test -p teetotum-pack
 
+step "host clippy: teetotum-pack"
+host clippy -p teetotum-pack --features cli --all-targets -- -D warnings
+
 step "signatures: bundled plugins"
 set --
 for m in $BUNDLED; do set -- "$@" "firmware/assets/plugins/$m.wasm"; done
-tools/sign-face.py --check "$@"
+tools/teetotum-pack check "$@"
 
 step "third-party notice"
 tools/third-party.py --check
