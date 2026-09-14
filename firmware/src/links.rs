@@ -83,7 +83,7 @@ pub const LINKS: [Link; 10] = [
     Link {
         slot: 11,
         name: "Code quality",
-        caption: "code quality",
+        caption: "checks for a push",
         host: "github.com",
         url: "https://github.com/teetotum-rs/firmware/blob/main/docs/code-quality.md",
     },
