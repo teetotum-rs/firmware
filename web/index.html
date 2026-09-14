@@ -57,6 +57,11 @@
       USB depends on which way round the USB-C plug is inserted. The port to pick is
       <code>USB JTAG/serial debug unit</code> (<code>303a:1001</code>). If only a
       <code>USB2.0-Serial</code> or CH340 port appears, turn the plug over.</li>
+    <li><strong>Chrome installed as a Flatpak on Linux needs one permission.</strong> Without it the
+      browser cannot tell which device is on a port: the list shows only <code>ttyACM0</code>, and the
+      install stops with &ldquo;Failed to initialize&rdquo;. Run
+      <code>flatpak override --user --filesystem=/run/udev:ro com.google.Chrome</code>, quit Chrome
+      completely and open this page again. For another Flatpak browser, use its app id.</li>
     <li><strong>Updating keeps your data.</strong> Settings, the haptics calibration and plugins installed
       in the flash slots stay where they are.</li>
     <li class="warn"><strong>The first install replaces the factory demo for good.</strong> Nothing on this

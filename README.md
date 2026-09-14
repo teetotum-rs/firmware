@@ -93,6 +93,12 @@ its factory firmware in place. Details, and everything else measured on this boa
 
 ## Building and flashing
 
+**Without building:** the [web installer](https://teetotum-rs.github.io/firmware/) writes the latest
+release from the browser (desktop Chrome, Edge or Opera). Settings and installed plugins are kept.
+The same files, with checksums, are attached to each [release](https://github.com/teetotum-rs/firmware/releases).
+
+To build it yourself:
+
 ```
 espup        0.17.1   # installs the Xtensa Rust toolchain (channel "esp")
 espflash / cargo-espflash 4.5.0

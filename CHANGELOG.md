@@ -11,6 +11,9 @@ of `teetotum-face`.
 
 - [teetotum-rs/plugins](https://github.com/teetotum-rs/plugins): a template for `cargo generate`, an
   example face and `index.json`, the list of known faces with where to fetch them, checked by CI.
+- Firmware files attached to each GitHub release — bootloader, partition table, blank `otadata`,
+  app, checksums — and a [web installer](https://teetotum-rs.github.io/firmware/) that writes them
+  from the browser without touching settings or plugins.
 
 ## [0.1.0] - 2026-09-14
 

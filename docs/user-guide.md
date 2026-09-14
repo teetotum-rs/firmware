@@ -707,8 +707,29 @@ chip: turn the plug over.
 
 ## 9. Building and flashing it yourself
 
-This section is for people who build TeeToTum from source. Everything here happens on your computer
-and the ESP32-S3; the second chip is never written.
+This section is for people who put TeeToTum on the board. The web installer needs no toolchain;
+everything after it is for building from source. Either way, only the ESP32-S3 is written, never the
+second chip.
+
+### Installing without building
+
+The [web installer](https://teetotum-rs.github.io/firmware/) writes the latest release from the
+browser. It needs desktop Chrome, Edge or Opera; Firefox and Safari cannot talk to serial ports.
+Connect the board so that the **ESP32-S3** is on USB (see the last item of
+[Troubleshooting](#8-troubleshooting)), press **Connect and install** and pick
+`USB JTAG/serial debug unit`. Writing takes about half a minute.
+
+Your settings and the plugins installed in the flash slots are kept. On a first install the dialog
+offers to erase the device; that clears the whole flash and is the clean start after the factory
+demo.
+
+**Chrome installed as a Flatpak on Linux** cannot tell which device is on a port unless it may read
+the device database: the list shows only `ttyACM0`, and the install stops with
+"Failed to initialize". Allow it, quit Chrome completely and open the page again:
+
+```
+flatpak override --user --filesystem=/run/udev:ro com.google.Chrome
+```
 
 ### What you need
 
