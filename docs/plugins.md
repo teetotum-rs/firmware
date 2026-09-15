@@ -563,6 +563,8 @@ Then:
 The catalogue is the list of known plugins in
 [teetotum-rs/plugins](https://github.com/teetotum-rs/plugins). Before it sends one, the page
 checks that the file's size, SHA-256, id and key match that list.
+Each plugin shows its tags, and the buttons above the list show only the plugins that carry
+the chosen tags; `bundled` marks those that ship with the firmware.
 
 The Knob chooses a free slot itself. A new version of a plugin it already holds goes into another
 slot, and the install dialog marks it as an update.

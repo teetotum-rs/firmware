@@ -10,6 +10,8 @@ of `teetotum-face`.
 ### Added
 
 - `teetotum-pack`: `slot::Digest` and `Header::matches_digest`, for a module that arrives in pieces.
+- Plugin page: each plugin shows its tags from the catalogue, and buttons filter the list by tag
+  ([#2](https://github.com/teetotum-rs/firmware/issues/2)).
 
 ## [0.2.1] - 2026-09-15
 

@@ -30,6 +30,12 @@
   .plugin .summary { margin: .15rem 0 .5rem; }
   .plugin .facts { margin: 0; color: var(--muted); font-size: .9rem; }
   .plugin .facts code { overflow-wrap: anywhere; }
+  .tags { display: flex; flex-wrap: wrap; gap: .4rem; margin: .5rem 0 0; padding: 0; list-style: none; }
+  .tag { font-size: .85rem; padding: .1rem .6rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); }
+  #tag-filter { margin: .25rem 0 .5rem; }
+  #tag-filter button { font-size: .9rem; font-weight: 500; padding: .3rem .8rem; border-radius: 999px;
+    background: transparent; color: var(--fg); border: 1px solid var(--line); }
+  #tag-filter button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
   .row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; margin-top: .85rem; }
   button {
     font: inherit; font-weight: 600; padding: .55rem 1.1rem; border: 0; border-radius: 8px;
@@ -67,6 +73,7 @@
 
   <h2>Catalogue</h2>
   <p id="catalogue-status" class="status">Reading the catalogue&hellip;</p>
+  <div id="tag-filter" class="tags" role="group" aria-label="Show only plugins tagged" hidden></div>
   <div id="catalogue"></div>
 
   <h2>A file of your own</h2>
@@ -157,25 +164,59 @@
     return wasm;
   }
 
+  // Shows the plugins that carry every chosen tag; none chosen shows all.
+  function filter(index, cards) {
+    const chosen = [...$("tag-filter").querySelectorAll('button[aria-pressed="true"]')].map((b) => b.dataset.tag);
+    let shown = 0;
+    index.plugins.forEach((p, i) => {
+      cards[i].hidden = !chosen.every((tag) => (p.tags ?? []).includes(tag));
+      if (!cards[i].hidden) shown++;
+    });
+    const from = "from the plugin repository's index.json.";
+    $("catalogue-status").textContent = chosen.length
+      ? `${shown} of ${index.plugins.length} plugins tagged ${chosen.join(" and ")}, ${from}`
+      : `${index.plugins.length} plugins, ${from}`;
+  }
+
   async function catalogue() {
     const response = await fetch(INDEX, { cache: "no-cache" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const index = await response.json();
     if (index.format !== 1) throw new Error(`catalogue format ${index.format}, this page reads 1`);
+    const cards = [];
     for (const p of index.plugins) {
       const button = element("button", { disabled: !canSend }, "Send to knob");
       button.dataset.ready = "";
       const bar = element("progress", { max: 1, value: 0, hidden: true });
       const status = element("span", { className: "status" });
       button.addEventListener("click", () => send(button, bar, status, () => fetchChecked(p)));
-      $("catalogue").append(element("div", { className: "plugin" },
+      const tags = (p.tags ?? []).map((tag) => element("li", { className: "tag" }, tag));
+      const card = element("div", { className: "plugin" },
         element("h3", {}, p.name),
         element("p", { className: "summary" }, p.summary),
         facts(p),
         element("p", { className: "facts" }, element("a", { href: p.source }, "source"), ` · ${p.license}`),
-        element("div", { className: "row" }, button, bar, status)));
+        ...(tags.length ? [element("ul", { className: "tags" }, ...tags)] : []),
+        element("div", { className: "row" }, button, bar, status));
+      cards.push(card);
+      $("catalogue").append(card);
     }
-    $("catalogue-status").textContent = `${index.plugins.length} plugins, from the plugin repository's index.json.`;
+    // One button per tag in the index, most used first, so a new tag needs no change here.
+    const counts = new Map();
+    index.plugins.forEach((p) => (p.tags ?? []).forEach((tag) => counts.set(tag, (counts.get(tag) ?? 0) + 1)));
+    const order = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    for (const [tag] of order) {
+      const toggle = element("button", { type: "button" }, tag);
+      toggle.dataset.tag = tag;
+      toggle.setAttribute("aria-pressed", "false");
+      toggle.addEventListener("click", () => {
+        toggle.setAttribute("aria-pressed", String(toggle.getAttribute("aria-pressed") !== "true"));
+        filter(index, cards);
+      });
+      $("tag-filter").append(toggle);
+    }
+    $("tag-filter").hidden = order.length === 0;
+    filter(index, cards);
   }
 
   catalogue().catch((e) => {
