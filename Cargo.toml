@@ -33,6 +33,8 @@ critical-section       = "1.2.0"
 # Xtensa's L32R literals and the link fails.
 ed25519-compact        = { version = "2.4.2", default-features = false, features = ["opt_size"] }
 embassy-executor       = { version = "0.10.0", features = ["log"] }
+# DHCP packets and leases only; the socket comes from embassy-net, so no edge-nal.
+edge-dhcp              = { version = "0.8.0", default-features = false, features = ["log"] }
 embassy-futures        = "0.1.2"
 embassy-net            = { version = "0.9.1", features = [
   "dhcpv4",
