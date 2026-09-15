@@ -121,7 +121,7 @@ impl fmt::Display for Version {
     }
 }
 
-/// What a face may do beyond drawing and hearing the glass.
+/// What a face may do beyond drawing and hearing taps.
 ///
 /// The loader holds a face to it: a module that imports [`send`](crate::send) without
 /// [`Rights::HID`] is refused, so what the settings show is all the face can do.

@@ -1,7 +1,7 @@
 //! Whether a face that does not fit the heap is refused rather than taking the firmware down.
 //!
 //! wasmi allocates through the global allocator and cannot fail, so a face too large for what
-//! is free used to be a panic in `handle_alloc_error` -- from the point of view of the glass,
+//! is free used to be a panic in `handle_alloc_error` -- from the point of view of the screen,
 //! a device that reboots when a plugin is opened. `Plugin::load` now estimates the cost from
 //! the size of the module first (`plugin::heap_needed`) and refuses before the engine exists.
 //!

@@ -1,9 +1,9 @@
-//! How bright the glass is.
+//! How bright the screen is.
 //!
 //! The panel's LEDs hang from 3V3 through 3.9 ohm and are switched on the low side by an
 //! AO3400A, whose gate is GPIO47 with a 10 k pull-down (Waveshare's schematic, net `LCD_BLK`;
-//! that the pin lights the glass is measured, the rest of the circuit is read off the drawing).
-//! A gate is either open or shut, so the glass is dimmed in time rather than in current: the LED
+//! that the pin lights the screen is measured, the rest of the circuit is read off the drawing).
+//! A gate is either open or shut, so the screen is dimmed in time rather than in current: the LED
 //! controller switches the pin at 5 kHz, and the brightness is the share of each period it is on.
 //! 5 kHz and 10 bits are what Espressif's board support package uses for the same job -- taken
 //! over, not measured.
@@ -14,7 +14,7 @@
 //! curve: the dimmest of the ten steps is on 1 % of the time, the middle one 25 %.
 //!
 //! It lives in the firmware and not in the SDK for the reason the settings do: how bright the
-//! glass is, is the device's to say and not a face's.
+//! screen is, is the device's to say and not a face's.
 
 use esp_hal::gpio::DriveMode;
 use esp_hal::gpio::interconnect::PeripheralOutput;
@@ -50,7 +50,7 @@ impl Backlight {
     /// Takes the LED controller and the backlight pin, and starts dark.
     ///
     /// **Dark on purpose.** The brightness is a setting, and the settings are read before the
-    /// first picture is drawn; starting dark lets the glass light up once, at the step it keeps,
+    /// first picture is drawn; starting dark lets the screen light up once, at the step it keeps,
     /// instead of at full and then a moment later dimmer. It also means the panel's power-up
     /// contents are never lit.
     ///
@@ -82,7 +82,7 @@ impl Backlight {
         Ok(Self { channel })
     }
 
-    /// Lights the glass at `level`.
+    /// Lights the screen at `level`.
     pub fn set(&self, level: Brightness) {
         self.channel.set_duty_hw(duty(level));
     }

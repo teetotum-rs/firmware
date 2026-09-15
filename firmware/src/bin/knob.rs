@@ -1,8 +1,8 @@
-//! The knob against a mark on the glass.
+//! The knob against a mark on the screen.
 //!
 //! Two things about the encoder could not be read off a pin: which of the two pulse lines is a
 //! turn clockwise, and how many pulses one revolution of the knob makes. Both need the hand and
-//! the glass in the same picture. So this draws a dot on a circle, moves it with the knob, and
+//! the screen in the same picture. So this draws a dot on a circle, moves it with the knob, and
 //! logs every step with its running count.
 //!
 //! Reading it:
@@ -34,7 +34,7 @@ use teetotum::display::{DisplayBus, DisplayReset};
 use teetotum::encoder::{Encoder, PULSES_PER_REVOLUTION};
 use teetotum::panel::{INIT_COMMANDS, POST_INIT_COMMANDS};
 
-/// The panel is 360x360 of visible glass, and the glass is a circle inside it.
+/// The panel is 360x360, and the visible screen is a circle inside it.
 const PANEL_WIDTH: u16 = 360;
 const PANEL_HEIGHT: u16 = 360;
 const DISPLAY_SIZE: DisplaySize = DisplaySize::new(PANEL_WIDTH, PANEL_HEIGHT);
@@ -195,7 +195,7 @@ fn main() -> ! {
 }
 
 /// The top left corner of the dot for an angle in degrees, zero at twelve o'clock and growing
-/// clockwise as the glass is seen.
+/// clockwise as the screen is seen.
 fn dot_corner(angle: i32) -> (u16, u16) {
     let x = CENTRE_X + (DOT_RADIUS * sin_q10(angle)) / 1024 - DOT_HALF;
     let y = CENTRE_Y - (DOT_RADIUS * cos_q10(angle)) / 1024 - DOT_HALF;

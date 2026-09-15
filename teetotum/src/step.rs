@@ -10,11 +10,11 @@
 //! being judged:
 //!
 //! - **the knob**, turned either way -- next step;
-//! - **the glass**: a **swipe** is next, a **tap** repeats this step;
+//! - **the screen**: a **swipe** is next, a **tap** repeats this step;
 //! - **a key in `espflash monitor`**: Enter or space for next, `r` to repeat, `q` to stop
 //!   waiting for good and let the binary run to its end.
 //!
-//! The glass learned to say "next" for a reason that was not the hand but the
+//! The screen learned to say "next" for a reason that was not the hand but the
 //! terminal. A run that can only be stepped forward with a key has to be watched in an
 //! interactive monitor, which means its output cannot be piped to a file, which means the
 //! result has to be selected with the mouse out of a window that is still scrolling. With a
@@ -61,17 +61,17 @@ pub struct Prompt<'d> {
     started: Instant,
     /// When the reminder was last printed.
     last_reminder: Instant,
-    /// When the glass may be asked again; every ask costs a bus transaction.
+    /// When the screen may be asked again; every ask costs a bus transaction.
     next_touch_read: Instant,
     /// Whether a finger was already down at the last read, so that a finger left lying on the
-    /// glass is one answer and not a stream of them.
+    /// screen is one answer and not a stream of them.
     finger_was_down: bool,
-    /// Whether the glass has been seen empty since the step was announced.
+    /// Whether the screen has been seen empty since the step was announced.
     ///
     /// A finger still lying there from the answer to the *previous* step must not answer this
     /// one, and the lift that ends it must not either.
-    glass_armed: bool,
-    /// Whether the contact currently on the glass has reported a swipe.
+    touch_armed: bool,
+    /// Whether the contact currently on the screen has reported a swipe.
     swiped: bool,
 }
 
@@ -87,7 +87,7 @@ impl<'d> Prompt<'d> {
             last_reminder: Instant::now(),
             next_touch_read: Instant::now(),
             finger_was_down: false,
-            glass_armed: false,
+            touch_armed: false,
             swiped: false,
         }
     }
@@ -98,7 +98,7 @@ impl<'d> Prompt<'d> {
         self
     }
 
-    /// Adds the glass.
+    /// Adds the touch screen.
     pub fn with_touch(mut self, touch: Touch<'d>) -> Self {
         self.touch = Some(touch);
         self
@@ -153,14 +153,14 @@ impl<'d> Prompt<'d> {
         ) {
             (true, _, true) => "turn the knob or press Enter",
             (true, _, false) => "turn the knob",
-            (false, true, true) => "swipe the glass or press Enter",
-            (false, true, false) => "swipe the glass",
+            (false, true, true) => "swipe the screen or press Enter",
+            (false, true, false) => "swipe the screen",
             (false, false, true) => "press Enter",
             (false, false, false) => "nothing",
         };
         let repeat = match (self.touch.is_some(), self.keys.is_some()) {
-            (true, true) => "tap the glass or press r",
-            (true, false) => "tap the glass",
+            (true, true) => "tap the screen or press r",
+            (true, false) => "tap the screen",
             (false, true) => "press r",
             (false, false) => "nothing",
         };
@@ -170,7 +170,7 @@ impl<'d> Prompt<'d> {
         self.last_reminder = now;
         self.next_touch_read = now;
         self.finger_was_down = false;
-        self.glass_armed = false;
+        self.touch_armed = false;
         self.swiped = false;
     }
 
@@ -178,7 +178,7 @@ impl<'d> Prompt<'d> {
     ///
     /// Non-blocking, and meant to be called as often as the caller can manage: the knob has to
     /// be polled tightly, because its pulses are shorter than ten milliseconds and a loop that
-    /// sleeps between reads walks straight past them (`src/bin/knob.rs`). The glass is asked on
+    /// sleeps between reads walks straight past them (`src/bin/knob.rs`). The screen is asked on
     /// a slower clock of its own, because every ask costs a bus transaction.
     pub fn poll(&mut self, i2c: &mut I2c<'_, Blocking>) -> Option<Step> {
         if !self.is_attended() {
@@ -212,7 +212,7 @@ impl<'d> Prompt<'d> {
         {
             self.next_touch_read = now + Duration::from_millis(20);
             // The interrupt line is deliberately not consulted. It was, and it lost taps: several
-            // in a row went unanswered while the same glass had worked moments earlier. The
+            // in a row went unanswered while the same screen had worked moments earlier. The
             // controller pulses that line rather than holding it, so
             // sampling it every twenty milliseconds is a coincidence, not a reading -- and
             // `src/touch.rs` established that the contact registers answer without it. One bus
@@ -220,10 +220,10 @@ impl<'d> Prompt<'d> {
             if let Ok(report) = touch.read(i2c) {
                 let finger_is_down = report.contact.is_some();
 
-                if !self.glass_armed {
-                    // Wait for the glass to be empty once. Otherwise the finger that answered
+                if !self.touch_armed {
+                    // Wait for the screen to be empty once. Otherwise the finger that answered
                     // the previous step answers this one too, on the way up.
-                    self.glass_armed = !finger_is_down;
+                    self.touch_armed = !finger_is_down;
                     self.finger_was_down = finger_is_down;
                     self.swiped = false;
                 } else {

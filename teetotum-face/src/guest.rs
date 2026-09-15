@@ -26,7 +26,7 @@ unsafe extern "C" {
 /// Needs [`Rights::RADIO`](crate::Rights::RADIO). Only from [`Face::event`](crate::Face::event),
 /// like [`random`] -- the time to call it is [`Event::Nearby`](crate::Event::Nearby), which says
 /// a new round is in. A round is one pass over the Wi-Fi channels, or one window of listening
-/// for Bluetooth; while a face with this right is on the glass, the firmware runs them back to
+/// for Bluetooth; while a face with this right is on the screen, the firmware runs them back to
 /// back, and a new one comes every few seconds.
 pub fn nearby(radio: Radio, into: &mut [Signal]) -> usize {
     // SAFETY: the firmware writes whole records, at most `into.len()` of them, at `into` during
@@ -39,7 +39,7 @@ pub fn nearby(radio: Radio, into: &mut [Signal]) -> usize {
 ///
 /// Needs [`Rights::HAPTIC`](crate::Rights::HAPTIC). Only from
 /// [`Face::event`](crate::Face::event). **The firmware keeps the time**, since a face has no
-/// clock, and it pulses only while the face is on the glass, at the strength the user has set
+/// clock, and it pulses only while the face is on the screen, at the strength the user has set
 /// for clicks -- which may be none, so a face should not rely on the pulse alone. Intervals
 /// outside [`PULSE_MIN_MS`](crate::abi::PULSE_MIN_MS) to
 /// [`PULSE_MAX_MS`](crate::abi::PULSE_MAX_MS) are taken to the nearer end.
@@ -103,7 +103,7 @@ pub fn text(line: &str, x: i32, y: i32, size: Size, colour: Colour) {
 
 /// Draws an arc around (`cx`, `cy`): `radius` to the middle of the stroke, `width` wide,
 /// clockwise from `start` degrees through `sweep` degrees. Zero degrees is three o'clock, and
-/// clockwise is clockwise on the glass. Only from [`Face::draw`](crate::Face::draw).
+/// clockwise is clockwise on the screen. Only from [`Face::draw`](crate::Face::draw).
 pub fn arc(cx: i32, cy: i32, radius: u32, start: i32, sweep: i32, width: u32, colour: Colour) {
     // SAFETY: plain numbers across the boundary.
     unsafe { host_arc(cx, cy, radius, start, sweep, width, colour.to_raw()) }

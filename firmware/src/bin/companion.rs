@@ -2,7 +2,7 @@
 //!
 //! `src/bin/uarttalk.rs` and `src/bin/ec2.rs` worked out the link itself. This one is the result:
 //! it opens the link through [`teetotum::companion`], takes the second encoder for itself, and
-//! drives the phone from the glass. Nothing here decodes a frame -- that is the driver's job now.
+//! drives the phone from the screen. Nothing here decodes a frame -- that is the driver's job now.
 //!
 //! What it does:
 //!
@@ -11,7 +11,7 @@
 //! * polls the status once a second and reports it when it changes, which is how the phone's
 //!   volume becomes visible,
 //! * prints the title, artist and album of every track change as the other chip pushes it,
-//! * turns a **tap** on the glass into play/pause and a **swipe left** / **swipe right** into
+//! * turns a **tap** on the screen into play/pause and a **swipe left** / **swipe right** into
 //!   the next and previous track -- as the finger sees it, which is the opposite of what the
 //!   controller calls it, and acted on when the finger lifts, because the controller names a
 //!   slide while the finger is still down,
@@ -55,7 +55,7 @@ enum Action {
     /// `A3 04`, a HID consumer usage id -- which goes out as a **BLE HID report** and not over
     /// AVRCP at all. It reaches the phone only if something is connected to `TAIJI_KNOB_HID`.
     /// Kept in the run as the contrast: if this stays dead while the swipe next to it works, the
-    /// two paths are told apart at the glass.
+    /// two paths are told apart at the screen.
     Key(MediaKey),
     /// `A3 03` with 5: play/pause, and the one code in the set the other chip may decide to
     /// swallow -- see [`QueueKey::PlayPause`]. This is what a tap sends.
@@ -71,7 +71,7 @@ use teetotum::touch::{Gesture, Taps, Touch};
 /// How often the volume is asked for. Nothing pushes it: it changes at the phone.
 const STATUS_PERIOD: Duration = Duration::from_secs(1);
 
-/// How often the glass is sampled. Fast enough that no contact is missed between two reads,
+/// How often the screen is sampled. Fast enough that no contact is missed between two reads,
 /// slow enough that the bus is not the only thing this loop does.
 const TOUCH_PERIOD: Duration = Duration::from_millis(20);
 
@@ -151,14 +151,14 @@ fn main() -> ! {
     );
     match touch.chip_id(&mut i2c) {
         Ok(id) => info!("touch controller answers with id {id:#04x} (0xB6 is the CST816D here)"),
-        Err(e) => warn!("touch controller does not answer: {e:?} -- the glass will do nothing"),
+        Err(e) => warn!("touch controller does not answer: {e:?} -- the screen will do nothing"),
     }
 
     // Whatever the other chip was in the middle of saying when we booted.
     companion.resync();
 
     info!("");
-    info!("tap the glass to play or pause, swipe left for the next track, right for the previous");
+    info!("tap the screen to play or pause, swipe left for the next track, right for the previous");
     info!("turn the knob: every detent should arrive as an event of its own");
     info!("");
 
@@ -225,7 +225,7 @@ fn main() -> ! {
                 //
                 // The names below are the hand's, with the device held **USB pointing away** --
                 // the orientation this project works in. `in_picture_mount` is what makes them
-                // so: the glass reports in the mounting frame and this panel sits half a turn
+                // so: touch reports in the mounting frame and this panel sits half a turn
                 // round, so the controller's own `SlideDown` is a swipe *towards* the USB port.
                 // A direction belongs in the frame the reader is standing in, not the frame the
                 // touch controller reports.

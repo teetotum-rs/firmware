@@ -1,8 +1,8 @@
 //! Write a face for teetotum: a plugin that the firmware loads at run time and shows on the
-//! glass.
+//! screen.
 //!
-//! A face is a WebAssembly module. While it is shown it gets the taps and wipes on the glass,
-//! the knob if it asks for it, and a way to say what should be on the glass -- never the glass
+//! A face is a WebAssembly module. While it is shown it gets the taps and wipes on the screen,
+//! the knob if it asks for it, and a way to say what should be on the screen -- never the screen
 //! itself. **The firmware draws, the face only names what to draw**: a pixel loop in the
 //! interpreter runs about thirty times slower than the same loop in the firmware, while a whole
 //! face of three calls is drawn in 19 µs, measured on the board.
@@ -44,7 +44,7 @@
 //! firmware turns it with the rest of the picture to wherever the user has the knob standing.
 //! Every [`draw`](Face::draw) starts from black.
 //!
-//! **One box of the picture is not the face's: [`HINT`].** Holding a finger on the glass leads
+//! **One box of the picture is not the face's: [`HINT`].** Holding a finger on the screen leads
 //! home from every face, and the firmware says so there, after the face has drawn -- a face does
 //! not have to, and cannot cover it. Whatever a face draws into that box ends up under the hint.
 //!
@@ -89,7 +89,7 @@
 //! While it runs, a call traps if it takes more than [`abi::FUEL`], draws outside
 //! [`Face::draw`], passes something the firmware cannot draw, asks for random bytes past
 //! [`abi::RANDOM_MAX`], or calls [`random`], [`nearby`] or [`pulse`] from [`Face::draw`]. After
-//! a trap the face is stopped, the firmware says so on the glass, and the rest of the device
+//! a trap the face is stopped, the firmware says so on the screen, and the rest of the device
 //! carries on.
 
 #![no_std]
@@ -111,7 +111,7 @@ pub use manifest::Rights;
 /// One value of it lives for as long as the face is loaded, and the firmware calls it from one
 /// thread, one call at a time. [`face!`] makes it the module's.
 pub trait Face {
-    /// Something happened on the glass or, with [`Rights::KNOB`], at the knob. Answers whether
+    /// Something happened on the screen or, with [`Rights::KNOB`], at the knob. Answers whether
     /// the face has to be drawn again.
     fn event(&mut self, event: Event) -> bool;
 
@@ -133,7 +133,7 @@ pub struct Area {
 /// free.
 ///
 /// It sits in the gap at the foot of a 270-degree arc of radius 176, the shape of the player's
-/// volume, and inside a full ring of radius 160 -- the two shapes round glass invites.
+/// volume, and inside a full ring of radius 160 -- the two shapes a round screen invites.
 pub const HINT: Area = Area {
     left: 120,
     top: 288,
@@ -223,11 +223,11 @@ pub enum Event {
     WipeUp = 5,
     WipeDown = 6,
     /// A new round of what the radio hears nearby is in; [`nearby`] reads it. Only with
-    /// [`Rights::RADIO`], and only while the face is on the glass: once when it comes up, so that
+    /// [`Rights::RADIO`], and only while the face is on the screen: once when it comes up, so that
     /// it starts from what is known, and again after every round.
     Nearby = 7,
     /// A phone is connected to the other chip over BLE HID, so what [`send`] sends reaches one.
-    /// Only with [`Rights::HID`], and only while the face is on the glass: once when it comes up,
+    /// Only with [`Rights::HID`], and only while the face is on the screen: once when it comes up,
     /// and again whenever the other chip reports a change.
     Linked = 8,
     /// No phone is connected over BLE HID, and what [`send`] sends is lost without a word. As
@@ -378,7 +378,7 @@ pub enum Size {
     Small = 0,
     /// 18 pixels, with Latin-1: running text, a title.
     Body = 1,
-    /// Bold, 24 pixels, ASCII only: a name, a value to be read off the glass.
+    /// Bold, 24 pixels, ASCII only: a name, a value to be read off the screen.
     Large = 2,
 }
 
@@ -467,7 +467,7 @@ pub enum Role {
     Icon = 3,
     /// A name, a label: white.
     Name = 4,
-    /// A value to be read off the glass: green.
+    /// A value to be read off the screen: green.
     Value = 5,
     /// Anything that explains rather than informs: grey.
     Quiet = 6,
@@ -496,7 +496,7 @@ impl Role {
 /// and Assign Selection stand in the descriptor, but their mapping was not read, so they are
 /// left out rather than guessed. **There is no volume among them**: the descriptor has none.
 ///
-/// Measured at the glass: [`Usage::Next`] skipped the track on a phone paired with
+/// Measured at the screen: [`Usage::Next`] skipped the track on a phone paired with
 /// `TAIJI_KNOB_HID`, and [`Usage::PlayPause`] paused and resumed. The rest were tried as well
 /// and worked, except [`Usage::Pause`], which never took effect.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

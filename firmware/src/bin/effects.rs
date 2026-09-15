@@ -6,7 +6,7 @@
 //! blur: by the time a buzz has registered, the log line naming it has scrolled away.
 //!
 //! So this hands the round over. **One step of the knob is one effect**, played once, with its
-//! number drawn large enough on the glass to read at arm's length; a tap on the glass plays the
+//! number drawn large enough on the screen to read at arm's length; a tap on the screen plays the
 //! current one again. Nothing needs to be read in a terminal, and the thing being measured --
 //! whether effect 24 feels like a tick and effect 47 like a buzz -- is measured where it lives.
 //!
@@ -35,7 +35,7 @@ use teetotum::haptic::{Actuator, CalTime, Haptic, Library};
 use teetotum::panel::{INIT_COMMANDS, POST_INIT_COMMANDS};
 use teetotum::touch::{Event, Gesture, Touch};
 
-/// The panel is 360x360 of visible glass, and the glass is a circle inside it.
+/// The panel is 360x360, and the visible screen is a circle inside it.
 const PANEL_WIDTH: u16 = 360;
 const PANEL_HEIGHT: u16 = 360;
 const DISPLAY_SIZE: DisplaySize = DisplaySize::new(PANEL_WIDTH, PANEL_HEIGHT);
@@ -56,7 +56,7 @@ const DIGIT_HEIGHT: u16 = 120;
 const STROKE: u16 = 14;
 /// Space between digits.
 const DIGIT_GAP: u16 = 18;
-/// Where the three digits start, so that they sit centred on the glass.
+/// Where the three digits start, so that they sit centred on the screen.
 const DIGITS_LEFT: u16 = (PANEL_WIDTH - (3 * DIGIT_WIDTH + 2 * DIGIT_GAP)) / 2;
 const DIGITS_TOP: u16 = (PANEL_HEIGHT - DIGIT_HEIGHT) / 2;
 
@@ -74,7 +74,7 @@ const SEGMENTS: [[bool; 7]; 10] = [
     [true, true, true, true, false, true, true],     // 9
 ];
 
-/// How often the knob and the glass are asked, in milliseconds.
+/// How often the knob and the screen are asked, in milliseconds.
 const POLL_MS: u32 = 5;
 
 /// Staging buffer for rectangle fills, in static memory.
@@ -174,7 +174,7 @@ fn main() -> ! {
         error!("Touch: the gesture registers could not be written: {err:?}");
     }
 
-    // GPIO8 is the clockwise direction, measured against a dot on the glass.
+    // GPIO8 is the clockwise direction, measured against a dot on the screen.
     let pull_up = InputConfig::default().with_pull(Pull::Up);
     let mut io = Io::new(peripherals.IO_MUX);
 
@@ -212,7 +212,7 @@ fn main() -> ! {
     draw_number(&mut display, buffer, effect);
     play(&mut haptic, &mut i2c, &delay, effect);
 
-    info!("Effects: turn the knob for the next effect, tap the glass to feel it again");
+    info!("Effects: turn the knob for the next effect, tap the screen to feel it again");
 
     loop {
         let steps = encoder.poll();
@@ -276,7 +276,7 @@ fn draw_number(
         draw_digit(display, buffer, left, DIGITS_TOP, lit);
     }
 
-    // The bar: as wide a share of the glass as the effect is a share of the library.
+    // The bar: as wide a share of the screen as the effect is a share of the library.
     let width = u16::from(value) * 240 / u16::from(EFFECT_COUNT);
     fill_rect(display, buffer, 60, 300, 240, 10, BACKGROUND);
     if width > 0 {

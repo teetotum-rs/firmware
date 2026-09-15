@@ -1,4 +1,4 @@
-//! Pictures larger than the screen, on the glass, through three different scalers.
+//! Pictures larger than the screen, shown on it through three different scalers.
 //!
 //! `src/bin/sdshow.rs` put a picture on the panel by reading it straight into the framebuffer,
 //! which worked because the factory demo stores its backgrounds in exactly the panel's shape.
@@ -33,7 +33,7 @@
 //! # In the hand
 //!
 //! * **turn the knob** -- the next picture: the four compiled-in ones first, then the card's;
-//! * **tap the glass** -- the next scaler, on the picture already decoded;
+//! * **tap the screen** -- the next scaler, on the picture already decoded;
 //! * **slide** -- turn the picture a quarter turn;
 //! * **`s`** next scaler, **`r`** read and decode again, **`0`** upright.
 //!
@@ -82,7 +82,7 @@ const FOLDER: &str = "/PIC";
 const MAX_PICTURES: usize = 32;
 /// The longest file name kept, in bytes.
 const NAME: usize = 64;
-/// How often the glass is asked.
+/// How often the screen is asked.
 const TOUCH_PERIOD: Duration = Duration::from_millis(15);
 
 /// Pictures compiled into the firmware, ahead of whatever the card holds.
@@ -168,7 +168,7 @@ fn main() -> ! {
     esp_alloc::heap_allocator!(size: 32 * 1024);
     let delay = Delay::new();
     delay.delay_millis(500);
-    info!("--- jpegshow: a JPEG off the card, decoded and fitted to the glass ---");
+    info!("--- jpegshow: a JPEG off the card, decoded and fitted to the screen ---");
 
     let pins = ScreenPins {
         sck: peripherals.GPIO13.into(),
@@ -348,7 +348,7 @@ fn main() -> ! {
                     }
                     _ => {}
                 },
-                Err(err) => warn!("the glass did not answer: {err:?}"),
+                Err(err) => warn!("the screen did not answer: {err:?}"),
             }
         }
     }
@@ -566,7 +566,7 @@ fn show(screen: &mut Screen<'_>, decoded: Option<&Decoded>, scaler: Scaler) {
 /// in the colour that carries across a desk: which scaler is on, and what it is scaling from.
 /// Those two together are the reading -- a scaler name over a picture that is already 360x360
 /// says nothing, and the run that learnt this the hard way had the size in the small line. The
-/// rest is for the terminal really, and is here so that a photograph of the glass says which
+/// rest is for the terminal really, and is here so that a photograph of the screen says which
 /// run made it.
 fn caption(screen: &mut Screen<'_>, name: &str, detail: &str, headline: &str) {
     const BAND: usize = 46;

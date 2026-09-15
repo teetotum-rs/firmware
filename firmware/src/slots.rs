@@ -6,7 +6,7 @@
 //! **The header is written last**, so a write cut short leaves a slot that reads as empty or
 //! fails its hash -- never one that passes as a plugin with half its bytes.
 //!
-//! **A written slot waits to be accepted** until the user accepts the plugin on the glass. Only
+//! **A written slot waits to be accepted** until the user accepts the plugin on the screen. Only
 //! bits are cleared then, so it needs no erase, and a slot written again waits again.
 //!
 //! Reading copies the module into the caller's buffer and checks hash and id. The signature is

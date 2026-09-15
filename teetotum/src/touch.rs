@@ -1,4 +1,4 @@
-//! The touch controller on the glass.
+//! The touch controller on the screen.
 //!
 //! The chip answers at `0x15` and reports `0xB6` on its identity register, which is a
 //! **CST816D** -- the factory image calls `esp_lcd_touch_new_i2c_cst816s`, but the silicon on
@@ -48,7 +48,7 @@ pub enum Event {
     Down,
     /// The finger left; the coordinates are where it was last seen.
     Up,
-    /// The finger is still on the glass.
+    /// The finger is still on the screen.
     Contact,
 }
 
@@ -134,7 +134,7 @@ impl Gesture {
     }
 }
 
-/// One finger on the glass, in the controller's own coordinates.
+/// One finger on the screen, in the controller's own coordinates.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Contact {
     pub x: u16,
@@ -147,7 +147,7 @@ impl Contact {
     /// while it stands upright.
     ///
     /// The controller reports in the frame the panel is **mounted** in, and this board mounts
-    /// the glass upside down: `x' = 359 - x`, `y' = 359 - y`, measured by
+    /// the panel upside down: `x' = 359 - x`, `y' = 359 - y`, measured by
     /// drawing both candidates and looking at which one is under the fingertip
     /// (`src/bin/touch.rs`). It is the same half turn that
     /// [`PANEL_MOUNT_MADCTL`](crate::panel::PANEL_MOUNT_MADCTL) applies to the pixels, and a
@@ -175,7 +175,7 @@ pub struct Report {
     pub gesture: Gesture,
     /// The gesture byte as it came off the bus, because the names above are hearsay.
     pub gesture_code: u8,
-    /// The finger, if one is on the glass.
+    /// The finger, if one is on the screen.
     pub contact: Option<Contact>,
 }
 
@@ -283,7 +283,7 @@ impl<'d> Touch<'d> {
 
     /// Reads the six contact registers in one burst.
     ///
-    /// The finger comes back as `None` when none is on the glass; the gesture comes back
+    /// The finger comes back as `None` when none is on the screen; the gesture comes back
     /// either way, because that is when the controller reports it.
     pub fn read(
         &mut self,
@@ -327,7 +327,7 @@ impl<'d> Touch<'d> {
 /// `src/bin/touch.rs`), and it goes on reporting it for as long as the contact lasts. A loop
 /// that acts on whatever the last read said therefore acts several times on one tap -- how many
 /// depends on how long the loop's own work takes, which makes it look like an intermittent
-/// glass rather than a counting error. `src/bin/jpegshow.rs` hit exactly this: one tap stepped
+/// screen rather than a counting error. `src/bin/jpegshow.rs` hit exactly this: one tap stepped
 /// its own scaler selection twice, because the same tap was read as a live gesture on every
 /// pass while the finger sat there.
 ///
@@ -351,7 +351,7 @@ pub struct Taps {
     held: bool,
 }
 
-/// How long a finger has to rest on the glass to be a long press, in milliseconds.
+/// How long a finger has to rest on the screen to be a long press, in milliseconds.
 ///
 /// **Timed here, because the controller does not say.** `0x0C` is the datasheet's code for a long
 /// press and has never been seen on this board. 600 ms is a little over the half second phones
@@ -367,7 +367,7 @@ const HOLD_SLOP: i32 = 16;
 /// **The controller does not name every slide.** Measured with the HID face: of 26
 /// contacts made while wiping, 10 came back without a gesture and so as taps -- the
 /// player stopped and started where it should have skipped. A tap drifts a few pixels; a tenth
-/// of the glass is far outside that and well inside any wipe.
+/// of the screen is far outside that and well inside any wipe.
 const SLIDE_MIN: i32 = 36;
 
 /// The slide a contact from `first` to `last` made, in the controller's own frame, if it went

@@ -1,4 +1,4 @@
-//! Watch the other chip's side of the link on the glass, because the cable can only be in one
+//! Watch the other chip's side of the link on the screen, because the cable can only be in one
 //! place at a time.
 //!
 //! The classic ESP32 prints its Bluetooth log on its own UART0, and that port is only reachable
@@ -8,9 +8,9 @@
 //!
 //! This run gives the S3 half a display of its own. It counts every frame the other chip sends,
 //! names the last track, and -- when a `BD 01` finally comes -- pulls the whole image packet by
-//! packet the way the protocol requires, then puts its size and its first bytes on the glass.
+//! packet the way the protocol requires, then puts its size and its first bytes on the screen.
 //! Nothing here needs the monitor; the answer is legible from across the desk. A `BD 01` on the
-//! glass tells apart what the console alone cannot: the console shows the cover art client
+//! screen tells apart what the console alone cannot: the console shows the cover art client
 //! connecting and never failing a get, but silence there means either success or a phone that
 //! returned no handle -- the two look identical from that side.
 //!
@@ -19,7 +19,7 @@
 //! every track change. So the first request after a connection never asks for a picture, and
 //! skipping tracks is the way to get one asked for.
 //!
-//! It also **puts the cover on the glass**: the finished transfer is decoded once, scaled to the
+//! It also **puts the cover on the screen**: the finished transfer is decoded once, scaled to the
 //! panel and kept as the backdrop, so every frame after that is a 21 ms copy rather than the
 //! scaler again. The green line carries the two things the run is worked by -- **which filter,
 //! and how big the picture arrived**. **Cover art comes in at 200x200**, so it is scaled *up* by
@@ -29,9 +29,9 @@
 //!
 //! * **turn the knob** -- next or previous track, so a fresh metadata request goes out without
 //!   touching the phone;
-//! * **tap the glass** -- play/pause;
+//! * **tap the screen** -- play/pause;
 //! * **Enter in the monitor** -- step the filter through the picture's own choice, nearest,
-//!   bilinear and box. The keyboard rather than the glass, because the glass is what is being
+//!   bilinear and box. The keyboard rather than the screen, because the screen is what is being
 //!   judged and the tap is already spoken for.
 //!
 //! Run it with the plug on the S3 (`cargo run --release --bin coverwatch`), then turn the plug
@@ -69,7 +69,7 @@ use teetotum::image::Scaler;
 use teetotum::screen::{Screen, ScreenPins};
 use teetotum::touch::{Gesture, Taps, Touch};
 
-/// How often the glass is asked for a finger.
+/// How often the screen is asked for a finger.
 const TOUCH_PERIOD: Duration = Duration::from_millis(20);
 /// How often the picture is rebuilt when nothing has happened. A whole frame costs 14 ms at the
 /// clock the panel was measured to take, so this is cheap enough to leave running for an hour.
@@ -79,7 +79,7 @@ const STATUS_PERIOD: Duration = Duration::from_secs(5);
 
 /// The filters to step through with the keyboard, starting with the picture's own choice.
 ///
-/// `None` is [`Picture::scaler`] -- what the judgement at the glass gives this picture -- and
+/// `None` is [`Picture::scaler`] -- what the judgement at the screen gives this picture -- and
 /// the other three are it overruled. Four states rather than three, because a run that can only
 /// force a filter can never be asked what it would have done.
 const FILTERS: [Option<Scaler>; 4] = [
@@ -101,7 +101,7 @@ fn main() -> ! {
     esp_alloc::heap_allocator!(size: 96 * 1024);
     let delay = Delay::new();
     delay.delay_millis(500);
-    info!("--- coverwatch: the other chip's frames, on the glass ---");
+    info!("--- coverwatch: the other chip's frames, on the screen ---");
 
     let pins = ScreenPins {
         sck: peripherals.GPIO13.into(),
@@ -268,7 +268,7 @@ fn main() -> ! {
                 &mut screen,
                 bytes,
                 pixels,
-                cover::CoverSize::Glass,
+                cover::CoverSize::Screen,
                 FILTERS[filter],
             );
             last_action = match art.as_ref() {
@@ -284,7 +284,7 @@ fn main() -> ! {
             dirty = true;
         }
 
-        // **The filter is switched from the keyboard**, because the glass is what is being
+        // **The filter is switched from the keyboard**, because the screen is what is being
         // judged and the tap is already play/pause. Dropping the picture is the whole of it:
         // the block above makes another one, from the same bytes, with the next filter.
         if let Ok(byte) = keys.read_byte()
@@ -317,7 +317,7 @@ fn main() -> ! {
         // **Nothing slow runs while a packet is on its way.** The receive FIFO holds 128 bytes
         // and fills in 1.4 ms at this baud rate; a packet is 1024 bytes and a redrawn screen
         // costs 14 ms. Drawing on the way to an answer therefore eats the answer. A transfer is
-        // under half a second, so the glass simply holds still for it.
+        // under half a second, so the screen simply holds still for it.
         let busy = cover.busy();
 
         if !busy && Instant::now() >= next_touch {
@@ -325,7 +325,7 @@ fn main() -> ! {
             // **The gesture is answered on the lift, not while the finger is down.** The
             // controller reports a tap for as long as the contact lasts, so reading it raw
             // sends one play/pause every 20 ms -- ten of them for an ordinary tap, which
-            // toggles back to where it started and looks like a dead glass. `Taps` holds the
+            // toggles back to where it started and looks like a dead screen. `Taps` holds the
             // rule so it is not relearned per binary.
             if let Ok(report) = touch.read(&mut i2c)
                 && taps.feed(&report) == Some(Gesture::SingleTap)
@@ -407,7 +407,7 @@ impl DrawTarget for Doubled<'_> {
 ///
 /// Once a cover has arrived the frame comes in with the picture already in it, and the text
 /// goes on top. **The bands are dimmed to the lines that are actually there**, in full width
-/// and not as boxes: the glass is round, so a box would put two more corners into the picture
+/// and not as boxes: the screen is round, so a box would put two more corners into the picture
 /// while a band runs off the edge -- the same rule the status screen follows.
 fn draw(
     frame: &mut Framebuffer,
@@ -453,7 +453,7 @@ fn draw(
         ),
     };
     let counters = format!("01:{} 02:{} 03:{}", counts[1], counts[2], counts[3]);
-    // **A cover on the glass takes the middle of it back.** The three doubled lines cover the
+    // **A cover on the screen takes the middle of it back.** The three doubled lines cover the
     // heart of a 360 pixel face, which is exactly where a picture is worth looking at; once
     // there is one, the same numbers go to the small lines below and the middle stays clear.
     let big_lines = if art.is_some() {

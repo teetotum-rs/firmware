@@ -3,7 +3,7 @@
 //! The table holds the register values the factory firmware programs into the panel, read out
 //! of its image (app0.bin offset 0x0006bc, 0x0106bc in the full image) and converted entry for
 //! entry. It differs from Espressif's `vendor_specific_init_default` in esp-iot-solution in
-//! exactly the registers that decide whether the glass keeps its picture: B2h VCOM, B5h
+//! exactly the registers that decide whether the screen keeps its picture: B2h VCOM, B5h
 //! AVDD/AVCL pump steps, B6h VGH/VGL pump steps, and the whole gamma and GIP block. AVDD, VGH,
 //! VGL and VCOM come from the controller's own charge pumps and the panel supply is plain 3V3,
 //! so these registers are the only thing between a picture that holds and one that sags away.
@@ -20,9 +20,9 @@ pub type InitCommand = (u8, &'static [u8], u16);
 
 /// How the panel sits in its case on this board, as MADCTL (36h) bits.
 ///
-/// This is a property of the hardware, not a preference. The glass is fitted turned by 180
+/// This is a property of the hardware, not a preference. The panel is fitted turned by 180
 /// degrees against the controller's native scan order, so the driver's default of `0x00` puts
-/// row 0 at the bottom of the glass and column 0 on the right. Bits 7 and 6 mirror Y and X, and
+/// row 0 at the bottom of the screen and column 0 on the right. Bits 7 and 6 mirror Y and X, and
 /// setting both undoes that mount. Bit 3 stays clear -- the colours are already RGB. Measured
 /// with `src/bin/orientation.rs`: an F drawn with this value reads upright with
 /// the USB socket pointing away from the viewer.
@@ -39,7 +39,7 @@ pub const PANEL_MOUNT_MADCTL: u8 = 0xC0;
 /// The factory initialisation sequence, in order.
 pub const INIT_COMMANDS: &[InitCommand] = &[
     // Prepended, as `esp_lcd_panel_init` does: memory access control. This corrects the
-    // mounting of the glass and nothing else -- see `PANEL_MOUNT_MADCTL`.
+    // mounting of the panel and nothing else -- see `PANEL_MOUNT_MADCTL`.
     (0x36, &[PANEL_MOUNT_MADCTL], 0),
     // Prepended likewise: 16 bits per pixel, RGB565.
     (0x3A, &[0x55], 0),
@@ -99,7 +99,7 @@ pub const INIT_COMMANDS: &[InitCommand] = &[
         ],
         0,
     ),
-    // GIP page open: gate-in-panel, the driving of the glass rows themselves.
+    // GIP page open: gate-in-panel, the driving of the screen rows themselves.
     (
         0xE1,
         &[

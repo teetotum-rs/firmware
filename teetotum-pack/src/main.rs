@@ -15,7 +15,7 @@
 //! `pack` writes `<wasm>.slot` next to the module, the slot header and then the module, and with
 //! `--write` hands it to `espflash write-bin` at the slot's address in the partition table:
 //! `--partitions`, else `$TEETOTUM_PARTITIONS`, else `partitions.csv` here. The firmware asks on
-//! the glass at the next boot whether the face gets a place; one with a bundled face's id takes
+//! the screen at the next boot whether the face gets a place; one with a bundled face's id takes
 //! that face's place.
 //!
 //! Exits 0 when every module passes, 1 when one does not, 2 on a usage error.

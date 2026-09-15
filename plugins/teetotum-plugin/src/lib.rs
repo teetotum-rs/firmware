@@ -1,7 +1,7 @@
 //! The teetotum: the spinning top the project is named after, with the knob as its stem.
 //!
 //! **Every detent is a throw.** Turn the knob and the side changes with each detent; where the
-//! hand stops, the side stands; a tap on the glass throws too. Each one is drawn from the chip's random number generator, and
+//! hand stops, the side stands; a tap on the screen throws too. Each one is drawn from the chip's random number generator, and
 //! while the radio runs -- in the firmware, always -- that generator mixes in physical noise
 //! (ESP-IDF, "Random Number Generation": the RF subsystem enables a high-speed ADC as its
 //! entropy source). The face says which it got, because a face that promises chance should not
@@ -87,7 +87,7 @@ impl Teetotum {
 impl Face for Teetotum {
     fn event(&mut self, event: Event) -> bool {
         match event {
-            // A tap throws as well as a detent does: the knob is the stem to spin, the glass a
+            // A tap throws as well as a detent does: the knob is the stem to spin, the screen a
             // table to knock on.
             Event::Clockwise | Event::Anticlockwise | Event::Tap => {
                 self.thrown = Some(Self::throw(SIDES[self.sides]));

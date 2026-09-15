@@ -13,7 +13,7 @@
 //!   custom section, the imports are checked against it, and only then is anything
 //!   instantiated. A face that imports `send_usage` without `Rights::HID` never gets that far.
 //! - **Every call runs on a budget** of [`abi::FUEL`], and a trap stops the face for good: it is
-//!   logged, the glass says so, and the face is not called again until it is loaded anew. The
+//!   logged, the screen says so, and the face is not called again until it is loaded anew. The
 //!   instance would answer the next call -- measured -- but a face that trapped once holds
 //!   whatever state the trap cut it off in.
 //! - **A face that would not fit is refused, not loaded.** wasmi allocates through the global
@@ -61,7 +61,7 @@ const HEAP_BASE: usize = 8 * 1024;
 /// How far above what it holds the peak of loading runs: measured at 3 to 5 KB, taken as 6.
 const HEAP_PEAK: usize = 6 * 1024;
 
-/// What the firmware is left with once the face is loaded. **Chosen, not measured**: the glass,
+/// What the firmware is left with once the face is loaded. **Chosen, not measured**: the screen,
 /// the menus and the faces themselves all allocate while a face runs, and a face that fits by a
 /// hundred bytes would only move the panic to the next thing that asks.
 const HEAP_SPARE: usize = 8 * 1024;
@@ -77,7 +77,7 @@ const HEAP_SPARE: usize = 8 * 1024;
 /// three by 1.7 to 4.7 KB.
 ///
 /// **It is an estimate, and it errs towards refusing.** A face may be turned away that would
-/// have fitted; the alternative is a panic, and a face that says why on the glass is worth a
+/// have fitted; the alternative is a panic, and a face that says why on the screen is worth a
 /// few kilobytes of headroom.
 pub fn heap_needed(wasm: usize) -> usize {
     HEAP_BASE + wasm * 5 / 2 + HEAP_PEAK + HEAP_SPARE
@@ -168,7 +168,7 @@ enum Draw {
 #[derive(Default)]
 pub struct Reply {
     /// Whether the face wants to be drawn again. Also set when the event stopped it, so that
-    /// the glass says so.
+    /// the screen says so.
     pub redraw: bool,
     /// What it sent, for the firmware to hand to the other chip. Empty when it trapped: a call
     /// that did not finish did not send anything.

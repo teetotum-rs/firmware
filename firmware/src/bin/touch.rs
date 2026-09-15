@@ -19,7 +19,7 @@
 //!
 //! The log carries the raw numbers besides, along with the event and the raw gesture code, so
 //! that the datasheet's names for the swipes can be checked against the picture's own up and
-//! down while the hand is already on the glass.
+//! down while the hand is already on the screen.
 //!
 //! What it answers:
 //!
@@ -31,7 +31,7 @@
 //!   mounting frame `0x01` is up.
 //! - **The gesture arrives while the finger is still down**, in a read that also carries a
 //!   contact -- logging the gesture only when a contact-suppressing branch lets it through
-//!   drops every gesture that occurs while a finger is on the glass.
+//!   drops every gesture that occurs while a finger is on the screen.
 
 #![no_std]
 #![no_main]
@@ -51,7 +51,7 @@ use teetotum::display::{DisplayBus, DisplayReset};
 use teetotum::panel::{INIT_COMMANDS, POST_INIT_COMMANDS};
 use teetotum::touch::{Event, Touch};
 
-/// The panel is 360x360 of visible glass, and the glass is a circle inside it.
+/// The panel is 360x360, and the visible screen is a circle inside it.
 const PANEL_WIDTH: u16 = 360;
 const PANEL_HEIGHT: u16 = 360;
 const DISPLAY_SIZE: DisplaySize = DisplaySize::new(PANEL_WIDTH, PANEL_HEIGHT);
@@ -207,7 +207,7 @@ fn main() -> ! {
     loop {
         match touch.read(&mut i2c) {
             Ok(report) => {
-                // The gesture is logged whether or not a finger is on the glass: the
+                // The gesture is logged whether or not a finger is on the screen: the
                 // controller names a slide in the same read that reports the finger gone.
                 if report.gesture_code != 0 {
                     info!(

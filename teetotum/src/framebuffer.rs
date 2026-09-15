@@ -74,7 +74,7 @@ impl Framebuffer {
     /// is one that is decided by looking. For the factory demo's backgrounds it was decided
     /// with `src/bin/sdshow.rs`: they are stored **high byte first**, the same way
     /// round as this buffer, so they need no pass over them at all. The other order was on the
-    /// glass one tap away and came out **grey** -- swapping the bytes of an RGB565 pixel cuts
+    /// screen one tap away and came out **grey** -- swapping the bytes of an RGB565 pixel cuts
     /// across the three channels rather than permuting them, so a photograph turns into noise.
     pub fn bytes_mut(&mut self) -> &mut [u8] {
         self.pixels
@@ -83,7 +83,7 @@ impl Framebuffer {
     /// Halves the brightness of the rows from `top` up to `bottom`, in place.
     ///
     /// This is what makes text readable over a photograph. A band across the whole width rather
-    /// than a box around the words, because the glass is round: a full-width band keeps its
+    /// than a box around the words, because the screen is round: a full-width band keeps its
     /// edges off the picture, where a box would put two more corners into it.
     ///
     /// The arithmetic is one shift and one mask per pixel. Shifting an RGB565 value down by one

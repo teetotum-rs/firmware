@@ -91,7 +91,7 @@ smoltcp = { version = "0.13.0", default-features = false, features = [
 ] }
 st77916      = "0.1.1"
 # Sans-serif bitmap fonts for the settings menu. The largest font embedded-graphics
-# brings, 10x20, is 2.5 mm tall on this glass and has serifs.
+# brings, 10x20, is 2.5 mm tall on this screen and has serifs.
 u8g2-fonts   = "0.8.0"
 static_cell  = "2.1.1"
 trouble-host = { version = "0.6.0", features = ["gatt", "scan"] }

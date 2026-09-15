@@ -19,7 +19,7 @@
 //! 6   the colour theme                                  since version 3
 //! 7   reserved, written 0 (was the face, see VERSION)   since version 4
 //! 8   reserved, written 0 (was removed plugins, see VERSION) since version 4
-//! 9   the glass's brightness, a step from 1 to 10       since version 5
+//! 9   the screen's brightness, a step from 1 to 10       since version 5
 //! 10  how hard the motor clicks, a step from 0 to 9     since version 6
 //! 11  how big the cover stands, 0 sharp or 1 full       since version 7
 //! 12  whether the cloud moves, 0 still or 1 moving      since version 8
@@ -123,7 +123,7 @@ pub struct Settings {
     /// its heap and its page; the module itself stays in the firmware image, which is also what
     /// lets it be installed again.
     removed: Removed,
-    /// How bright the glass is.
+    /// How bright the screen is.
     pub brightness: Brightness,
     /// How hard the motor clicks.
     pub haptics: Haptics,
@@ -343,20 +343,20 @@ impl Motion {
 
 /// How wide a full cover stands: round, and as wide as the inside of the volume arc around the
 /// player, whose 8 px stroke is centred on a circle of 352, so 4 px of it lie inside. A cover
-/// filling the glass would show past the arc.
+/// filling the screen would show past the arc.
 pub const COVER_DISC: usize = 344;
 
 /// How big the cover stands behind the player.
 ///
 /// **Sharp by default**: the other chip asks the phone for the 200x200
-/// thumbnail, and brought up to the glass it has no more detail, only softer edges. Full screen
+/// thumbnail, and brought up to the screen it has no more detail, only softer edges. Full screen
 /// is there for whoever prefers size to sharpness, which is a matter of taste.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CoverStyle {
     /// At its own size in the middle.
     #[default]
     Sharp = 0,
-    /// Brought up to fill the glass.
+    /// Brought up to fill the screen.
     Full = 1,
 }
 
@@ -435,10 +435,10 @@ impl Haptics {
     }
 }
 
-/// How bright the glass is, as one of ten steps; what a step comes to on the pin is
+/// How bright the screen is, as one of ten steps; what a step comes to on the pin is
 /// `backlight`'s business.
 ///
-/// **The default is the brightest**, because that is what the glass was before there was a
+/// **The default is the brightest**, because that is what the screen was before there was a
 /// choice: a record written before version 5 comes back looking the way it did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Brightness(u8);
@@ -450,7 +450,7 @@ impl Default for Brightness {
 }
 
 impl Brightness {
-    /// The dimmest step. Not zero: a dark glass is one on which nobody can find the way back.
+    /// The dimmest step. Not zero: a dark screen is one on which nobody can find the way back.
     pub const MIN: Self = Self(1);
     /// The backlight on all the time.
     pub const MAX: Self = Self(10);
@@ -459,7 +459,7 @@ impl Brightness {
     ///
     /// **It stops at both ends instead of going round** like the theme does: one detent past the
     /// brightest would otherwise be the darkest, on the one setting where the darkest can mean
-    /// not seeing the glass.
+    /// not seeing the screen.
     pub fn turned(self, detents: i32) -> Self {
         Self((self.0 as i32 + detents).clamp(Self::MIN.0 as i32, Self::MAX.0 as i32) as u8)
     }
@@ -469,7 +469,7 @@ impl Brightness {
         self.0
     }
 
-    /// What the glass calls it: the step in percent of the brightest.
+    /// What the screen calls it: the step in percent of the brightest.
     pub fn percent(self) -> u8 {
         self.0 * 10
     }
@@ -528,7 +528,7 @@ impl Theme {
         Self::ALL[(self as i32 + detents).rem_euclid(Self::ALL.len() as i32) as usize]
     }
 
-    /// What the glass calls it.
+    /// What the screen calls it.
     pub fn name(self) -> &'static str {
         match self {
             Theme::Teal => "Teal",

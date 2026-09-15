@@ -15,9 +15,9 @@
 //!    panel takes a higher clock, that is the largest single lever there is.
 //!
 //! The picture is made of fine detail -- small text, a one-pixel ring, radial marks every 30
-//! degrees -- so that anything lost on the way to the glass is visible there.
+//! degrees -- so that anything lost on the way to the screen is visible there.
 //!
-//! **It waits for a hand at every step**, because the result of each one is on the glass and
+//! **It waits for a hand at every step**, because the result of each one is on the screen and
 //! not in the log. Swipe or turn the knob for the next step, tap to repeat one, `q` to let it
 //! run to the end unattended. Run it in the monitor:
 //! `cargo run --release --bin render`.
@@ -174,7 +174,7 @@ fn main() -> ! {
     // Nothing has written to the panel's own memory since it powered up, and what is in it is
     // whatever it is -- on this panel, white and coloured noise. That was taken for our own
     // first frame once, during the ninety seconds this run spends waiting for a hand, so the
-    // glass is blacked out before anything is asked of anybody.
+    // screen is blacked out before anything is asked of anybody.
     {
         // SAFETY: single-threaded, and the staging buffer is still the zeroes it started as.
         let black: &[u8; SPI_CHUNK] = unsafe { &*core::ptr::addr_of!(STAGING) };
@@ -233,7 +233,7 @@ fn main() -> ! {
     for clock in CLOCKS {
         prompt.wait(
             &mut i2c,
-            "look at the glass while the frame is sent at the next clock",
+            "look at the screen while the frame is sent at the next clock",
         );
         loop {
             let bus = display.interface_mut();
@@ -268,7 +268,7 @@ fn main() -> ! {
         }
     }
 
-    info!("--- render: done. The last frame stays on the glass. ---");
+    info!("--- render: done. The last frame stays on the screen. ---");
     loop {
         delay.delay_millis(1000);
     }
@@ -280,7 +280,7 @@ fn draw_scene(frame: &mut Framebuffer) {
     let white = PrimitiveStyle::with_stroke(Rgb565::WHITE, 1);
     let dim = PrimitiveStyle::with_stroke(Rgb565::CSS_DIM_GRAY, 1);
 
-    // The glass is round: a ring just inside the bezel says where the picture actually ends.
+    // The screen is round: a ring just inside the bezel says where the picture actually ends.
     let _ = Circle::with_center(centre, 356)
         .into_styled(dim)
         .draw(frame);

@@ -79,7 +79,7 @@ pub const FUEL: u64 = 20_000;
 pub const DRAWS_MAX: usize = 64;
 /// The longest line `text` takes, in bytes.
 pub const TEXT_MAX: usize = 128;
-/// The largest radius and stroke `arc` takes. The glass is 360 pixels across.
+/// The largest radius and stroke `arc` takes. The screen is 360 pixels across.
 pub const RADIUS_MAX: u32 = 512;
 pub const WIDTH_MAX: u32 = 64;
 /// How many usages one event may send. More are dropped: a handful per touch is a remote, more

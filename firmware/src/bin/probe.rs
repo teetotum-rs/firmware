@@ -13,7 +13,7 @@
 //! identifying register afterwards so that "something acked" becomes "this chip is there".
 //!
 //! Then it holds, reading the touch controller and the knob and logging every change. Nothing
-//! here draws on the glass: the point is the serial log, so that a finger on the glass or a
+//! here draws on the screen: the point is the serial log, so that a finger on the screen or a
 //! turn of the knob shows up as a line or does not.
 
 #![no_std]
@@ -126,7 +126,7 @@ fn main() -> ! {
 
     let pull_up = InputConfig::default().with_pull(Pull::Up);
     let touch_interrupt = Input::new(peripherals.GPIO9.reborrow(), pull_up);
-    // Which of the two lines counts up is arbitrary until something on the glass says
+    // Which of the two lines counts up is arbitrary until something on the screen says
     // otherwise; see `Encoder::new`.
     let mut io = Io::new(peripherals.IO_MUX);
 
@@ -136,7 +136,7 @@ fn main() -> ! {
         Input::new(peripherals.GPIO7, pull_up),
     );
 
-    info!("Probe: holding -- turn the knob and touch the glass");
+    info!("Probe: holding -- turn the knob and touch the screen");
 
     let mut reported = 0;
     let mut interrupt_was_low = touch_interrupt.is_low();
@@ -222,7 +222,7 @@ fn identify(i2c: &mut I2c<'_, Blocking>) {
 
 /// Reads the touch controller's status and logs a finger arriving, moving or leaving.
 ///
-/// Returns whether a finger is on the glass, so that the caller can tell a new touch from a
+/// Returns whether a finger is on the screen, so that the caller can tell a new touch from a
 /// continuing one; a touch held still would otherwise fill the log.
 fn read_touch(i2c: &mut I2c<'_, Blocking>, was_touching: bool) -> bool {
     let mut status = [0u8; 6];

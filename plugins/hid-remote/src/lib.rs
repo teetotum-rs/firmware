@@ -91,7 +91,7 @@ impl Face for Remote {
         teetotum_face::text("tap to play or pause", 180, 212, Size::Small, Colour::QUIET);
         teetotum_face::text("swipe to skip", 180, 230, Size::Small, Colour::QUIET);
         teetotum_face::text("turn to seek", 180, 248, Size::Small, Colour::QUIET);
-        // Green like every other value to be read off the glass; the way to pair stands where it
+        // Green like every other value to be read off the screen; the way to pair stands where it
         // stood, in the colour it had, until there is a phone to send to.
         match self.linked {
             true => teetotum_face::text("phone connected", 180, 266, Size::Small, Colour::VALUE),

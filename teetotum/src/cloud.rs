@@ -25,7 +25,7 @@
 //! # Whole numbers only
 //!
 //! No `sin`, `cos` or `powf` from a library: the points are drawn from a square and the ones
-//! outside the glass thrown away, the brightness rises with the distance from the centre as
+//! outside the screen thrown away, the brightness rises with the distance from the centre as
 //! `t * sqrt(t)`, and the one sine the motion needs is a parabola with a correction, good to
 //! about 0.1 %. The mockup drew in polar coordinates and with `t^1.6`, so its points lie
 //! elsewhere; the number, the share of large and of icon-coloured points and the darkening are
@@ -38,7 +38,7 @@ use embedded_graphics::primitives::Rectangle;
 use crate::framebuffer::{HEIGHT, WIDTH};
 use crate::menu::Palette;
 
-/// The radius the brightness is measured against: the glass's.
+/// The radius the brightness is measured against: the screen's.
 const RIM: i32 = WIDTH as i32 / 2;
 
 /// How far from the centre a point may lie, one pixel inside the rim so a large one still fits.
@@ -60,7 +60,7 @@ pub struct Cloud {
     /// Where the scattering starts. The same seed puts the points in the same places in every
     /// theme and on every boot.
     pub seed: u32,
-    /// How many points lie on the glass.
+    /// How many points lie on the screen.
     pub points: usize,
     /// How bright a point at the rim is, of 256.
     pub peak: u16,

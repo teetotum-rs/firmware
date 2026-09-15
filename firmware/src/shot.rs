@@ -1,7 +1,7 @@
-//! A screenshot of the glass, down the same wire the log goes.
+//! A screenshot of the display, down the same wire the log goes.
 //!
 //! The README shows this device rendered rather than photographed, and the render needs
-//! something on its glass. Redrawing the interface a second time in another language would be a
+//! something on its screen. Redrawing the interface a second time in another language would be a
 //! second implementation of the same rules, wrong the day either one changes. So the firmware
 //! hands over exactly what it drew: the framebuffer, byte for byte, base64 on stdout, bracketed
 //! by two markers `tools/shot.py` looks for.

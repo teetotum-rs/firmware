@@ -17,7 +17,7 @@
 //!
 //! This module used to sample the two pins whenever it was asked to, which only sees every
 //! pulse if the caller runs often enough. **The firmware's loop runs about twenty-five times a
-//! second**, because it waits ten milliseconds and then redraws the glass -- and it redraws
+//! second**, because it waits ten milliseconds and then redraws the screen -- and it redraws
 //! precisely because the knob moved. At a hand's speed detents are about forty milliseconds
 //! apart and a pulse stays low for fifteen to thirty, so a single slow pass through the loop
 //! steps straight over one.

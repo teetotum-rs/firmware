@@ -1,4 +1,4 @@
-//! A picture off the TF card, on the glass.
+//! A picture off the TF card, on the screen.
 //!
 //! Everything the card knows so far was printed: pins, registers, a partition table, a listing.
 //! This is the first run that **uses** it. The factory demo keeps its clock backgrounds as
@@ -15,7 +15,7 @@
 //! - **the throughput**, because the read is timed and 253 KiB is a whole screen;
 //! - **the byte order**, which no file format here declares. Our framebuffer stores RGB565 high
 //!   byte first because the panel wants it that way; a file written by a little-endian host may
-//!   not. **Tap the glass to swap the two bytes of every pixel** and the eye decides in a
+//!   not. **Tap the screen to swap the two bytes of every pixel** and the eye decides in a
 //!   second what a specification could not: one of the two orders looks like a photograph and
 //!   the other looks like a fault.
 //!
@@ -26,7 +26,7 @@
 //! In the hand:
 //!
 //! * **turn the knob** -- the next background of the folder, re-read from the card and re-timed;
-//! * **tap the glass** -- swap the byte order of the picture;
+//! * **tap the screen** -- swap the byte order of the picture;
 //! * **slide** -- turn the picture a quarter turn;
 //! * **`r`** re-reads the same file, **`s`** swaps, **`0`** stands it upright.
 //!
@@ -71,7 +71,7 @@ const FOLDER: &str = "/CLOCKBG";
 const MAX_PICTURES: usize = 8;
 /// The longest file name kept, in bytes.
 const NAME: usize = 64;
-/// How often the glass is asked.
+/// How often the screen is asked.
 const TOUCH_PERIOD: Duration = Duration::from_millis(15);
 
 /// One candidate file: a name in [`FOLDER`] whose size is a whole screen.
@@ -238,7 +238,7 @@ fn main() -> ! {
                     }
                     _ => {}
                 },
-                Err(err) => warn!("the glass did not answer: {err:?}"),
+                Err(err) => warn!("the screen did not answer: {err:?}"),
             }
         }
     }

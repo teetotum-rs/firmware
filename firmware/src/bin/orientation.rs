@@ -5,7 +5,7 @@
 //! ways it can appear names the flip that is missing. A red square marks the corner the
 //! controller calls (0,0), which says the same thing a second time.
 //!
-//! `MADCTL` below is the only thing to change: set it, flash, look at the glass. What the F
+//! `MADCTL` below is the only thing to change: set it, flash, look at the screen. What the F
 //! shows is the answer. `0xC0` is that answer, carried in `src/panel.rs`'s init table -- this
 //! binary stays as the way to check that claim again.
 
@@ -25,7 +25,7 @@ use st77916::{ColorMode, DisplaySize, St77916};
 use teetotum::display::{DisplayBus, DisplayReset};
 use teetotum::panel::{INIT_COMMANDS, POST_INIT_COMMANDS};
 
-/// The panel is 360x360 of visible glass.
+/// The panel is 360x360 pixels.
 const PANEL_WIDTH: u16 = 360;
 const PANEL_HEIGHT: u16 = 360;
 const DISPLAY_SIZE: DisplaySize = DisplaySize::new(PANEL_WIDTH, PANEL_HEIGHT);
@@ -34,7 +34,7 @@ const DISPLAY_SIZE: DisplaySize = DisplaySize::new(PANEL_WIDTH, PANEL_HEIGHT);
 ///
 /// Bit 7 mirrors Y, bit 6 mirrors X, bit 5 exchanges the two axes, bit 3 swaps the colour
 /// order to BGR. The init table leaves this at `0x00`, which is what put row 0 at the bottom
-/// of the glass; `0xC0` is both mirrors, which is a 180 degree turn and the guess this run
+/// of the screen; `0xC0` is both mirrors, which is a 180 degree turn and the guess this run
 /// tests. Bit 3 stays clear -- the colours are already right.
 const MADCTL: u8 = 0xC0;
 
@@ -48,7 +48,7 @@ const ORIGIN: u16 = 0xF800;
 /// The letter F, as rectangles in the controller's own coordinates: x to the right, y down,
 /// (0,0) the first pixel written after RAMWR.
 ///
-/// The glass is round -- a circle of radius 180 about (180,180) -- so every corner of every
+/// The screen is round -- a circle of radius 180 about (180,180) -- so every corner of every
 /// rectangle here stays well inside it, or the bezel would eat the evidence.
 const STROKES: [(u16, u16, u16, u16, u16); 4] = [
     // x, y, width, height, colour

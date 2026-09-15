@@ -2,7 +2,7 @@
 //!
 //! The Wi-Fi scans and the Bluetooth windows run whether or not a face listens, and publish
 //! what each round heard here; a face reads it through `teetotum_face::nearby`, as records in
-//! the layout `abi::SIGNAL_BYTES` describes. While such a face is on the glass, the main loop
+//! the layout `abi::SIGNAL_BYTES` describes. While such a face is on the screen, the main loop
 //! says so with [`set_wanted`], and the two loops come round as fast as they go.
 //!
 //! **No address leaves this module.** A record carries a key in its place, made from the
@@ -68,7 +68,7 @@ pub fn set_salt(salt: u32) {
     SALT.store(salt, Ordering::Relaxed);
 }
 
-/// Whether a face that listens is on the glass.
+/// Whether a face that listens is on the screen.
 pub fn set_wanted(wanted: bool) {
     WANTED.store(wanted, Ordering::Relaxed);
 }

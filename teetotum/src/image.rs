@@ -22,7 +22,7 @@
 //! JPEG, for a frame of coefficients; that is out of our hands, and it is the reason the
 //! external RAM belongs in the allocator as well.
 //!
-//! # Three scalers, because the right one is a matter for the glass
+//! # Three scalers, because the right one is a matter for the screen
 //!
 //! Cover art and photographs arrive **larger** than the screen and have to come down. That
 //! decides which filter is right, and it decides it twice over:
@@ -37,7 +37,7 @@
 //!   only one of the three whose cost grows as the picture gets bigger, and the only one that
 //!   uses all of it.
 //!
-//! **Judged at the glass with `src/bin/jpegshow.rs`, on four synthetic pictures
+//! **Judged at the screen with `src/bin/jpegshow.rs`, on four synthetic pictures
 //! built to separate them: `Scaler::Box` wins clearly, and `Scaler::Nearest` invents rings that
 //! are not in the source.** Coming down to 360 pixels, box is the filter. That reverses the
 //! judgement for a picture that keeps its size -- and it has to, because the two cases are
@@ -49,7 +49,7 @@
 //! bilinear, and box is the one whose cost follows the *source*: it reads every pixel, so it
 //! gets dearer the further down the picture comes, while the other two follow the screen.
 //!
-//! **Going up, bilinear**, and that was judged at the glass too, on the phone's
+//! **Going up, bilinear**, and that was judged at the screen too, on the phone's
 //! own cover art at 200x200. Box collapses to nearest above 1:1 -- its window falls to a single
 //! pixel -- and the two are indeed indistinguishable there, which is this direction's free proof
 //! that the sampling grid sits right. Bilinear is better by a little: `tools/upscale-difference.py`
@@ -86,7 +86,7 @@ pub enum Error {
 ///
 /// The names are the same three the rest of the field uses. What they mean here is spelled out
 /// in the module documentation, and which one is right for a given picture is a question the
-/// glass has now answered three times, differently each time -- see [`Picture::scaler`].
+/// screen has now answered three times, differently each time -- see [`Picture::scaler`].
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Scaler {
     /// The nearest source pixel, and nothing else.
@@ -122,7 +122,7 @@ pub struct Picture<'a> {
 
 /// Where a picture ended up on the screen once it was fitted into it.
 ///
-/// A picture that is not square leaves a band above and below, or left and right; the glass is
+/// A picture that is not square leaves a band above and below, or left and right; the screen is
 /// round and the band is mostly behind the bezel, but a caption still wants to know where the
 /// picture stops.
 #[derive(Clone, Copy, Debug)]
@@ -231,7 +231,7 @@ impl<'a> Picture<'a> {
     }
 
     /// How big this picture is when it is made to fit a square of `side` in the middle of the
-    /// screen without changing its shape: [`Picture::fit`] with less room than the whole glass.
+    /// screen without changing its shape: [`Picture::fit`] with less room than the whole screen.
     pub fn fit_within(&self, side: usize) -> Fit {
         let side = side.min(WIDTH).min(HEIGHT);
         if self.width == 0 || self.height == 0 || side == 0 {
@@ -258,7 +258,7 @@ impl<'a> Picture<'a> {
     /// Where this picture goes at its own size, in the middle of the screen -- or, if it is
     /// bigger than the screen, where [`Picture::fit`] puts it.
     ///
-    /// For a small picture that should stay sharp rather than fill the glass: a 200x200 cover
+    /// For a small picture that should stay sharp rather than fill the screen: a 200x200 cover
     /// brought up by 1.8 has no more detail than before, only bigger pixels.
     pub fn native(&self) -> Fit {
         if self.width > WIDTH || self.height > HEIGHT {
@@ -272,10 +272,10 @@ impl<'a> Picture<'a> {
         }
     }
 
-    /// The filter this picture wants, from the judgement made at the glass.
+    /// The filter this picture wants, from the judgement made at the screen.
     ///
     /// **Coming down, box**, because it reads every source pixel and the ones a sampler skips
-    /// come back as moire rings -- that is what the glass showed on the zone plate, and it is
+    /// come back as moire rings -- that is what the screen showed on the zone plate, and it is
     /// the whole reason this is a function and not a caller's guess.
     ///
     /// **At 1:1, nearest**, because all three are then the same arithmetic and this is the

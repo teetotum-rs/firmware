@@ -212,7 +212,7 @@ pub fn write_back(bytes: &[u8]) {
 /// Asks whether the external RAM holds what the CPU thinks it wrote there.
 ///
 /// The direct path fails in the firmware and works in `src/bin/psramdma.rs`, and after
-/// [`Path::Staged`](crate::screen::Path::Staged) put a clean picture on the glass with the same
+/// [`Path::Staged`](crate::screen::Path::Staged) put a clean picture on the screen with the same
 /// descriptors and the same transfer, two halves were left: either the DMA reads the external
 /// RAM wrongly here, or the external RAM does not hold the picture at all and every reader of it
 /// would fail -- the DMA is just the only one that does not go through the cache.
@@ -423,7 +423,7 @@ impl DisplayBus<'_> {
     ///
     /// An SPI transfer does not wait for its DMA. At 80 MHz over four lines the bus takes
     /// 40 MB/s and the external RAM gives about 32, so the transmit FIFO runs dry and the panel
-    /// is handed whatever stood in it -- long runs of one colour. Measured at the glass
+    /// is handed whatever stood in it -- long runs of one colour. Measured at the screen
     /// by holding the path here and swapping the clock: clean at 40 MHz, striped at
     /// 80. Everything in this function was checked against that and is sound; the source simply
     /// cannot keep up. See [`Path::Direct`](crate::screen::Path::Direct).

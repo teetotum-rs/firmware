@@ -27,11 +27,11 @@
 //!
 //! Numbers cannot say what reached the panel. So the run ends in a loop that redraws a moving
 //! hand and a frame counter, holds the path at [`Path::Direct`], and **swaps the clock every
-//! two seconds** between [`SLOW`] and the panel's own 80 MHz, naming which is on the glass.
+//! two seconds** between [`SLOW`] and the panel's own 80 MHz, naming which is on the screen.
 //!
 //! An SPI transfer does not wait for its DMA, and at 80 MHz over four lines the bus takes
 //! 40 MB/s where the external RAM gives about 32. A dry transmit FIFO sends what stood in it
-//! last, which is thick bands of one colour. **At the glass: clean at 40 MHz, striped at 80.**
+//! last, which is thick bands of one colour. **At the screen: clean at 40 MHz, striped at 80.**
 //! The direct path is therefore not a lever -- at the clock where it is right it saves eight
 //! per cent, and at the clock where it saves half the frame it is wrong.
 //!
@@ -72,7 +72,7 @@ use teetotum::screen::{CLOCK, Path, Screen, ScreenPins};
 /// table is over in a few seconds.
 const FRAMES: u32 = 20;
 
-/// How long each path stays on the glass in the looking loop, in frames.
+/// How long each path stays on the screen in the looking loop, in frames.
 const SWAP_AFTER: u32 = 20;
 
 /// How far into the external RAM the picture is put, in bytes.
@@ -185,7 +185,7 @@ fn main() -> ! {
             if let Err(err) = screen.set_clock(rate) {
                 error!("the bus refused {} MHz: {err:?}", rate.as_mhz());
             }
-            info!("direct at {} MHz on the glass", rate.as_mhz());
+            info!("direct at {} MHz on the screen", rate.as_mhz());
         }
         draw_ground(screen.frame(), frames);
         draw_scene(screen.frame(), frames);

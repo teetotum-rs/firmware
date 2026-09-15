@@ -40,7 +40,7 @@
 //!
 //! Half of this measurement is in the fingers, so the run does not set the pace: every step
 //! that needs a hand waits for one, and repeats on request. Turn the knob or press Enter to go
-//! on, touch the glass or press `r` to have the same thing again, `q` to let the rest run
+//! on, touch the screen or press `r` to have the same thing again, `q` to let the rest run
 //! through -- `src/step.rs` holds each step until answered, so the run cannot outrun its own
 //! instructions.
 
@@ -124,7 +124,7 @@ fn main() -> ! {
     .with_scl(peripherals.GPIO12.reborrow());
 
     // The three ways to answer, all equivalent: the knob under the hand that is about to judge
-    // a click, the glass under the other one, and the keyboard at the far end of the monitor.
+    // a click, the screen under the other one, and the keyboard at the far end of the monitor.
     let pull_up = InputConfig::default().with_pull(Pull::Up);
     let mut io = Io::new(peripherals.IO_MUX);
 

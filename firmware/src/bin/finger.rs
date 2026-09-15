@@ -1,6 +1,6 @@
 //! Draw on the picture with a finger, then turn the picture and draw some more.
 //!
-//! Everything up to here turned pixels. This turns the other direction: the glass says where a
+//! Everything up to here turned pixels. This turns the other direction: the screen says where a
 //! finger is in **its** frame, the panel is mounted half a turn round, and the picture on top of
 //! that may stand at any of four quarter turns -- so a touch has to come back through both turns
 //! before anything drawn into the framebuffer can claim to be under the fingertip.
@@ -11,7 +11,7 @@
 //! Neither knows about the other; this run is where they meet.
 //!
 //! **The ink is the check.** A stroke is drawn into the picture at the point the two turns say
-//! the finger was, so it is turned back out again on its way to the glass. If the mapping is
+//! the finger was, so it is turned back out again on its way to the screen. If the mapping is
 //! right, the line grows under the fingertip and then **stays where it was put**: turn the knob
 //! and the drawing turns with the picture, mark unchanged, and drawing over an old stroke at a
 //! new angle lands on it. If the mapping is wrong, the ink appears somewhere else -- mirrored,
@@ -19,7 +19,7 @@
 //!
 //! In the hand:
 //!
-//! * **draw on the glass** -- ink, in the picture's coordinates;
+//! * **draw on the screen** -- ink, in the picture's coordinates;
 //! * **turn the knob** -- the picture and everything drawn on it turn, a quarter turn per detent;
 //! * **`c` in the monitor** -- clear the ink and start over;
 //! * **`0`** -- back upright.
@@ -57,8 +57,8 @@ use teetotum::framebuffer::{Framebuffer, HEIGHT, WIDTH};
 use teetotum::screen::{ORIENTATIONS, Screen, ScreenPins};
 use teetotum::touch::{Event, Gesture, Touch};
 
-/// How often the glass is asked. The controller has nothing to say most of the time, and a
-/// finger crossing the glass in half a second wants more samples than that.
+/// How often the screen is asked. The controller has nothing to say most of the time, and a
+/// finger crossing the screen in half a second wants more samples than that.
 const TOUCH_PERIOD: Duration = Duration::from_millis(15);
 
 /// Radius of the ink dot, in picture pixels. Wide enough to see against the ring, narrow enough
@@ -128,11 +128,11 @@ fn main() -> ! {
         Err(e) => error!("touch controller does not answer: {e:?} -- there will be no ink"),
     }
 
-    // The keys, for everything that is not drawing. A run whose only control is the glass loses
-    // the control the moment the glass is the thing under suspicion.
+    // The keys, for everything that is not drawing. A run whose only control is the screen loses
+    // the control the moment the screen is the thing under suspicion.
     let (mut keys, _) = UsbSerialJtag::new(peripherals.USB_DEVICE.reborrow()).split();
 
-    // GPIO8 is the clockwise direction, measured against a dot on the glass.
+    // GPIO8 is the clockwise direction, measured against a dot on the screen.
     let pull_up = InputConfig::default().with_pull(Pull::Up);
     let mut io = Io::new(peripherals.IO_MUX);
 
@@ -147,7 +147,7 @@ fn main() -> ! {
     if let Err(err) = screen.present() {
         error!("sending the picture failed: {err:?}");
     }
-    info!("draw on the glass, turn the knob, 'c' clears the ink, '0' stands it upright");
+    info!("draw on the screen, turn the knob, 'c' clears the ink, '0' stands it upright");
 
     let mut next_touch = Instant::now();
     let mut down = false;
@@ -222,7 +222,7 @@ fn main() -> ! {
                         None => down = false,
                     }
                 }
-                Err(e) => warn!("the glass did not answer: {e:?}"),
+                Err(e) => warn!("the screen did not answer: {e:?}"),
             }
         }
 
@@ -234,7 +234,7 @@ fn main() -> ! {
 
 /// Puts one dot of ink into the picture, and says whether it landed on it.
 ///
-/// Every point on the glass maps inside the picture, so a miss means the mapping is wrong.
+/// Every point on the screen maps inside the picture, so a miss means the mapping is wrong.
 fn ink(frame: &mut Framebuffer, x: i32, y: i32) -> bool {
     if x < 0 || y < 0 || x >= WIDTH as i32 || y >= HEIGHT as i32 {
         return false;
@@ -246,7 +246,7 @@ fn ink(frame: &mut Framebuffer, x: i32, y: i32) -> bool {
 }
 
 /// The picture to draw on: a ring, twelve marks, and a plain north so that the angle can be
-/// read off the glass without asking the log.
+/// read off the screen without asking the log.
 fn draw_scene(frame: &mut Framebuffer) {
     let centre = Point::new(WIDTH as i32 / 2, HEIGHT as i32 / 2);
     let white = PrimitiveStyle::with_stroke(Rgb565::WHITE, 1);
@@ -289,7 +289,7 @@ fn draw_scene(frame: &mut Framebuffer) {
 
     let small = MonoTextStyle::new(&FONT_6X10, Rgb565::CSS_LIGHT_GRAY);
     let _ = Text::with_alignment(
-        "draw on the glass",
+        "draw on the screen",
         Point::new(centre.x, centre.y - 6),
         small,
         Alignment::Center,

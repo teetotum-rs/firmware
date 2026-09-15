@@ -42,14 +42,14 @@ const ICON: Icon = Icon::new(&[
     "........................",
 ]);
 
-/// What this one is called, and so what stands in its manifest, in both rings and on the glass.
+/// What this one is called, and so what stands in its manifest, in both rings and on the screen.
 const NAME: &str = env!("TEETOTUM_DUMMY_NAME");
 
-/// The middle of the glass.
+/// The middle of the screen.
 const CENTRE: i32 = 180;
 
 struct Dummy {
-    /// Whether a finger has been on the glass since the face came up. The only thing it has to
+    /// Whether a finger has been on the screen since the face came up. The only thing it has to
     /// show, and it is there so that a tap proves the face is running and not a picture.
     touched: bool,
 }
@@ -69,7 +69,7 @@ impl Face for Dummy {
         teetotum_face::icon(&ICON, CENTRE, CENTRE - 60, Colour::ICON);
         teetotum_face::text(NAME, CENTRE, CENTRE, Size::Large, Colour::NAME);
         let line = match self.touched {
-            false => "tap the glass",
+            false => "tap the screen",
             true => "tapped",
         };
         teetotum_face::text(line, CENTRE, CENTRE + 34, Size::Body, Colour::VALUE);

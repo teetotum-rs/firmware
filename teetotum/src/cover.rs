@@ -51,7 +51,7 @@ pub const MAX_STALLS: u8 = 8;
 /// numbered 1 to 4 -- so that a silence cannot be mistaken for an answer.
 pub const NO_ANSWER: u8 = 0xFF;
 
-/// One thing that happened to a transfer, for a caller that keeps a log or a line on the glass.
+/// One thing that happened to a transfer, for a caller that keeps a log or a line on the screen.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Step {
     /// A picture is on offer, and the first packet has been asked for.
@@ -290,8 +290,8 @@ impl<'a> Cover<'a> {
 /// How big a cover is drawn.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CoverSize {
-    /// As big as the glass allows: a 200x200 cover comes up by 1.8.
-    Glass,
+    /// As big as the screen allows: a 200x200 cover comes up by 1.8.
+    Screen,
     /// At its own size in the middle, as long as it fits: sharp, and smaller.
     Native,
     /// Brought up to fill a round window of this diameter in the middle, black outside it: for
@@ -308,7 +308,7 @@ pub const DECODE_HEAP: usize = 40_000;
 /// `pixels` is where it is unpacked, three bytes to a pixel of the picture's own size -- so a
 /// 200x200 cover wants 120 KiB and there is nowhere but the external RAM to put it. `forced`
 /// overrules [`crate::image::Picture::scaler_for`], for a run that is comparing the filters at
-/// the glass rather than trusting the judgement in the module.
+/// the screen rather than trusting the judgement in the module.
 ///
 /// The frame is left holding the picture and the backdrop holding a copy of it. `None`, with a
 /// line in the log, if the bytes are not a picture, if `pixels` is too small for it, or if
@@ -331,7 +331,7 @@ pub fn show(
 
     let (width, height) = (picture.width, picture.height);
     let fit = match size {
-        CoverSize::Glass => picture.fit(),
+        CoverSize::Screen => picture.fit(),
         CoverSize::Native => picture.native(),
         CoverSize::Disc(diameter) => picture.fit_within(diameter),
     };
@@ -362,9 +362,9 @@ pub fn show(
     })
 }
 
-/// Blacks out everything `radius` or further from the middle of the glass, a row at a time.
+/// Blacks out everything `radius` or further from the middle of the screen, a row at a time.
 ///
-/// What makes [`CoverSize::Disc`] round. The middle of the glass lies between pixels 179 and
+/// What makes [`CoverSize::Disc`] round. The middle of the screen lies between pixels 179 and
 /// 180, so distances are taken in half pixels from the middles of pixels, the way the menu ring
 /// takes them.
 fn black_outside(frame: &mut crate::framebuffer::Framebuffer, radius: i32) {

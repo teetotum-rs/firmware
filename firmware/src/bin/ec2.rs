@@ -17,7 +17,7 @@
 //! chip's own queue), each with the knob turned by hand and the frames counted.
 //!
 //! **The knob does not step this run forward**, because the knob is what the run measures.
-//! **Swipe** the glass to go on, **tap** it to repeat a step; Enter and `r` in the monitor do the
+//! **Swipe** the screen to go on, **tap** it to repeat a step; Enter and `r` in the monitor do the
 //! same, and `q` lets the rest run unattended. Since no key is needed, the run can be logged:
 //! `cargo run --release --bin ec2 | tee /tmp/ec2.log`.
 //!
@@ -275,7 +275,7 @@ fn turn_step(
 /// Waits for the hand without letting the line run dry, and says whether to repeat the step.
 ///
 /// The pause is not dead time on this link: it is exactly when the other chip talks, because it
-/// talks about what the hand is doing. So the wait drains the wire and polls the glass in one
+/// talks about what the hand is doing. So the wait drains the wire and polls the screen in one
 /// loop -- the reasoning `src/bin/uarttalk.rs` had to learn the hard way.
 fn waiting(
     prompt: &mut Prompt<'_>,

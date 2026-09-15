@@ -32,7 +32,7 @@
 //!
 //! The steps wait for a hand (`src/step.rs`): the play/pause answer is at the phone, and a cover
 //! only exists while music with artwork is playing. Turn the knob for the next step, touch the
-//! glass to repeat one, `q` in the monitor to let the rest run unattended.
+//! screen to repeat one, `q` in the monitor to let the rest run unattended.
 
 #![no_std]
 #![no_main]
@@ -199,7 +199,7 @@ fn main() -> ! {
     .with_sda(peripherals.GPIO11.reborrow())
     .with_scl(peripherals.GPIO12.reborrow());
 
-    // The glass is the only way to repeat a step here: `espflash monitor --non-interactive` has
+    // The screen is the only way to repeat a step here: `espflash monitor --non-interactive` has
     // no keyboard, and the knob only ever goes forwards. So it is pulsed rather than merely
     // attached, and asked who it is -- a step that cannot be repeated is worth one bus read to
     // find out about before the first question rather than after the last.

@@ -1,10 +1,10 @@
-//! The glass as one object: the bus, the panel, the picture, and the way out.
+//! The screen as one object: the bus, the panel, the picture, and the way out.
 //!
 //! Everything this module does was measured in `src/bin/render.rs`, and until now it lived in
 //! each run separately -- eighty lines of
 //! PSRAM, DMA, SPI and panel bring-up, copied from bin to bin. Copied code is not the problem;
 //! **copied constants are**: the 80 MHz that made the panel four times faster was measured
-//! and was still nowhere in the firmware, which went on driving the glass at the
+//! and was still nowhere in the firmware, which went on driving the screen at the
 //! 10 MHz that was never a decision but the first value that worked. A number that has been
 //! measured belongs in one place, and this is that place.
 //!
@@ -55,7 +55,7 @@ pub const ORIENTATIONS: usize = 4;
 /// The clock the panel is driven at.
 ///
 /// Measured with `src/bin/render.rs`: 10, 20, 40 and 80 MHz all arrive cleanly,
-/// and each one was looked at on the glass. 80 turns 16 frames a second into 69, which makes
+/// and each one was looked at on the screen. 80 turns 16 frames a second into 69, which makes
 /// this the largest single number in the project.
 pub const CLOCK: Rate = Rate::from_mhz(80);
 
@@ -103,12 +103,12 @@ const _: () = assert!(STAGED_BYTES.is_multiple_of(crate::display::ALIGN));
 /// MV set:    px = MX ? W-1-j : j      py = MY ? H-1-i : i
 /// ```
 ///
-/// The glass is fitted upside down, so the viewer's coordinates are the panel's turned by 180
+/// The panel is fitted upside down, so the viewer's coordinates are the panel's turned by 180
 /// -- that is [`PANEL_MOUNT_MADCTL`], and it is the entry for zero here. A picture turned a
 /// quarter clockwise wants the viewer to see `(W-1-j, i)`, which on the panel is `(j, H-1-i)`:
 /// axes exchanged, Y mirrored, X not. Hence `MV|MY`. The other two follow the same way.
 ///
-/// Checked on the glass against the same turns computed pixel by pixel, which it matched.
+/// Checked on the screen against the same turns computed pixel by pixel, which it matched.
 const QUARTER_MADCTL: [u8; 4] = [
     PANEL_MOUNT_MADCTL, // 0 degrees: the mount, uncorrected further
     0xA0,               // 90 degrees clockwise: MV | MY
@@ -154,7 +154,7 @@ pub enum Error {
     Command(&'static str),
 }
 
-/// The pins the glass is wired to, as pins rather than as a board.
+/// The pins the screen is wired to, as pins rather than as a board.
 ///
 /// They are [`AnyPin`] so that this module does not name GPIO numbers: which pin carries the
 /// clock is a property of the board, and the board is described where the peripherals are
@@ -187,7 +187,7 @@ pub struct ScreenPins<'d> {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Path {
     /// `SpiDmaBus` copies every piece into its own DMA buffer first. 14.4 ms a frame, and the
-    /// only path that has ever put a clean picture on the glass out of the firmware.
+    /// only path that has ever put a clean picture on the screen out of the firmware.
     Copied,
     /// The DMA reads the piece out of the external RAM where it lies. 6.6 ms a frame, and
     /// **stripes at 80 MHz, everywhere, because the bus drains faster than the memory fills
@@ -200,10 +200,10 @@ pub enum Path {
     /// Slower than either of the others -- it pays the read out of the external RAM *and* a
     /// write into internal RAM -- and it was never here to be fast. It is the same descriptor
     /// chain, the same borrowed-buffer window and the same transfer as [`Direct`](Self::Direct)
-    /// with only the source moved, so what it shows on the glass says which half of the direct
+    /// with only the source moved, so what it shows on the screen says which half of the direct
     /// path is wrong.
     ///
-    /// **It showed a picture** (at the glass, the whole firmware: cloud, ring, Home,
+    /// **It showed a picture** (at the screen, the whole firmware: cloud, ring, Home,
     /// a settings dialog opened and taken back; 16.1 frames a second against 17 to 18 copying).
     /// That cleared the mechanism, and what was left turned out to be the rate: internal RAM
     /// feeds the bus and the external RAM does not. Kept because it is the shape every further
@@ -234,7 +234,7 @@ pub struct Screen<'d> {
     quarters: usize,
     /// Which way a piece of the picture reaches the bus.
     ///
-    /// **[`Path::Copied`] until the striped glass is understood** -- see
+    /// **[`Path::Copied`] until the striped screen is understood** -- see
     /// [`set_path`](Self::set_path).
     path: Path,
     /// What the controller was last told, so a present that changes nothing writes nothing.
@@ -248,7 +248,7 @@ pub struct Screen<'d> {
 impl Screen<'static> {
     /// Brings up the external RAM, the bus and the panel, and hands back a blank picture.
     ///
-    /// The picture is *not* sent: nothing reaches the glass before the first
+    /// The picture is *not* sent: nothing reaches the screen before the first
     /// [`present`](Self::present), so a caller can draw its first screen without a flash of
     /// whatever the panel powered up with.
     ///
@@ -536,11 +536,11 @@ impl Screen<'_> {
     /// out: 259200 bytes over four lines at 80 MHz leave the bus at 40 MB/s, and the external
     /// RAM is read at about 32. An SPI transfer does not wait for its DMA -- once the
     /// transaction is running the clock runs, and a dry transmit FIFO sends whatever stood in it
-    /// last. That is the thick bands of one colour on the glass, and it is why a nearly black
+    /// last. That is the thick bands of one colour on the screen, and it is why a nearly black
     /// scene hid it for days: a repeated band of black looks like black.
     ///
     /// It was found by holding the path at `Direct` and swapping the *clock* every two seconds:
-    /// clean at 40 MHz, striped at 80 (at the glass). The address had nothing to do with it --
+    /// clean at 40 MHz, striped at 80 (at the screen). The address had nothing to do with it --
     /// the same picture stripes at `0x3c020000` and at the firmware's `0x3c1a0000` -- and
     /// neither did the alignment, the burst size or the cache writeback, all three of which were
     /// tried at 80 MHz where it fails whatever they say.
@@ -554,12 +554,12 @@ impl Screen<'_> {
         self.path = path;
     }
 
-    /// Which pixel of the picture is under a point on the turned glass.
+    /// Which pixel of the picture is under a point on the turned screen.
     ///
     /// The point goes in as the viewer's coordinates -- the frame the picture is drawn in while
     /// it stands upright, which is where [`Contact::in_view`](crate::touch::Contact::in_view)
     /// leaves a finger -- and comes back in the picture's own, whatever the orientation. A quarter
-    /// turn maps the square onto itself, so a point on the glass is always a point of the picture.
+    /// turn maps the square onto itself, so a point on the screen is always a point of the picture.
     pub fn picture_point(&self, x: i32, y: i32) -> (i32, i32) {
         let (right, bottom) = (WIDTH as i32 - 1, HEIGHT as i32 - 1);
         match self.quarters {
@@ -578,7 +578,7 @@ impl Screen<'_> {
         self.quarters
     }
 
-    /// Sends the picture to the glass at the current orientation.
+    /// Sends the picture to the screen at the current orientation.
     ///
     /// It costs **6.6 ms** with the picture standing still and **7.5 ms** after the whole of it has
     /// been redrawn, the difference being the cache written back ahead of the DMA. That is the bus

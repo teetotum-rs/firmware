@@ -8,7 +8,7 @@
 //! leaves the middle of a segment -- never a divider -- pointing wherever a middle pointed before,
 //! so the segment that faces the USB socket keeps facing it at every setting.
 //!
-//! The ring reaches the edge of the glass and is a quarter of its radius thick, 45 of 180 pixels,
+//! The ring reaches the edge of the screen and is a quarter of its radius thick, 45 of 180 pixels,
 //! which leaves a disc 270 pixels across for the dialog. **The ring carries icons and no names**,
 //! and that was measured rather than chosen: a 24-pixel icon
 //! fits in every segment, but an icon with a name in `FONT_6X10` under it fits only in the four
@@ -18,14 +18,14 @@
 //! middle, large, which is where the eye already is.
 //!
 //! **The type is Helvetica, sans-serif, at 14, 18 and 24 pixels** -- the X11 bitmaps U8g2
-//! carries, under Adobe's and DEC's permission notice (see `LICENSE-FONTS`). The glass has
+//! carries, under Adobe's and DEC's permission notice (see `LICENSE-FONTS`). The screen has
 //! 0.127 mm to the pixel, so the 10x20 font that `embedded-graphics` brings is 2.5 mm tall; it
-//! was judged too small on the glass, and it has serifs, which were not wanted.
+//! was judged too small on the screen, and it has serifs, which were not wanted.
 //! A dialog's body is set in the same [`fonts`] through [`text`], so it matches the frame.
 //!
 //! # The rules every menu keeps
 //!
-//! - **About is the top segment**, in the firmware's menu and in every plugin's. On round glass
+//! - **About is the top segment**, in the firmware's menu and in every plugin's. On round screen
 //!   it is also the one mark that says which way up the menu stands, so the orientation setting
 //!   needs no marker of its own. **The home menu is the one exception**: Home stands there, and
 //!   marks the top just the same (see [`Menu::home`]).
@@ -37,8 +37,8 @@
 //! - **OK or Cancel in a dialog goes back to the menu it was opened from.** OK in a menu goes up
 //!   one level, and out of the menus altogether from the top one -- **unless the top one is the
 //!   home menu, which has no OK.** It is left by choosing a screen.
-//! - **A long press on the glass leads home**, from anywhere, the menus included; in an open
-//!   dialog it is Cancel first. That rule belongs to whoever reads the glass, which is the
+//! - **A long press on the screen leads home**, from anywhere, the menus included; in an open
+//!   dialog it is Cancel first. That rule belongs to whoever reads the screen, which is the
 //!   firmware -- see [`Taps::press`](crate::touch::Taps::press) -- so a plugin never sees the
 //!   long press and cannot take it away.
 //! - **Where OK and the long press would do the same, the menu says "hold for home" instead of
@@ -57,7 +57,7 @@
 //! owner's, taken at [`Outcome::Open`].
 //!
 //! Everything here is in picture coordinates, drawn as if upright and turned on the way to the
-//! glass like every other picture. A tap has to be brought into the same frame before it is
+//! screen like every other picture. A tap has to be brought into the same frame before it is
 //! handed in: [`Contact::in_view`](crate::touch::Contact::in_view), then
 //! [`Screen::picture_point`](crate::screen::Screen::picture_point).
 
@@ -85,9 +85,9 @@ pub const FIRMWARE_SLOT: usize = SLOTS - 1;
 /// addresses a segment of a page as one bit of a `u64`, and five pages of twelve are sixty.
 pub const MAX_PAGES: usize = 64 / SLOTS;
 
-/// The ring's outer radius: the edge of the glass.
+/// The ring's outer radius: the edge of the screen.
 pub const OUTER: i32 = WIDTH as i32 / 2;
-/// The ring's inner radius. A quarter of the glass's radius is the ring; the rest is the dialog.
+/// The ring's inner radius. A quarter of the screen's radius is the ring; the rest is the dialog.
 pub const INNER: i32 = OUTER - OUTER / 4;
 
 /// Where a dialog's owner draws its body: between the name above and the buttons below.
@@ -140,7 +140,7 @@ const BUTTON_REACH: Size = Size::new(104, 52);
 ///
 /// **Two families on purpose**: the ring in teal and the icons in amber, so an icon reads as the
 /// thing and the ring as the ground it stands on. Green is left out of both because on this device
-/// green means "a value to be read off the glass", and the menu uses it for exactly that.
+/// green means "a value to be read off the screen", and the menu uses it for exactly that.
 ///
 /// Expected to change, which is why it is a value handed to the drawing rather than constants in
 /// it -- a plugin can bring its own.
@@ -293,7 +293,7 @@ pub mod fonts {
         u8g2_font_helvR18_tr,
     };
 
-    /// An entry's name, and a value to be read off the glass.
+    /// An entry's name, and a value to be read off the screen.
     pub const LARGE: FontRenderer =
         FontRenderer::new::<u8g2_font_helvB24_tr>().with_ignore_unknown_chars(true);
     /// A dialog's running text.
@@ -605,7 +605,7 @@ pub mod icons {
         "........................",
     ]);
 
-    /// A sun, for how bright the glass is: a disc with eight rays, so it cannot be taken for the
+    /// A sun, for how bright the screen is: a disc with eight rays, so it cannot be taken for the
     /// gear, which has its teeth on the rim.
     pub const BRIGHTNESS: Icon = Icon::new(&[
         "........................",
@@ -1049,7 +1049,7 @@ const HOME_ENTRY: Entry = Entry {
 /// Twelve segments, of which About -- or Home -- is always the top one.
 ///
 /// Built in a `const`, so that a menu which breaks a rule -- a second entry in About's slot, or
-/// anything in the one a plugin keeps for the firmware -- fails the build rather than the glass.
+/// anything in the one a plugin keeps for the firmware -- fails the build rather than the screen.
 #[derive(Debug)]
 pub struct Menu {
     /// Shown small above the entry's name, so the user knows which level they are on.
@@ -1204,10 +1204,10 @@ pub enum Outcome {
 
 #[derive(Clone, Copy, Debug)]
 struct Level {
-    /// The menu's first page. What is on the glass is [`page`](Self::page) steps along from it,
+    /// The menu's first page. What is on the screen is [`page`](Self::page) steps along from it,
     /// so that the pages can be counted and walked from wherever the knob stands.
     menu: &'static Menu,
-    /// Which page of it is on the glass.
+    /// Which page of it is on the screen.
     page: usize,
     selected: usize,
     owner: Owner,
@@ -1246,7 +1246,7 @@ impl Level {
         menu.page(page).slots[slot].as_ref()
     }
 
-    /// The entry in segment `slot` of the page on the glass, unless there is none or it is
+    /// The entry in segment `slot` of the page on the screen, unless there is none or it is
     /// hidden.
     fn entry(&self, slot: usize) -> Option<&'static Entry> {
         self.entry_on(self.page, slot)
@@ -1307,7 +1307,7 @@ const TOP_BITS: u64 = {
     bits
 };
 
-/// What the glass says about the long press, in the menus and on every face. One string, so the
+/// What the screen says about the long press, in the menus and on every face. One string, so the
 /// two cannot drift apart.
 pub const HOLD_FOR_HOME: &str = "hold for home";
 
@@ -1325,7 +1325,7 @@ static OK_CANCEL_BUTTONS: [(Button, Point); 2] = [
 /// Where the user is in the menus, and what a turn or a tap means there.
 ///
 /// Small and `Copy`, so a firmware can keep it in the state it redraws from and compare it: the
-/// glass then changes exactly when the user got somewhere.
+/// screen then changes exactly when the user got somewhere.
 #[derive(Clone, Copy, Debug)]
 pub struct Navigator {
     levels: [Option<Level>; DEPTH],
@@ -1415,12 +1415,12 @@ impl Navigator {
             .expect("a navigator always has its top menu")
     }
 
-    /// The menu on the glass.
+    /// The menu on the screen.
     pub fn menu(&self) -> &'static Menu {
         self.level().menu
     }
 
-    /// Whose menu is on the glass, and so whose ids [`selected`](Self::selected) names.
+    /// Whose menu is on the screen, and so whose ids [`selected`](Self::selected) names.
     pub fn owner(&self) -> Owner {
         self.level().owner
     }
@@ -1494,8 +1494,8 @@ impl Navigator {
     ///
     /// In a menu, **a tap on a segment selects it and a tap on the selected one opens it**; the
     /// middle opens what the knob is on, and the buttons do what they say. **A finger on or past
-    /// the rim counts as the ring**: on round glass the edge is where a finger aiming at the ring
-    /// lands. While a dialog is open the ring does
+    /// the rim counts as the ring**: on a round screen the edge is where a finger aiming at the
+    /// ring lands. While a dialog is open the ring does
     /// nothing -- the way out of a dialog is its buttons, so that Cancel means something.
     pub fn tap(&mut self, point: Point) -> Outcome {
         let (dx, dy) = half_pixels(point);
@@ -1595,13 +1595,13 @@ impl Navigator {
         }
     }
 
-    /// Whether the menu on the glass lies one level below home, so that its OK would do exactly
+    /// Whether the menu on the screen lies one level below home, so that its OK would do exactly
     /// what the long press does. There the hint stands instead of OK.
     fn up_is_home(&self) -> bool {
         self.open.is_none() && self.depth == 2 && self.levels[0].is_some_and(|top| top.menu.home)
     }
 
-    /// The buttons on the glass right now, and where their middles are from the centre.
+    /// The buttons on the screen right now, and where their middles are from the centre.
     fn buttons(&self) -> &'static [(Button, Point)] {
         match self.open {
             None if self.level().menu.home || self.up_is_home() => &NO_BUTTONS,
@@ -1723,7 +1723,7 @@ impl Navigator {
                                 )?;
                             }
                             // A line that will not fit drops to the small face rather than
-                            // losing its end: half a URL is worth nothing on the glass.
+                            // losing its end: half a URL is worth nothing on the screen.
                             None => fitted(
                                 target,
                                 state,
@@ -1794,9 +1794,9 @@ impl Navigator {
     }
 }
 
-/// A point as half pixels from the centre of the glass.
+/// A point as half pixels from the centre of the screen.
 ///
-/// The glass has an even number of pixels, so its centre lies between two of them, at 179.5.
+/// The screen has an even number of pixels, so its centre lies between two of them, at 179.5.
 /// Counting in half pixels puts it on a whole number, and the twelve segments come out mirror
 /// images of each other instead of one pixel off on one side.
 fn half_pixels(point: Point) -> (i32, i32) {
@@ -1844,7 +1844,7 @@ const BEVEL: i32 = 4;
 const BEVEL_STRENGTH: i32 = 104;
 
 /// How much a segment is shaded at one of its pixels, lit from the top left like a key standing a
-/// little proud of the glass: the `amount` for [`shade`], 0 away from the edges.
+/// little proud of the screen: the `amount` for [`shade`], 0 away from the edges.
 ///
 /// Within [`BEVEL`] of an edge, a pixel is lightened if that edge faces the light and darkened if
 /// it faces away, the more the closer it is. **Only the nearest edge counts**, so the corners need
@@ -2014,10 +2014,10 @@ const DOT: u32 = 7;
 const DOT_PITCH: i32 = 15;
 /// How far above the centre the row of dots sits: inside the ring, under the top segment.
 const DOTS_ABOVE: i32 = INNER - 16;
-/// How far down towards black a page that is not on the glass has its dot.
+/// How far down towards black a page that is not on the screen has its dot.
 const DOT_DIM: i32 = 120;
 
-/// The row of dots under the top segment: one per page, the page on the glass lit.
+/// The row of dots under the top segment: one per page, the page on the screen lit.
 ///
 /// **Dots rather than "1/2"**: the count is read at a glance, it needs no
 /// font, and it can stand under About or Home because those are on every page -- the anchor the
@@ -2066,7 +2066,7 @@ where
 ///
 /// `dy` is the row's distance from the centre, in half pixels too. A pixel is nearer than
 /// `radius` when `dx² + dy² < (2 radius)²`, the test [`draw_segments`] makes pixel by pixel, and
-/// `dx` is odd because the glass has an even number of pixels.
+/// `dx` is odd because the screen has an even number of pixels.
 const fn reach(dy: i32, radius: i32) -> i32 {
     let room = 4 * radius * radius - dy * dy;
     if room < 2 {

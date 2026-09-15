@@ -1,4 +1,4 @@
-# The SDK: the glass, the knob, the haptics, the card, the other chip and the
+# The SDK: the screen, the knob, the haptics, the card, the other chip and the
 # settings ring, and nothing that knows about Wi-Fi, Bluetooth or the firmware's
 # own screens. Whoever builds a firmware for this board writes `teetotum = "0.1"`.
 # A face -- a plugin -- is not written against this crate: it runs in

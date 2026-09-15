@@ -6,7 +6,7 @@
 //! comes ([`crate::slots`]), checks length and hash at the commit, writes the header and
 //! restarts; the install dialog at boot checks the signature and asks the user.
 //!
-//! Writes are taken only while the receive dialog is open on the glass.
+//! Writes are taken only while the receive dialog is open on the screen.
 
 use crate::slots::{HEADER, Header};
 
@@ -107,7 +107,7 @@ impl Status {
         }
     }
 
-    /// What went wrong, short enough for the glass; empty for a status that is no failure.
+    /// What went wrong, short enough for the screen; empty for a status that is no failure.
     pub fn reason(self) -> &'static str {
         match self {
             Self::Idle | Self::Ready | Self::Written => "",

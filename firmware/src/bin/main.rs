@@ -111,7 +111,7 @@ const BLE_SCAN_INTERVAL: Duration = Duration::from_secs(25);
 /// Upper bound on the advertisers remembered per window, to cap the allocation.
 const BLE_MAX_DEVICES: usize = 40;
 
-/// While a face that listens is on the glass -- one with `Rights::RADIO`, see
+/// While a face that listens is on the screen -- one with `Rights::RADIO`, see
 /// `teetotum_firmware::nearby` -- the two loops come round as fast as they go: a Wi-Fi scan
 /// follows the last after this pause, which with the dwell times above makes a round every few
 /// seconds...
@@ -180,10 +180,10 @@ const UPLOAD_RESTART: Duration = Duration::from_millis(500);
 /// while it was low, so the period was the difference between counting a fast turn and losing
 /// half of it. Since the edge is latched by the GPIO interrupt (`teetotum::encoder`), a pass
 /// that comes late collects everything that happened while it was away, and what is left here
-/// is how quickly a turn or a finger shows up on the glass.
+/// is how quickly a turn or a finger shows up on the screen.
 const INPUT_PERIOD: Duration = Duration::from_millis(10);
 
-/// How often the glass is asked for a finger.
+/// How often the screen is asked for a finger.
 ///
 /// The controller names a slide **while the finger is still down** rather than on release, so a
 /// slow poll does not merely delay a gesture, it drops it.
@@ -231,14 +231,14 @@ const KNOB_VOLUME_AT_CHIP: bool = true;
 
 /// Which way a piece of the picture reaches the bus.
 ///
-/// [`Path::Copied`] is what has ever put a picture on this glass out of the firmware, and it
+/// [`Path::Copied`] is what has ever put a picture on this screen out of the firmware, and it
 /// stays: [`Path::Direct`] is faster (6.6 ms a frame instead of 14.4, see `src/bin/psramdma.rs`)
 /// but streaks at 80 MHz, because the SPI bus outruns what the external RAM can read.
 /// [`Path::Staged`] is the slowest of the three and not a candidate. See
 /// [`Screen::set_path`](teetotum::screen::Screen::set_path).
 const SCREEN_PATH: Path = Path::Copied;
 
-/// How long the very first picture stays on the glass before the loop is allowed to draw again.
+/// How long the very first picture stays on the screen before the loop is allowed to draw again.
 ///
 /// A picture wrong from the *first* present points at something static -- the frame's address,
 /// the mapping, the bring-up -- rather than at other traffic. The loop redraws far too quickly
@@ -254,7 +254,7 @@ const FIRST_FRAME_HOLD: Option<Duration> = None;
 /// pay it. 0 outside such a debugging run.
 const EXTERNAL_PROBES: usize = 0;
 
-/// The click under one detent of the knob, and the one under a tap on the glass.
+/// The click under one detent of the knob, and the one under a tap on the screen.
 ///
 /// Numbers into the DRV2605L's ROM library: 24 is listed as "Sharp Tick 1" and 1 as "Strong
 /// Click". The names are the datasheet's; which one belongs under which gesture was decided at
@@ -324,7 +324,7 @@ const DRIVE: [(u8, u8); 9] = [
 /// four-byte header the demo's files carry. That is the whole of the format check: the pixels
 /// are already in the panel's order, so a background is a read into memory and not a decode.
 const BACKGROUND_FOLDER: &str = "/CLOCKBG";
-/// How many backgrounds the glass will swipe through.
+/// How many backgrounds the screen will swipe through.
 const MAX_BACKGROUNDS: usize = 12;
 /// Whether the card's photographs are laid behind the status screen at all.
 ///
@@ -337,7 +337,7 @@ const MAX_BACKGROUNDS: usize = 12;
 const CARD_BACKGROUNDS: bool = false;
 
 /// The firmware's settings as the ring shows them: About at twelve o'clock, then clockwise the
-/// picture's orientation, the colour theme, the brightness of the glass, the strength of the clicks,
+/// picture's orientation, the colour theme, the screen's brightness, the strength of the clicks,
 /// whether the background moves and the bundled plugins,
 /// the rest free for what comes next. When the card's backgrounds come back (see [`CARD_BACKGROUNDS`]) they come back as an
 /// entry here, because a list to choose from is what settings are for.
@@ -348,7 +348,7 @@ const CARD_BACKGROUNDS: bool = false;
 /// inside every plugin, and a swipe is exactly what a plugin's own screen is likely to want for
 /// itself.
 ///
-/// The orientation is not a constant -- the knob turns it a quarter at a time, the glass turns
+/// The orientation is not a constant -- the knob turns it a quarter at a time, the screen turns
 /// with it, and the `nvs` partition keeps it.
 ///
 /// **A `const`, not the menu itself.** The plugin's entry is known only once its manifest has been
@@ -541,7 +541,7 @@ fn qr_index(id: Id) -> Option<usize> {
         .filter(|&n| n < LINKS.len())
 }
 
-/// Whether the menu on the glass is home itself, with nothing open over it.
+/// Whether the menu on the screen is home itself, with nothing open over it.
 fn at_home(nav: &Navigator) -> bool {
     nav.depth() == 1 && nav.menu().is_home() && nav.opened().is_none()
 }
@@ -552,7 +552,7 @@ const HOME_TITLE: &str = "TeeToTum";
 /// Where the first bundled plugin's settings stand in the ring, right after the firmware's own;
 /// the others follow clockwise.
 ///
-/// **A plugin's settings do not start it.** Which face is on the glass is chosen at home, and
+/// **A plugin's settings do not start it.** Which face is on the screen is chosen at home, and
 /// the Face setting that once chose it here is gone.
 const PLUGIN_SLOT: usize = 6;
 
@@ -568,7 +568,7 @@ const HOME_PLAYER_SLOT: usize = 10;
 /// between it and About read as a gap.
 const SETTINGS_PLAYER_SLOT: usize = FIRMWARE_SLOT;
 
-/// What the glass shows while the menus are not up.
+/// What the screen shows when no menu is up.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 enum Face {
     /// The player, the firmware's own.
@@ -1001,9 +1001,9 @@ const RUN_STEP: i32 = 4;
 const RUN_HOLD: i32 = 15;
 
 /// The one run of the player's long lines, after each change of track and each time the player
-/// comes back on the glass.
+/// comes back on the screen.
 ///
-/// **Time counts only while the player is on the glass and the loop gets round.** A pass that a
+/// **Time counts only while the player is on the screen and the loop gets round.** A pass that a
 /// cover transfer or a decode held up counts one period at most, so the run waits for the
 /// picture instead of jumping ahead of it.
 #[derive(Default)]
@@ -1053,11 +1053,11 @@ mod overview {
     /// What the status screen knows, gathered from all five sources.
     ///
     /// Kept apart from the drawing so that redrawing is a pure function of it: the picture is only
-    /// sent to the glass when one of these fields actually moved.
+    /// sent to the screen when one of these fields actually moved.
     #[derive(Clone, Default, PartialEq, Eq)]
     pub(super) struct Overview {
         /// Where the user is in the menus while they are up -- home after boot -- and `None` while a
-        /// face is on the glass.
+        /// face is on the screen.
         pub(super) menu: Option<Navigator>,
         /// Seconds since boot.
         pub(super) uptime: u32,
@@ -1071,7 +1071,7 @@ mod overview {
         pub(super) orientation: usize,
         /// Which colours the settings are drawn in.
         pub(super) theme: Theme,
-        /// How bright the glass is.
+        /// How bright the screen is.
         pub(super) brightness: Brightness,
         /// How hard the motor clicks.
         pub(super) haptics: Haptics,
@@ -1095,12 +1095,12 @@ mod overview {
         /// How far the long lines stand shifted while their one run lasts, from [`Run::offset`].
         pub(super) run: Option<i32>,
         /// Which frame of the moving cloud is up, counted in [`CLOUD_FRAME`]s since boot, or 0
-        /// while it stands still or is not on the glass. A new frame is a change like any other,
+        /// while it stands still or is not on the screen. A new frame is a change like any other,
         /// so it is what makes the moving cloud redraw.
         pub(super) cloud: u32,
         /// The picture currently laid behind the text, if there is one.
         pub(super) backdrop: Option<Backdrop>,
-        /// What the glass shows while the menus are not up. [`Face::Plugin`] only while that plugin
+        /// What the screen shows when no menu is up. [`Face::Plugin`] only while that plugin
         /// is installed; if loading it was refused, its face says why.
         pub(super) face: Face,
         /// The plugins as the settings show them, each `None` if its manifest could not be read,
@@ -1167,7 +1167,7 @@ struct Offer {
     update: bool,
     name: &'static str,
     version: Version,
-    /// The first bytes of the author's key, which tell two authors apart on the glass.
+    /// The first bytes of the author's key, which tell two authors apart on the screen.
     key: [u8; 8],
     /// Whether a bundled plugin is signed with the same key.
     known: bool,
@@ -1434,7 +1434,7 @@ fn accept_slot(
 /// card, a track change puts up the cover of what is playing; both are the same 253 KiB of
 /// external RAM (see [`Screen::stash`]), so keeping both would cost a third screen and the
 /// choice between them would still have to be made somewhere. Which one is up is named on the
-/// status screen, because from the glass a photograph and an album sleeve look alike.
+/// status screen, because from the screen a photograph and an album sleeve look alike.
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Backdrop {
     /// A full-screen background read off the card, by file name.
@@ -1569,7 +1569,7 @@ fn local_name(data: &[u8]) -> Option<String> {
     })
 }
 
-/// Waits `slow`, or only `fast` while a face that listens is on the glass -- and notices such a
+/// Waits `slow`, or only `fast` while a face that listens is on the screen -- and notices such a
 /// face coming up within [`NEARBY_POLL`].
 async fn pause(slow: Duration, fast: Duration) {
     let began = Instant::now();
@@ -1664,7 +1664,7 @@ async fn main(spawner: Spawner) -> ! {
 
     let delay = Delay::new();
 
-    // The glass, in one call: external RAM, the QSPI bus at the 80 MHz the panel was measured
+    // The screen, in one call: external RAM, the QSPI bus at the 80 MHz the panel was measured
     // to take, the vendor initialisation sequence, and a blank 360x360 picture to draw into.
     // Which pin carries what is board knowledge and stays here; everything after this line is
     // about pictures. See `src/screen.rs`.
@@ -1698,7 +1698,7 @@ async fn main(spawner: Spawner) -> ! {
     // brightness -- see the main loop. **Nothing before it is lit**: there is no boot screen,
     // and after a reset the panel still holds the last picture of the run before, which must
     // not show either. A configuration the controller
-    // refuses is refused on every boot, so the dark glass that follows shows at the first flash
+    // refuses is refused on every boot, so the dark screen that follows shows at the first flash
     // and not in someone's hand.
     let backlight = match Backlight::new(peripherals.LEDC, peripherals.GPIO47) {
         Ok(backlight) => Some(backlight),
@@ -1722,7 +1722,7 @@ async fn main(spawner: Spawner) -> ! {
     .with_sda(peripherals.GPIO11)
     .with_scl(peripherals.GPIO12);
 
-    // The glass. GPIO10 is not wired as a reset -- the controller answers without a pulse --
+    // The screen. GPIO10 is not wired as a reset -- the controller answers without a pulse --
     // and the interrupt line pulses too briefly to sample, so the driver polls instead.
     let mut touch = Touch::new(
         Output::new(peripherals.GPIO10, Level::High, OutputConfig::default()),
@@ -1883,7 +1883,7 @@ async fn main(spawner: Spawner) -> ! {
         Haptics::MAX.step()
     );
 
-    // The knob. GPIO8 is the clockwise direction, measured against a mark on the glass rather
+    // The knob. GPIO8 is the clockwise direction, measured against a mark on the screen rather
     // than taken from the schematic. How many pulses make a revolution is still open: 30 when
     // polled, 37 to 41 with interrupts depending on the speed; the menu assumes 40.
     let pull_up = InputConfig::default().with_pull(Pull::Up);
@@ -2406,7 +2406,7 @@ async fn main(spawner: Spawner) -> ! {
         esp_alloc::HEAP.free()
     );
 
-    // The device itself: the knob, the glass, the motor and the other chip, polled from one
+    // The device itself: the knob, the screen, the motor and the other chip, polled from one
     // place. It borrows peripherals from this frame, which is why it is a future joined here
     // rather than a spawned task -- the same reason the two BLE loops are.
     let device = async {
@@ -2445,13 +2445,13 @@ async fn main(spawner: Spawner) -> ! {
         // The upload under way over BLE, and when the knob restarts after one was written.
         let mut upload: Option<Upload> = None;
         let mut restart_at: Option<Instant> = None;
-        // What the glass is currently showing. The picture is sent only when the gathered
+        // What the screen is currently showing. The picture is sent only when the gathered
         // state differs from it, which makes the redraw rate a consequence of what changed
         // rather than a timer: `uptime` moves once a second and everything else on demand.
         let mut shown: Option<Overview> = None;
         let mut cloud_meter = CloudMeter::new();
         // The long lines' one run; see [`Run`]. `player_up` is whether the player was on the
-        // glass in the last pass, `run_pass` when that pass was.
+        // screen in the last pass, `run_pass` when that pass was.
         let mut title_run = Run::default();
         let mut player_up = false;
         let mut run_pass = Instant::now();
@@ -2463,7 +2463,7 @@ async fn main(spawner: Spawner) -> ! {
             ARTIST_LINE.room().1
         );
         // Whether the backlight is on yet. It comes on with the first picture that reached the
-        // panel, so that home is the first thing on the glass.
+        // panel, so that home is the first thing on the screen.
         let mut lit = false;
         // Whether the backlight stands at full for a QR code rather than at the stored level.
         let mut qr_lit = false;
@@ -2503,7 +2503,7 @@ async fn main(spawner: Spawner) -> ! {
         let mut wanted_state = companion_state(&state);
         // What the settings were when the open dialog opened, for its Cancel to go back to.
         let mut before = settings;
-        // The round of the radio the face on the glass was last handed, while one that listens
+        // The round of the radio the face on the screen was last handed, while one that listens
         // is shown; `None` otherwise, so that it is handed the latest as soon as it comes up.
         let mut handed_round: Option<u32> = None;
         // The same for whether a phone is connected over BLE HID, told to a face that may send.
@@ -2522,9 +2522,9 @@ async fn main(spawner: Spawner) -> ! {
             }
 
             // A screenshot on `s` in the monitor. The README's renders put something on the
-            // glass, and the honest something is what the firmware actually drew -- so the
+            // screen, and the honest something is what the firmware actually drew -- so the
             // framebuffer goes down the log's own wire rather than being drawn a second time
-            // in another language. Whatever is on the glass when the key arrives is what comes
+            // in another language. Whatever is on the screen when the key arrives is what comes
             // out, so every screen is reachable: home, the player with a cover, any face.
             if let Some(keys) = keys.as_mut()
                 && let Ok(key) = keys.read_byte()
@@ -2652,7 +2652,7 @@ async fn main(spawner: Spawner) -> ! {
             // **A transfer owns the pass it is in.** A redrawn screen is 14 ms and the receive
             // FIFO is 1.4, so drawing on the way to an answer eats the answer -- 34 packets
             // offered and none arriving is what that looked like. A whole cover is under half a
-            // second, so the glass holds still for it; yielding rather than spinning keeps the
+            // second, so the screen holds still for it; yielding rather than spinning keeps the
             // two Bluetooth futures alive meanwhile.
             if cover.as_ref().is_some_and(Cover::busy) {
                 yield_now().await;
@@ -2664,7 +2664,7 @@ async fn main(spawner: Spawner) -> ! {
             // every frame after this one is a 21 ms copy instead.
             //
             // Decoding holds [`cover::DECODE_HEAP`] of internal heap for a moment, and the plugin
-            // that ran last may leave less. It gives way then, unless its face is on the glass:
+            // that ran last may leave less. It gives way then, unless its face is on the screen:
             // the cover waits until the face is left.
             let face_running = shown_index(state.face)
                 .is_some_and(|n| running.as_ref().is_some_and(|(m, _)| *m == n));
@@ -2718,7 +2718,7 @@ async fn main(spawner: Spawner) -> ! {
                 let mut felt = true;
                 if let Some(menu) = state.menu.as_mut() {
                     // In the settings the knob belongs to the menu: it walks the ring, or it
-                    // turns whatever the open dialog sets. For the orientation that is the glass
+                    // turns whatever the open dialog sets. For the orientation that is the screen
                     // itself, and About at the top of the ring is the mark that shows it.
                     // Clockwise, the way the panel controller turns the picture.
                     match menu.turn(detents) {
@@ -2746,7 +2746,7 @@ async fn main(spawner: Spawner) -> ! {
                             settings.theme = settings.theme.turned(detents);
                             state.theme = settings.theme;
                         }
-                        // And the brightness is the glass itself again, like the orientation.
+                        // And the brightness is the screen itself again, like the orientation.
                         Outcome::Adjust {
                             id: SETTING_BRIGHTNESS,
                             owner: Owner::Firmware,
@@ -2861,7 +2861,7 @@ async fn main(spawner: Spawner) -> ! {
                 } else if KNOB_VOLUME_AT_CHIP {
                     // The detent is the other chip's to act on and ours only to watch. Ask it
                     // where the volume ended up once the hand comes to rest -- this side has
-                    // no other way to know, and the glass is showing that number.
+                    // no other way to know, and the screen is showing that number.
                     if !volume_settling {
                         volume_before = state.volume;
                     }
@@ -2917,7 +2917,7 @@ async fn main(spawner: Spawner) -> ! {
                 }
             }
 
-            // The glass.
+            // The screen.
             if Instant::now() >= next_touch {
                 next_touch = Instant::now() + TOUCH_PERIOD;
                 match touch.read(&mut i2c) {
@@ -2948,7 +2948,7 @@ async fn main(spawner: Spawner) -> ! {
                                     true,
                                 ));
                             }
-                            // **A long press goes home, whatever is on the glass.** It is
+                            // **A long press goes home, whatever is on the screen.** It is
                             // answered here, before any screen sees the finger, so that no
                             // screen -- and no plugin -- can take it away.
                             // From inside the menus too, since the settings one level below home
@@ -3152,7 +3152,7 @@ async fn main(spawner: Spawner) -> ! {
                                     }
                                 }
                             }
-                            // A face's glass is the face's: the tap goes to it, not to the player.
+                            // A face's screen is the face's: the tap goes to it, not to the player.
                             Some(Press::Tap(_)) if state.face != Face::Player => {
                                 click_ends = Some(click(
                                     &mut haptic,
@@ -3179,7 +3179,7 @@ async fn main(spawner: Spawner) -> ! {
                                 info!("Touch: a tap -- asking the other chip to toggle playback");
                             }
                             // And so is every wipe, in the picture's directions: which way the
-                            // glass stands is the firmware's business, not the face's.
+                            // screen stands is the firmware's business, not the face's.
                             Some(Press::Gesture(gesture))
                                 if state.menu.is_none() && state.face != Face::Player =>
                             {
@@ -3214,7 +3214,7 @@ async fn main(spawner: Spawner) -> ! {
                                 let quarters = screen.as_ref().map_or(0, Screen::picture_quarter);
                                 match gesture.in_picture_mount().in_picture(quarters) {
                                     // **Left is the previous track**, the way a timeline reads
-                                    // rather than the way a carousel does; judged at the glass
+                                    // rather than the way a carousel does; judged at the screen
                                     // with the USB socket pointing away.
                                     //
                                     // `A3 03` and not `A3 04`: the key that works is the one that
@@ -3256,11 +3256,11 @@ async fn main(spawner: Spawner) -> ! {
                             }
                         }
                     }
-                    Err(err) => warn!("Touch: the glass did not answer: {err:?}"),
+                    Err(err) => warn!("Touch: the screen did not answer: {err:?}"),
                 }
             }
 
-            // A face that listens to the radio: the loops speed up while it is on the glass, and
+            // A face that listens to the radio: the loops speed up while it is on the screen, and
             // it is handed every round as it comes in.
             let listening = state.menu.is_none()
                 && shown_view(&state).is_some_and(|view| view.rights.contains(Rights::RADIO));
@@ -3299,7 +3299,7 @@ async fn main(spawner: Spawner) -> ! {
             }
 
             // A face's pulse: the firmware keeps the time, since a face has none, and only while
-            // the face is on the glass. The interval is the face's latest, so a pulse that
+            // the face is on the screen. The interval is the face's latest, so a pulse that
             // speeds up does so from the last click and not from where the old interval ended.
             let pulse = match state.menu {
                 None => shown_plugin(&mut running, state.face).and_then(|face| face.pulse()),
@@ -3535,7 +3535,7 @@ async fn main(spawner: Spawner) -> ! {
 /// Logs what a cover transfer just did, and notes when one is ready to be decoded.
 ///
 /// A transfer says more than a firmware needs to show -- packet by packet it is a log line and
-/// nothing else. Only the end of it changes what is on the glass, and that is the flag.
+/// nothing else. Only the end of it changes what is on the screen, and that is the flag.
 fn report(step: CoverStep, waiting: &mut bool) {
     match step {
         CoverStep::Offered { id, packets } => {
@@ -3733,7 +3733,7 @@ fn load_background(volume: &mut Volume<'_>, screen: &mut Screen<'_>, name: &str)
 /// **One plugin runs at a time.** Loading every installed plugin at boot left the two bundled
 /// ones with only 30 768 bytes of the internal heap: the home
 /// menu has nine places for faces, the heap had room for one or two more. Only the face on the
-/// glass needs its plugin, so that is the one loaded. The price is a load whenever another face
+/// screen needs its plugin, so that is the one loaded. The price is a load whenever another face
 /// is started, 15 to 44 ms so far, and a plugin that begins afresh after another has run.
 ///
 /// **The one that ran last stays loaded** until another plugin is started or it is removed:
@@ -3815,7 +3815,7 @@ fn stop_plugin(
 }
 
 /// Loads a plugin into the page, if the page is free, and says what that cost:
-/// microseconds, and bytes of internal heap -- or why it was refused, in words for the glass.
+/// microseconds, and bytes of internal heap -- or why it was refused, in words for the screen.
 #[expect(
     clippy::large_stack_frames,
     reason = "a `Plugin` is 968 bytes and moves by value, and boxing it would spend internal heap, which runs out first; the main stack has room, see the note at the top"
@@ -3864,7 +3864,7 @@ fn shown_index(face: Face) -> Option<usize> {
     }
 }
 
-/// The plugin whose face is on the glass, if one is and it is the one running.
+/// The plugin whose face is on the screen, if one is and it is the one running.
 fn shown_plugin(running: &mut Option<(usize, Plugin)>, face: Face) -> Option<&mut Plugin> {
     let n = shown_index(face)?;
     match running {
@@ -3873,7 +3873,7 @@ fn shown_plugin(running: &mut Option<(usize, Plugin)>, face: Face) -> Option<&mu
     }
 }
 
-/// What the settings know about the plugin whose face is on the glass, if one is.
+/// What the settings know about the plugin whose face is on the screen, if one is.
 fn shown_view(state: &Overview) -> Option<&PluginView> {
     state.plugins.get(shown_index(state.face)?)?.as_ref()
 }
@@ -3907,7 +3907,7 @@ fn deliver(
     if reply.redraw {
         state.plugin_frame = state.plugin_frame.wrapping_add(1);
     }
-    // The face on the glass is the one events go to, so it is the one to report on.
+    // The face on the screen is the one events go to, so it is the one to report on.
     if let Some(view) = shown_index(state.face).and_then(|n| state.plugins[n].as_mut()) {
         view.fault = plugin.fault().map(String::from);
     }
@@ -4054,7 +4054,7 @@ const CLOUD_REPORT: Duration = Duration::from_secs(10);
 ///
 /// `clean` says the frame before was a menu too. If it was not, whatever it left outside the
 /// ring -- a cover, a face -- is cleared once with the rest: the ring stops at the pixel centres
-/// 180 px out, and the edge of the glass shows a little past them (the user saw a cover there).
+/// 180 px out, and the edge of the screen shows a little past them (the user saw a cover there).
 fn cloud_ground(frame: &mut Framebuffer, state: &Overview, ring: bool, clean: bool) -> Duration {
     let started = Instant::now();
     let reach = match ring {
@@ -4083,7 +4083,7 @@ fn cloud_ground(frame: &mut Framebuffer, state: &Overview, ring: bool, clean: bo
 fn clear_disc(frame: &mut Framebuffer, radius: i32) {
     let centre = WIDTH as i32 / 2;
     for y in centre - radius - 1..centre + radius + 1 {
-        // In half pixels, from the middle of the row to the middle of the glass.
+        // In half pixels, from the middle of the row to the middle of the screen.
         let dy = 2 * y + 1 - 2 * centre;
         let half = (4 * radius * radius - dy * dy).max(0).isqrt() / 2 + 1;
         let row = Rectangle::new(Point::new(centre - half, y), Size::new(2 * half as u32, 1));
@@ -4158,7 +4158,7 @@ impl CloudMeter {
 /// The cover, once the other chip has sent one, is the ground; title
 /// and artist stand on a dimmed band below the middle, so the top of the cover stays whole; and
 /// the volume runs round the rim as an arc in the theme's colours -- the ring's language, and the
-/// one shape round glass gives away for free. What this screen used to list moved into About.
+/// one shape a round screen gives away for free. What this screen used to list moved into About.
 ///
 /// The picture is drawn upright and turned on its way to the panel, so nothing in here has to
 /// know which way the knob has left it standing.
@@ -4189,7 +4189,7 @@ fn status_screen(frame: &mut Framebuffer, state: &Overview, over_picture: bool) 
     }
 
     // The band, from the top of the first line to the foot of the last. Full width on purpose:
-    // the glass is round, so a band leaves its edges off the picture where a box would put two
+    // the screen is round, so a band leaves its edges off the picture where a box would put two
     // more corners into it. The margins are half the largest line and a little.
     if over_picture {
         let (first, last) = match playing {
@@ -4207,13 +4207,13 @@ fn status_screen(frame: &mut Framebuffer, state: &Overview, over_picture: bool) 
 
     // The volume, 0-127, like the scale of a knob: 270 degrees from lower left over the top to
     // lower right, with the gap at the bottom where the hint stands. Angles in embedded-graphics
-    // start at three o'clock and run clockwise on the glass. The track is drawn even before the
+    // start at three o'clock and run clockwise on the screen. The track is drawn even before the
     // other chip has named a volume, so the face does not change shape when it does.
     const START: f32 = 135.0;
     const SWEEP: f32 = 270.0;
-    // Out to the rim of the glass, as the menu ring is: 8 px wide round a circle of 352, so its
-    // outer edge is the glass's own. **Placed by its corner, not its centre**: `with_center`
-    // puts the middle of an even diameter half a pixel below and right of the glass's, which
+    // Out to the rim of the screen, as the menu ring is: 8 px wide round a circle of 352, so its
+    // outer edge is the screen's own. **Placed by its corner, not its centre**: `with_center`
+    // puts the middle of an even diameter half a pixel below and right of the screen's, which
     // sits between pixels 179 and 180 -- off by half a pixel, a full-screen cover showed past
     // the arc at the top left.
     const CORNER: i32 = (WIDTH as i32 - 352) / 2;
@@ -4303,7 +4303,7 @@ const REPO: &str = "look at github.com:\nteetotum-rs/firmware";
 /// whichever dialog is open.
 ///
 /// **The orientation needs no mark of its own any more.** Until the ring, a green dot at twelve
-/// o'clock was what made 180 degrees distinguishable from 0 on round glass. About is the top
+/// o'clock was what made 180 degrees distinguishable from 0 on a round screen. About is the top
 /// segment of every menu and turns with the picture, so it is that mark now.
 #[expect(
     clippy::large_stack_frames,
@@ -4369,7 +4369,7 @@ fn settings_screen(
 
     let centre = BODY.center();
     // Green and large, like every other value on this device that is there to be read off the
-    // glass rather than merely displayed.
+    // screen rather than merely displayed.
     let (heading, reading, detail, quiet) = (
         (&fonts::BODY, palette.name),
         (&fonts::LARGE, palette.value),
@@ -4413,7 +4413,7 @@ fn settings_screen(
         Some((SETTING_PLAYER_ABOUT, Owner::Firmware)) => {
             let backdrop = match state.backdrop.as_ref() {
                 Some(Backdrop::Card(name)) => format!("card  {name}"),
-                // The picture's own size, whichever way it stands on the glass.
+                // The picture's own size, whichever way it stands on the screen.
                 Some(Backdrop::Cover { width, height }) => format!("cover  {width}x{height}"),
                 None => String::from("no cover"),
             };

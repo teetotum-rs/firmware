@@ -113,7 +113,7 @@ pub enum QueueKey {
     /// Lowers it by 5, floored at 0, behind the same guard.
     VolumeDown = 2,
     /// AVRCP `0x4B`, forward. No guard, and **measured working**: a swipe on
-    /// the glass changed the track on the phone, and the other chip announced the new title as
+    /// the screen changed the track on the phone, and the other chip announced the new title as
     /// a `BD 06` of its own accord.
     Next = 3,
     /// AVRCP `0x4C`, backward. No guard, measured the same way and in the same run.

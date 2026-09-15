@@ -44,7 +44,7 @@ pub fn draw(frame: &mut Framebuffer, n: usize) {
     let centre = Point::new(width_px / 2, height_px / 2);
 
     // A row at a time, because `fill_solid` is word-wide and a circle primitive goes pixel by
-    // pixel. In half pixels, since the glass's centre lies between two.
+    // pixel. In half pixels, since the screen's centre lies between two.
     for y in 0..height_px {
         let dy = 2 * y + 1 - height_px;
         let r = 2 * DISC;
