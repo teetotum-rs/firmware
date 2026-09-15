@@ -7,6 +7,7 @@
 use embedded_graphics::pixelcolor::Rgb565;
 use embedded_graphics::prelude::*;
 use embedded_graphics::primitives::Rectangle;
+use qrcodegen_no_heap::{QrCode, QrCodeEcc, Version};
 use teetotum::framebuffer::{Framebuffer, HEIGHT, WIDTH};
 use teetotum::menu::{INNER, fonts, text, width};
 
@@ -36,10 +37,92 @@ const QUIET: i32 = 2;
 const LINE: i32 = 16;
 const MARGIN: i32 = 6;
 
-/// Draws link `n`'s code over the disc, as large as whole pixels a module allow, with its base
-/// URL below and its caption above where that fits.
+/// Draws link `n`'s code over the disc, with its base URL below and its caption above.
 pub fn draw(frame: &mut Framebuffer, n: usize) {
     let (code, link) = (&CODES[n], &LINKS[n]);
+    draw_modules(
+        frame,
+        i32::from(code.size),
+        |x, y| code.dark(x, y),
+        link.host,
+        Above::WhereItFits(link.caption),
+    );
+}
+
+/// The largest version [`encode`] makes: 41 modules a side, some 150 characters at level Medium.
+const ENCODED_VERSION: Version = Version::new(6);
+const ENCODED_BYTES: usize = ENCODED_VERSION.buffer_len();
+
+/// A code made on the device, for text that is only known at run time.
+pub struct Encoded {
+    size: u8,
+    modules: [u8; ENCODED_BYTES],
+}
+
+impl Encoded {
+    fn dark(&self, x: usize, y: usize) -> bool {
+        let i = y * self.size as usize + x;
+        self.modules[i / 8] & (0x80 >> (i % 8)) != 0
+    }
+
+    /// Draws the code like a link's, with `below` under it and `above` over it. Unlike a link's
+    /// caption, `above` always stands: the code shrinks until it fits.
+    pub fn draw(&self, frame: &mut Framebuffer, below: &str, above: &str) {
+        draw_modules(
+            frame,
+            i32::from(self.size),
+            |x, y| self.dark(x, y),
+            below,
+            Above::Always(above),
+        );
+    }
+}
+
+/// Encodes `text`, or `None` if it is too long for [`ENCODED_VERSION`].
+pub fn encode(text: &str) -> Option<Encoded> {
+    let mut scratch = [0u8; ENCODED_BYTES];
+    let mut out = [0u8; ENCODED_BYTES];
+    let code = QrCode::encode_text(
+        text,
+        &mut scratch,
+        &mut out,
+        QrCodeEcc::Medium,
+        Version::MIN,
+        ENCODED_VERSION,
+        None,
+        true,
+    )
+    .ok()?;
+    let size = code.size();
+    let mut modules = [0u8; ENCODED_BYTES];
+    for y in 0..size {
+        for x in 0..size {
+            if code.get_module(x, y) {
+                let i = (y * size + x) as usize;
+                modules[i / 8] |= 0x80 >> (i % 8);
+            }
+        }
+    }
+    Some(Encoded {
+        size: size as u8,
+        modules,
+    })
+}
+
+/// The line over a code.
+enum Above<'a> {
+    WhereItFits(&'a str),
+    Always(&'a str),
+}
+
+/// Draws `size` modules over the disc, as large as whole pixels a module allow.
+fn draw_modules(
+    frame: &mut Framebuffer,
+    size: i32,
+    dark: impl Fn(usize, usize) -> bool,
+    below: &str,
+    above: Above<'_>,
+) {
     let (width_px, height_px) = (WIDTH as i32, HEIGHT as i32);
     let centre = Point::new(width_px / 2, height_px / 2);
 
@@ -58,11 +141,15 @@ pub fn draw(frame: &mut Framebuffer, n: usize) {
 
     // The base URL always stands below the code, so the code gives up a pixel a module until
     // that line fits the chord there. The caption above stands only where it fits as it is.
-    let size = code.size as i32;
     let square = DISC * 181 / 128; // the disc's inscribed square, DISC * sqrt(2)
-    let host = width(link.host, &fonts::SMALL);
+    let host = width(below, &fonts::SMALL);
     let mut scale = (square / (size + 2 * QUIET)).max(1);
-    while scale > 1 && host > room(size * scale / 2 + QUIET * scale + LINE) {
+    let (above, required) = match above {
+        Above::WhereItFits(text) => (text, 0),
+        Above::Always(text) => (text, width(text, &fonts::SMALL)),
+    };
+    let caption = required.max(host);
+    while scale > 1 && caption > room(size * scale / 2 + QUIET * scale + LINE) {
         scale -= 1;
     }
     let side = size * scale;
@@ -70,12 +157,12 @@ pub fn draw(frame: &mut Framebuffer, n: usize) {
     for y in 0..size {
         let mut x = 0;
         while x < size {
-            if !code.dark(x as usize, y as usize) {
+            if !dark(x as usize, y as usize) {
                 x += 1;
                 continue;
             }
             let start = x;
-            while x < size && code.dark(x as usize, y as usize) {
+            while x < size && dark(x as usize, y as usize) {
                 x += 1;
             }
             fill(
@@ -91,9 +178,9 @@ pub fn draw(frame: &mut Framebuffer, n: usize) {
 
     let gap = side / 2 + QUIET * scale;
     let at = |sign: i32| centre + Point::new(0, sign * (gap + LINE / 2));
-    let _ = text(frame, link.host, at(1), &fonts::SMALL, Rgb565::BLACK);
-    if width(link.caption, &fonts::SMALL) <= room(gap + LINE) {
-        let _ = text(frame, link.caption, at(-1), &fonts::SMALL, Rgb565::BLACK);
+    let _ = text(frame, below, at(1), &fonts::SMALL, Rgb565::BLACK);
+    if width(above, &fonts::SMALL) <= room(gap + LINE) {
+        let _ = text(frame, above, at(-1), &fonts::SMALL, Rgb565::BLACK);
     }
 }
 

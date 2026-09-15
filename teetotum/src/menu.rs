@@ -721,6 +721,34 @@ pub mod icons {
         "........................",
     ]);
 
+    /// A memory card with a Wi-Fi mark cut out of it, for the card over Wi-Fi.
+    pub const CARD_WIFI: Icon = Icon::new(&[
+        "........................",
+        "........................",
+        "....############........",
+        "....#############.......",
+        "....##############......",
+        "....###############.....",
+        "....################....",
+        "....################....",
+        "....####........####....",
+        "....##..########..##....",
+        "....##.##########.##....",
+        "....#####......#####....",
+        "....####.######.####....",
+        "....################....",
+        "....################....",
+        "....#######..#######....",
+        "....#######..#######....",
+        "....################....",
+        "....################....",
+        "....################....",
+        "....################....",
+        "....################....",
+        "........................",
+        "........................",
+    ]);
+
     /// A framed picture, for how the cover stands behind the player.
     pub const COVER: Icon = Icon::new(&[
         "........................",
@@ -1751,11 +1779,12 @@ impl Navigator {
                     palette.quiet,
                 )?;
             }
-            Some(_) => text(
+            Some(_) => fitted(
                 target,
                 name,
                 CENTRE + Point::new(0, -82),
-                &fonts::LARGE,
+                title_font(name),
+                TITLE_ROOM,
                 palette.name,
             )?,
         }
@@ -2229,6 +2258,21 @@ where
 /// px up, where the inside of the ring leaves a chord of `2 * sqrt(135^2 - 23^2)` = 266 px. Twelve
 /// px off the ring on either side leaves this.
 const STATE_ROOM: i32 = 242;
+
+/// Room for an open dialog's name. It stands 82 px above the centre, so its upper edge is about
+/// 94 px up, where the inside of the ring leaves `2 * sqrt(135^2 - 94^2)` = 193 px. Twelve px off
+/// the ring on either side leaves this.
+const TITLE_ROOM: i32 = 169;
+
+/// The face an open dialog's name is set in: the large one while it fits, the body one when it
+/// would otherwise run into the ring.
+fn title_font(name: &str) -> &'static FontRenderer {
+    if width(name, &fonts::LARGE) <= TITLE_ROOM {
+        &fonts::LARGE
+    } else {
+        &fonts::BODY
+    }
+}
 
 /// One line centred on `at` like [`text`], cut with "..." where it would run past `room` pixels.
 /// The face a state line is set in: the body one while it fits, the small one when it would

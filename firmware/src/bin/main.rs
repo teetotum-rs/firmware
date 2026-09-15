@@ -19,9 +19,10 @@ use bt_hci::controller::ExternalController;
 use bt_hci::param::LeAdvReportsIter;
 use critical_section::Mutex;
 use embassy_executor::Spawner;
-use embassy_futures::join::join4;
+use embassy_futures::join::{join, join5};
 use embassy_futures::select::{Either3, select3};
 use embassy_futures::yield_now;
+use embassy_net::StackResources;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::signal::Signal;
@@ -44,6 +45,8 @@ use esp_hal::timer::timg::TimerGroup;
 use esp_hal::uart::{Config as UartConfig, Uart};
 use esp_hal::usb_serial_jtag::UsbSerialJtag;
 use esp_radio::ble::controller::BleConnector;
+use esp_radio::wifi::AuthenticationMethod;
+use esp_radio::wifi::ap::AccessPointConfig;
 use esp_radio::wifi::scan::{ScanConfig, ScanTypeConfig};
 use esp_radio::wifi::sta::StationConfig;
 use esp_radio::wifi::{Config as WifiConfig, WifiController};
@@ -79,6 +82,7 @@ use teetotum_firmware::qr::{self, LINKS};
 use teetotum_firmware::settings::{
     self, Brightness, CloudShape, CoverStyle, Haptics, Motion, Part, Settings, Theme,
 };
+use teetotum_firmware::share;
 use teetotum_firmware::shot;
 use teetotum_firmware::slots::{self, Slots, Upload};
 use teetotum_firmware::upload::{self, Command, Status as UploadStatus};
@@ -392,6 +396,10 @@ const SETTINGS: Menu = Menu::new(
 .with(
     SETTINGS_PLAYER_SLOT,
     Entry::menu("Music Player", &icons::MUSIC, &PLAYER),
+)
+.with(
+    SETTINGS_SHARE_SLOT,
+    Entry::setting(SHARE_NAME, &icons::CARD_WIFI, SETTING_SHARE, Buttons::None),
 );
 
 /// The player's settings, left of About in the firmware's ring.
@@ -475,6 +483,10 @@ const SETTING_QR: u16 = 13;
 const SETTING_INSTALL: Id = Id(SETTING_QR + LINKS.len() as u16);
 /// The receive dialog: while it is open, a plugin can be uploaded over BLE.
 const SETTING_RECEIVE: Id = Id(SETTING_INSTALL.0 + 1);
+/// What the card over Wi-Fi is called, in both rings and over its code.
+const SHARE_NAME: &str = "Card over Wi-Fi";
+/// The card over Wi-Fi: while it is open, the card can be read over the knob's access point.
+const SETTING_SHARE: Id = Id(SETTING_RECEIVE.0 + 1);
 
 /// Where the install dialog stands: a menu of one entry, left by its buttons or a long press.
 static INSTALL_MENU: Menu = Menu::new(
@@ -559,14 +571,16 @@ const PLUGIN_SLOT: usize = 6;
 /// Where the faces of the bundled plugins stand in the home menu: right of Home, the first one
 /// next to it.
 const HOME_PLUGIN_SLOT: usize = 1;
-/// Where the player stands in the home menu: left of the gear, on the firmware's side of Home.
-const HOME_PLAYER_SLOT: usize = 10;
-/// Where the player's menu stands in the settings: left of About, in the segment the gear has at
-/// home and in a plugin's menu. The settings need no gear, being where it leads.
-///
-/// **Not the segment the player has at home**: there it sat at 10 as well, and the empty segment
-/// between it and About read as a gap.
-const SETTINGS_PLAYER_SLOT: usize = FIRMWARE_SLOT;
+/// Where the player stands in the home menu: an hour before the card over Wi-Fi, on the
+/// firmware's side of Home.
+const HOME_PLAYER_SLOT: usize = 9;
+/// Where the card over Wi-Fi stands in the home menu: between the player and the gear.
+const HOME_SHARE_SLOT: usize = 10;
+/// Where the player's menu stands in the settings: an hour before the card over Wi-Fi.
+const SETTINGS_PLAYER_SLOT: usize = FIRMWARE_SLOT - 1;
+/// Where the card over Wi-Fi stands in the settings: left of About, in the segment the gear has
+/// at home and in a plugin's menu. The settings need no gear, being where it leads.
+const SETTINGS_SHARE_SLOT: usize = FIRMWARE_SLOT;
 
 /// What the screen shows when no menu is up.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -1119,6 +1133,10 @@ mod overview {
         pub(super) offer: Option<Offer>,
         /// How the upload stands that the receive dialog shows.
         pub(super) received: Received,
+        /// The card's size as the share entry states it, `None` without a card.
+        pub(super) card: Option<String>,
+        /// Whether the share dialog shows its network in words instead of as a code.
+        pub(super) share_text: bool,
         /// Counted up whenever the plugin asks to be drawn again. What it shows lives in its own
         /// memory, where the comparison that decides a redraw cannot look, so this stands in for it.
         pub(super) plugin_frame: u32,
@@ -1598,7 +1616,7 @@ async fn pause(slow: Duration, fast: Duration) {
     reason = "many small locals in the task's future, none over 120 bytes; the main stack has room, see the note at the top"
 )]
 #[embassy_executor::task]
-async fn wifi_scan(mut controller: WifiController<'static>) {
+async fn wifi_scan(mut controller: WifiController<'static>, access_point: AccessPointConfig) {
     // Scanning needs station mode. `set_config` starts the driver as a side effect -- there is
     // no separate start call in esp-radio 0.18.
     if let Err(err) = controller.set_config(&WifiConfig::Station(StationConfig::default())) {
@@ -1614,44 +1632,70 @@ async fn wifi_scan(mut controller: WifiController<'static>) {
             max: SCAN_DWELL_MAX,
         });
 
+    let mut sharing = false;
     loop {
-        match controller.scan_async(&config).await {
-            Ok(mut networks) => {
-                networks.sort_by_key(|ap| core::cmp::Reverse(ap.signal_strength));
-                WIFI_NETWORKS.store(networks.len() as u8, Ordering::Relaxed);
-                nearby::publish(
-                    Radio::Wifi,
-                    networks.iter().map(|ap| Heard {
-                        address: ap.bssid,
-                        strength: ap.signal_strength,
-                        channel: ap.channel,
-                        name: ap.ssid.as_str(),
-                    }),
-                );
-                info!("Scan: {} networks", networks.len());
-                // While a face listens a round comes every few seconds, and twenty lines each
-                // would bury the log.
-                for ap in networks.iter().filter(|_| !nearby::wanted()) {
-                    let b = ap.bssid;
-                    info!(
-                        "  {:>4} dBm  ch {:>2}  {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}  {:?}  {}",
-                        ap.signal_strength,
-                        ap.channel,
-                        b[0],
-                        b[1],
-                        b[2],
-                        b[3],
-                        b[4],
-                        b[5],
-                        ap.auth_method,
-                        ap.ssid.as_str()
-                    );
-                }
+        // The access point comes and goes with the share dialog. A mode change restarts the
+        // driver, so it happens here, between scans, where nothing else holds the controller.
+        let wanted = share::OPEN.load(Ordering::Relaxed);
+        if wanted != sharing {
+            let mode = if wanted {
+                WifiConfig::AccessPointStation(StationConfig::default(), access_point.clone())
+            } else {
+                WifiConfig::Station(StationConfig::default())
+            };
+            match controller.set_config(&mode) {
+                Ok(()) => info!("Share: access point {}", if wanted { "up" } else { "down" }),
+                Err(err) => error!("Share: Wi-Fi mode change failed: {err:?}"),
             }
-            Err(err) => error!("Scan failed: {err:?}"),
+            sharing = wanted;
         }
 
-        pause(SCAN_INTERVAL, NEARBY_WIFI_GAP).await;
+        // A scan switches channels, which stalls a download for seconds.
+        if !share::busy() {
+            match controller.scan_async(&config).await {
+                Ok(mut networks) => {
+                    networks.sort_by_key(|ap| core::cmp::Reverse(ap.signal_strength));
+                    WIFI_NETWORKS.store(networks.len() as u8, Ordering::Relaxed);
+                    nearby::publish(
+                        Radio::Wifi,
+                        networks.iter().map(|ap| Heard {
+                            address: ap.bssid,
+                            strength: ap.signal_strength,
+                            channel: ap.channel,
+                            name: ap.ssid.as_str(),
+                        }),
+                    );
+                    info!("Scan: {} networks", networks.len());
+                    // While a face listens a round comes every few seconds, and twenty lines each
+                    // would bury the log.
+                    for ap in networks.iter().filter(|_| !nearby::wanted()) {
+                        let b = ap.bssid;
+                        info!(
+                            "  {:>4} dBm  ch {:>2}  {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}  {:?}  {}",
+                            ap.signal_strength,
+                            ap.channel,
+                            b[0],
+                            b[1],
+                            b[2],
+                            b[3],
+                            b[4],
+                            b[5],
+                            ap.auth_method,
+                            ap.ssid.as_str()
+                        );
+                    }
+                }
+                Err(err) => error!("Scan failed: {err:?}"),
+            }
+        }
+
+        let began = Instant::now();
+        while began.elapsed() < SCAN_INTERVAL
+            && !(nearby::wanted() && began.elapsed() >= NEARBY_WIFI_GAP)
+            && share::OPEN.load(Ordering::Relaxed) == sharing
+        {
+            Timer::after(NEARBY_POLL).await;
+        }
     }
 }
 
@@ -1965,6 +2009,15 @@ async fn main(spawner: Spawner) -> ! {
         }
         other => (other, None),
     };
+    // The share's socket buffers, which only the CPU copies.
+    let (spare, share_area) = match spare {
+        Some(spare) if spare.len() > COVER_MAX_BYTES + share::BUFFER_BYTES => {
+            let at = spare.len() - share::BUFFER_BYTES;
+            let (rest, tail) = spare.split_at_mut(at);
+            (Some(rest), Some(tail))
+        }
+        other => (other, None),
+    };
     let (mut cover, mut cover_pixels) = match spare {
         Some(spare) if spare.len() > COVER_MAX_BYTES => {
             let (bytes, pixels) = spare.split_at_mut(COVER_MAX_BYTES);
@@ -2042,6 +2095,13 @@ async fn main(spawner: Spawner) -> ! {
         _ => None,
     };
 
+    // What the share entry says about the card, worked out while the volume is still at hand.
+    let card_size = volume.as_ref().map(|volume| {
+        let layout = volume.layout();
+        let tenths = (u64::from(layout.clusters) * u64::from(layout.cluster_bytes()) * 10) >> 30;
+        format!("{}.{} GB card", tenths / 10, tenths % 10)
+    });
+
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     let sw_interrupt =
         esp_hal::interrupt::software::SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
@@ -2049,7 +2109,7 @@ async fn main(spawner: Spawner) -> ! {
 
     info!("Embassy initialized!");
 
-    let (wifi_controller, _interfaces) = esp_radio::wifi::new(peripherals.WIFI, Default::default())
+    let (wifi_controller, interfaces) = esp_radio::wifi::new(peripherals.WIFI, Default::default())
         .expect("Failed to initialize Wi-Fi controller");
     // find more examples https://github.com/embassy-rs/trouble/tree/main/examples/esp32
     let transport = BleConnector::new(peripherals.BT, Default::default()).unwrap();
@@ -2064,18 +2124,49 @@ async fn main(spawner: Spawner) -> ! {
     // after the radio is set up, in the hope that its noise is in the generator by now -- the
     // log says whether it was, since only then does the number differ from boot to boot.
     let mut salt = [0u8; 4];
+    let mut secret = [0u8; 6];
     let source = match esp_hal::rng::Trng::try_new() {
         Ok(trng) => {
             trng.read(&mut salt);
+            trng.read(&mut secret);
             "physical"
         }
         Err(_) => {
-            esp_hal::rng::Rng::new().read(&mut salt);
+            let rng = esp_hal::rng::Rng::new();
+            rng.read(&mut salt);
+            rng.read(&mut secret);
             "pseudo-random"
         }
     };
     nearby::set_salt(u32::from_le_bytes(salt));
     info!("Nearby: keys made with a {source} number");
+
+    // The card over Wi-Fi: its network, new every boot, and the IP stack on the access point
+    // interface. The stack's room is static; the access point itself only runs while the dialog
+    // is open, see [`wifi_scan`].
+    let credentials = share::Credentials::new(interfaces.access_point.mac_address(), secret);
+    info!(
+        "Share: network {} with password {}",
+        credentials.ssid, credentials.password
+    );
+    let share_code = qr::encode(&credentials.join_text());
+    let access_point = AccessPointConfig::default()
+        .with_ssid(credentials.ssid.as_str())
+        .with_auth_method(AuthenticationMethod::Wpa2Personal)
+        .with_password(credentials.password.clone())
+        .with_max_connections(4);
+    static NET_RESOURCES: StaticCell<StackResources<{ share::SOCKETS }>> = StaticCell::new();
+    let net_seed = {
+        let mut bytes = [0u8; 8];
+        esp_hal::rng::Rng::new().read(&mut bytes);
+        u64::from_le_bytes(bytes)
+    };
+    let (net_stack, mut net_runner) = embassy_net::new(
+        interfaces.access_point,
+        share::ip_config(),
+        NET_RESOURCES.init(StackResources::new()),
+        net_seed,
+    );
     let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> =
         HostResources::new();
     let stack = trouble_host::new(ble_controller, &mut resources);
@@ -2156,7 +2247,9 @@ async fn main(spawner: Spawner) -> ! {
         }
     };
 
-    spawner.spawn(wifi_scan(wifi_controller).expect("Failed to create the Wi-Fi scan task"));
+    spawner.spawn(
+        wifi_scan(wifi_controller, access_point).expect("Failed to create the Wi-Fi scan task"),
+    );
 
     let server = Server::new_with_config(GapConfig::Peripheral(PeripheralConfig {
         name: BLE_DEVICE_NAME,
@@ -2384,10 +2477,16 @@ async fn main(spawner: Spawner) -> ! {
         let mut home_next: Option<&'static Menu> = None;
         for page in (0..home_pages).rev() {
             let mut home = match page {
-                0 => Menu::home(HOME_TITLE).holding(HOLD_FOR_QR).with(
-                    HOME_PLAYER_SLOT,
-                    Entry::screen("Music Player", &icons::MUSIC, Face::Player.id()),
-                ),
+                0 => Menu::home(HOME_TITLE)
+                    .holding(HOLD_FOR_QR)
+                    .with(
+                        HOME_PLAYER_SLOT,
+                        Entry::screen("Music Player", &icons::MUSIC, Face::Player.id()),
+                    )
+                    .with(
+                        HOME_SHARE_SLOT,
+                        Entry::setting(SHARE_NAME, &icons::CARD_WIFI, SETTING_SHARE, Buttons::None),
+                    ),
                 _ => Menu::home_page(HOME_TITLE).holding(HOLD_FOR_QR),
             };
             for (k, n) in (0..PLUGINS_MAX).filter(on_home).enumerate() {
@@ -2431,6 +2530,8 @@ async fn main(spawner: Spawner) -> ! {
             motion: settings.motion,
             shape: settings.shape,
             free_slots,
+            card: card_size.clone(),
+            share_text: false,
             plugins: core::array::from_fn(|n| {
                 manifests[n].zip(ids[n]).map(|(manifest, id)| PluginView {
                     id,
@@ -2842,6 +2943,13 @@ async fn main(spawner: Spawner) -> ! {
                         // On the ring a click means the selection moved to another segment.
                         // Every detent moves it one entry, so this is a turn with nowhere to go:
                         // a menu that shows only its top entry.
+                        // The share dialog has no value either: turning flips between its code and
+                        // the same in words, for a computer without a camera.
+                        Outcome::Adjust {
+                            id: SETTING_SHARE,
+                            owner: Owner::Firmware,
+                            ..
+                        } => state.share_text = !state.share_text,
                         // A QR code is no value to turn: the knob goes on to the next code and
                         // shows it straight away, so the codes can be walked without tapping.
                         Outcome::Adjust {
@@ -3158,7 +3266,7 @@ async fn main(spawner: Spawner) -> ! {
                                         id,
                                         owner: Owner::Firmware,
                                         ..
-                                    } if qr_index(id).is_some() => {
+                                    } if qr_index(id).is_some() || id == SETTING_SHARE => {
                                         if let Some(nav) = state.menu.as_mut() {
                                             nav.dismiss();
                                         }
@@ -3365,7 +3473,9 @@ async fn main(spawner: Spawner) -> ! {
             // in it ends above.
             let on_cloud =
                 state.menu.is_some() || (state.face == Face::Player && state.backdrop.is_none());
-            state.cloud = match state.motion == Motion::Moving && on_cloud {
+            // A cloud frame is drawn synchronously for some 47 ms, which starves the network
+            // stack: while a file goes out over Wi-Fi the cloud holds still.
+            state.cloud = match state.motion == Motion::Moving && on_cloud && !share::busy() {
                 true => (now.as_millis() / CLOUD_FRAME.as_millis()) as u32 + 1,
                 false => 0,
             };
@@ -3381,6 +3491,15 @@ async fn main(spawner: Spawner) -> ! {
                 Some((SETTING_RECEIVE, Owner::Firmware))
             );
             RECEIVING.store(receiving, Ordering::Relaxed);
+            // The access point runs while the card's dialog is open, and only with a card.
+            let sharing = matches!(
+                state.menu.as_ref().and_then(Navigator::opened),
+                Some((SETTING_SHARE, Owner::Firmware))
+            );
+            if !sharing {
+                state.share_text = false;
+            }
+            share::OPEN.store(sharing && state.card.is_some(), Ordering::Relaxed);
             if !receiving {
                 if let Some(dropped) = upload.take() {
                     info!("Plugin: upload into slot {} dropped", dropped.slot());
@@ -3471,7 +3590,14 @@ async fn main(spawner: Spawner) -> ! {
                                 let _ = haptic.stop(&mut i2c);
                             }
                             ground = Some(cloud_ground(screen.frame(), &state, true, ring_clean));
-                            settings_screen(screen.frame(), &state, nav, ring.as_ref());
+                            settings_screen(
+                                screen.frame(),
+                                &state,
+                                nav,
+                                ring.as_ref(),
+                                &credentials,
+                                share_code.as_ref(),
+                            );
                         }
                     }
                     // Sending the picture blocks: 14 ms standing upright, 42 ms turned. At one
@@ -3543,11 +3669,23 @@ async fn main(spawner: Spawner) -> ! {
         }
     };
 
-    join4(
+    // The card over Wi-Fi. Its sockets wait for ever and only hear something while the access
+    // point runs.
+    let share_area = share_area.unwrap_or_else(|| {
+        warn!("Share: no external RAM to spare -- the buffers take the heap");
+        alloc::vec![0u8; share::BUFFER_BYTES].leak()
+    });
+    let card_share = join(
+        net_runner.run(),
+        share::serve(net_stack, share_area, volume),
+    );
+
+    join5(
         runner.run_with_handler(&scan_log),
         scanning,
         advertising,
         device,
+        card_share,
     )
     .await;
 
@@ -4310,6 +4448,14 @@ fn home_state(state: &Overview, entry: &Entry) -> Option<String> {
             }
         },
         Kind::Home => Some(String::from(REPO)),
+        Kind::Setting {
+            id: SETTING_SHARE, ..
+        } => Some(
+            state
+                .card
+                .clone()
+                .unwrap_or_else(|| String::from("no card")),
+        ),
         _ => None,
     }
 }
@@ -4339,6 +4485,8 @@ fn settings_screen(
     state: &Overview,
     nav: &Navigator,
     ring: Option<&Ring>,
+    credentials: &share::Credentials,
+    code: Option<&qr::Encoded>,
 ) {
     const VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"), " ", env!("TEETOTUM_COMMIT"));
 
@@ -4370,6 +4518,7 @@ fn settings_screen(
         (Owner::Firmware, Some(SETTING_COVER)) => Some(state.cover.name()),
         (Owner::Firmware, Some(SETTING_MOTION)) => Some(state.motion.name()),
         (Owner::Firmware, Some(SETTING_RECEIVE)) => free.as_deref(),
+        (Owner::Firmware, Some(SETTING_SHARE)) => Some(state.card.as_deref().unwrap_or("no card")),
         (Owner::Plugin, Some(id)) => match PluginSetting::of(id) {
             Some((n, PluginSetting::Installed)) => Some(installed(n)),
             _ => None,
@@ -4665,6 +4814,24 @@ fn settings_screen(
                 line(44, &cost, detail);
             }
         }
+        // The network to join, as a code or, once the knob turns, in words.
+        Some((SETTING_SHARE, Owner::Firmware)) => match (&state.card, code) {
+            (None, _) => {
+                line(-14, "no card", reading);
+                line(16, "none was found at boot", quiet);
+            }
+            (Some(_), Some(code)) if !state.share_text => {
+                code.draw(frame, share::HOST, &credentials.ssid);
+            }
+            (Some(_), _) => {
+                line(-40, "join the network", quiet);
+                line(-22, &credentials.ssid, detail);
+                line(-2, "with the password", quiet);
+                line(16, &credentials.password, detail);
+                line(36, "then open", quiet);
+                line(54, share::HOST, detail);
+            }
+        },
         Some((id, Owner::Firmware)) => {
             if let Some(n) = qr_index(id) {
                 qr::draw(frame, n);

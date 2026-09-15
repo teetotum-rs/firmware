@@ -77,6 +77,8 @@ esp-rtos = { version = "0.3.0", features = [
   "log-04",
 ] }
 log = "0.4.27"
+# Encodes the share dialog's QR code on the device, where SSID and password are only known at run time.
+qrcodegen-no-heap = "1.8.1"
 # for more networking protocol support see https://crates.io/crates/edge-net
 smoltcp = { version = "0.13.0", default-features = false, features = [
   "log",

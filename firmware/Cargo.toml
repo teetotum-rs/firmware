@@ -53,6 +53,7 @@ esp-println            = { workspace = true }
 esp-radio              = { workspace = true }
 esp-rtos               = { workspace = true }
 log                    = { workspace = true }
+qrcodegen-no-heap      = { workspace = true }
 smoltcp                = { workspace = true }
 st77916                = { workspace = true }
 static_cell            = { workspace = true }

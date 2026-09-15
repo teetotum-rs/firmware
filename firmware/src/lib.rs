@@ -16,6 +16,7 @@ pub mod nearby;
 pub mod plugin;
 pub mod qr;
 pub mod settings;
+pub mod share;
 pub mod shot;
 pub mod slots;
 pub mod upload;
