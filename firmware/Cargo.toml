@@ -1,6 +1,6 @@
 # The firmware itself, plus the bring-up runs that measured the board. It is not
-# published: what a plugin builds against is `teetotum`, and a version number on
-# this package would only invite somebody to depend on it.
+# published: what a plugin builds against is `teetotum-face`. Its version is the
+# firmware release's, shown in About, and moves apart from the crates'.
 [package]
 authors      = { workspace = true }
 description  = "no_std Rust firmware for the Waveshare ESP32-S3 Knob Touch LCD 1.8 (TAIJI_KNOB)"
@@ -11,7 +11,7 @@ name         = "teetotum-firmware"
 publish      = false
 repository   = { workspace = true }
 rust-version = { workspace = true }
-version      = { workspace = true }
+version      = "0.2.0"
 
 # The firmware. Sharing the package's name is not what makes `cargo run` choose
 # it -- `default-run` above is, and without that line cargo refuses to guess

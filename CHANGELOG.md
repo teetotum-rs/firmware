@@ -9,6 +9,14 @@ of `teetotum-face`.
 
 ### Added
 
+- `teetotum-pack`: `slot::Digest` and `Header::matches_digest`, for a module that arrives in pieces.
+
+## [0.2.0] - 2026-09-15
+
+A firmware release; `teetotum-face` and `teetotum-pack` stay at 0.1.0.
+
+### Added
+
 - [teetotum-rs/plugins](https://github.com/teetotum-rs/plugins): a template for `cargo generate`, an
   example face and `index.json`, the list of known faces with where to fetch them, checked by CI.
 - Firmware files attached to each GitHub release — bootloader, partition table, blank `otadata`,
@@ -19,7 +27,8 @@ of `teetotum-face`.
   installed plugin. A [plugin page](https://teetotum-rs.github.io/firmware/plugins.html) sends one
   from the browser, from the catalogue of teetotum-rs/plugins or a file of your own;
   `tools/ble-upload.py` sends one from a computer.
-- `teetotum-pack`: `slot::Digest` and `Header::matches_digest`, for a module that arrives in pieces.
+- Settings > About shows the commit a firmware was built from after its version, with `+` for a
+  build from changed files.
 
 ## [0.1.0] - 2026-09-14
 
@@ -40,5 +49,6 @@ The first release.
 - `teetotum-pack` 0.1.0, which checks, signs and packs plugins, as a library and a command-line
   tool for Linux, macOS and Windows.
 
-[Unreleased]: https://github.com/teetotum-rs/firmware/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/teetotum-rs/firmware/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/teetotum-rs/firmware/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/teetotum-rs/firmware/releases/tag/v0.1.0
