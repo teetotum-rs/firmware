@@ -42,6 +42,8 @@ browser</a>.</em></p>
 - **Settings that survive a power cut**: eleven colour themes, the picture's orientation in
   quarter turns, ten backlight levels, ten click strengths, the dot-cloud background, and
   how the cover art is scaled. Written to two alternating flash sectors, not to a file.
+- **The TF card over Wi-Fi**, read-only: while its dialog is open, the Knob runs an access point,
+  shows a QR code to join it, and lists the card's folders and serves its files to a browser.
 - **Plugins as WebAssembly**, loaded at runtime under [wasmi](https://github.com/wasmi-labs/wasmi),
   each with a manifest of rights the firmware enforces. Beyond the bundled ones, sixteen flash
   slots take plugins sent over Bluetooth or written over USB, and accepted on the screen. Bundled: a HID remote for the phone's
@@ -58,7 +60,7 @@ Not there: sound of its own (the loudspeaker belongs to the other microcontrolle
 
 | | For | What it covers |
 |---|---|---|
-| [User guide](docs/user-guide.md) | anyone with a Knob running TeeToTum | the controls, Home, the player, every setting, troubleshooting |
+| [User guide](docs/user-guide.md) | anyone with a Knob running TeeToTum | the controls, Home, the player, the card over Wi-Fi, every setting, troubleshooting |
 | [Using plugins](docs/plugins.md) | anyone who starts or removes plugins | the bundled three, rights, what "stopped" means, memory, installing more |
 | [Writing plugins](docs/plugin-development.md) | Rust developers | the `teetotum-face` SDK, the manifest, events, drawing, limits |
 | [Code quality](docs/code-quality.md) | anyone who changes the code | the checks a push must pass, and how to run them |

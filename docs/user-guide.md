@@ -2,8 +2,8 @@
 
 This guide is for people who have TeeToTum running on a **Waveshare ESP32-S3 Knob Touch LCD
 1.8**: the round 360 x 360 touch screen with a rotary knob around it. This guide calls the
-device **the Knob**, with a capital K, and the ring you turn **the knob**. Sections 1 to 8 need no
-programming knowledge. [Section 9](#9-building-and-flashing-it-yourself) is for people who build
+device **the Knob**, with a capital K, and the ring you turn **the knob**. Sections 1 to 9 need no
+programming knowledge. [Section 10](#10-building-and-flashing-it-yourself) is for people who build
 and flash the firmware themselves.
 
 Related documents:
@@ -20,11 +20,12 @@ Contents:
 3. [The controls](#3-the-controls)
 4. [Home](#4-home)
 5. [Music Player](#5-music-player)
-6. [Settings](#6-settings)
-7. [Plugins](#7-plugins)
-8. [Troubleshooting](#8-troubleshooting)
-9. [Building and flashing it yourself](#9-building-and-flashing-it-yourself)
-10. [Glossary](#10-glossary)
+6. [Card over Wi-Fi](#6-card-over-wi-fi)
+7. [Settings](#7-settings)
+8. [Plugins](#8-plugins)
+9. [Troubleshooting](#9-troubleshooting)
+10. [Building and flashing it yourself](#10-building-and-flashing-it-yourself)
+11. [Glossary](#11-glossary)
 
 ---
 
@@ -53,12 +54,14 @@ do:
 - Four picture orientations, eleven colour themes, ten brightness steps.
 - A background of points in the colours of the theme behind Home, the menus and the Music Player,
   still or moving.
+- The TF card read from a phone or computer over Wi-Fi, read-only, while its dialog is open.
 - Plugins: small add-on programs that each get their own screen. Three come with the firmware.
 - Settings that survive a restart.
 
 **What not to expect:**
 
-- **No internet.** The TeeToTum firmware scans for Wi-Fi networks nearby but never joins one.
+- **No internet.** The TeeToTum firmware scans for Wi-Fi networks nearby, and runs a network of
+  its own for [Card over Wi-Fi](#6-card-over-wi-fi), but never joins one.
   Plugins cannot do so either today, since none of their rights allows it; if a later plugin can,
   its own documentation says so.
 - **No sound of its own.** What you hear is your phone's music, played by the second chip.
@@ -66,7 +69,7 @@ do:
 - **The factory demo is gone** from the ESP32-S3: its clock faces and animations are not shown.
   Its pictures are still on the microSD card, but TeeToTum does not use them. How to go back to the
   demo is in
-  [section 9](#restoring-the-factory-firmware).
+  [section 10](#restoring-the-factory-firmware).
 - **No installing plugins from the Knob alone.** Plugins beyond the bundled ones come from a
   browser over Bluetooth or from a computer over the USB cable, not from the SD card or over
   Wi-Fi. See
@@ -158,8 +161,9 @@ and values are read; how it looks is set under [Background](#background).
   which is at every detent unless the menu has only one entry.
 
 **When a ring is full: pages.** A ring has twelve segments and some of them are taken by the
-firmware -- the top one, the gear, and at Home the Music Player. What is left over is where
-plugins go: nine segments at Home, five in the Settings. A menu with more entries than that
+firmware -- the top one, the Music Player and Card over Wi-Fi, at Home the gear and in the
+Settings the firmware's own settings. What is left over is where plugins go: eight segments at
+Home, four in the Settings, where `Receive` takes the one after the last plugin. A menu with more entries than that
 **runs on to a second page**, where every segment but the top one is free and the plugins fill
 them from one o'clock round to eleven, and a **row of dots** appears just inside the ring under the top segment, one dot per
 page, the page you are on lit:
@@ -178,8 +182,8 @@ page, the page you are on lit:
   two pages mean two turns round the menu, three pages three.
 - **Only the top segment repeats.** About, or Home at Home, stands on every page: it is what the
   pages turn under and what the dots stand beneath, so the top segment still marks "up" wherever
-  you are. **Everything else has one place in the whole menu** -- the gear, the Music Player and
-  the firmware's own settings are all on the first page, and a later page carries nothing but the
+  you are. **Everything else has one place in the whole menu** -- the gear, the Music Player, Card
+  over Wi-Fi and the firmware's own settings are all on the first page, and a later page carries nothing but the
   entries that did not fit before it. A long press leads to Home from any of them.
 - **Taps work on the page in front of you.** There is no gesture that turns a page and none is
   needed: the knob walks through all of them, and a long press still goes to Home, which is the
@@ -212,29 +216,29 @@ it. It always means the same thing: a long press takes you to Home.
 ## 4. Home
 
 Home is where the device starts and where a long press leads from every other screen. From here you open the
-Music Player, the Settings and the screens of the plugins. The menu's title is `TeeToTum`.
+Music Player, Card over Wi-Fi, the Settings and the screens of the plugins. The menu's title is `TeeToTum`.
 
 ```
                           Home
                            12
           Settings  11           1  HID remote
-    Music Player  10                 2  Teetotum
-                 9                     3  Nearby
+ Card over Wi-Fi  10                 2  Teetotum
+   Music Player  9                     3  Nearby
                   8                  4
                      7            5
                            6
 ```
 
-- **Left of Home is what belongs to the firmware**: the gear (`Settings`) at eleven o'clock and
-  the `Music Player` at ten o'clock.
+- **Left of Home is what belongs to the firmware**: the gear (`Settings`) at eleven o'clock,
+  `Card over Wi-Fi` at ten and the `Music Player` at nine.
 - **Right of Home are the plugins**, one per segment from one o'clock on. The three bundled ones
   are `HID remote`, `Teetotum` (a die -- the firmware itself is `TeeToTum`) and
   `Nearby`. They are described in [Using plugins](plugins.md).
-- **A plugin that has been removed leaves its segment empty.** The other plugins do not move.
+- **A plugin that has been removed leaves no gap.** The plugins after it move up a segment.
   Removing and reinstalling is done in the plugin's settings (see
   [Plugin entries](#plugin-entries)).
-- **From the tenth plugin on, Home has a second page**, with the dots under the Home segment; see
-  [How the menus work](#how-the-menus-work). The tenth plugin then stands at one o'clock of the
+- **From the ninth plugin on, Home has a second page**, with the dots under the Home segment; see
+  [How the menus work](#how-the-menus-work). The ninth plugin then stands at one o'clock of the
   second page, where the first stands on the first.
 - Home has **no OK button**: there is nothing above it. You leave it by opening one of its entries.
 - Where other menus have OK, Home says `hold for QR codes`: a long press there opens the
@@ -247,6 +251,7 @@ Music Player, the Settings and the screens of the plugins. The menu's title is `
 | Home | where the firmware's source lives, on two lines | `look at github.com:` / `teetotum-rs/firmware` |
 | Settings | theme and brightness; the picture's angle if it is not 0; `silent` if clicks are off; `moving` if the [background](#background) moves | `Red · 100 %`, `Grey · 40 % · 90 deg · silent`, `Red · 100 % · moving` |
 | Music Player | the title that is playing, or `nothing playing` | `nothing playing` |
+| Card over Wi-Fi | the size of the card found at start-up, or `no card` | `14.8 GB card` |
 | a plugin | the plugin's own one-line summary, or `stopped` after it failed | `remote for the phone's player` |
 
 Lines too long for the space are shortened with `...`.
@@ -295,7 +300,7 @@ camera, which is quicker than spelling out a web address.
 ## 5. Music Player
 
 The Music Player shows what your phone is playing and lets you control it. Open it from Home:
-select `Music Player` at ten o'clock and tap it again.
+select `Music Player` at nine o'clock and tap it again.
 
 ### Pairing your phone
 
@@ -402,7 +407,38 @@ The second chip asks for a cover **when the track changes**. After connecting, t
 may therefore only appear with the next track. Whether a cover arrives at all depends on the phone
 and its player app.
 
-## 6. Settings
+## 6. Card over Wi-Fi
+
+`Card over Wi-Fi` lets a phone or a computer read the TF card inside the Knob, without opening the
+housing. Open it from Home (select the entry at ten o'clock and tap it again) or from the
+Settings, where it stands at eleven o'clock. The line under its name shows the card TeeToTum found
+at start-up, for example `14.8 GB card`, or `no card`.
+
+**While the dialog is open, the Knob runs a Wi-Fi network of its own.** The dialog has no buttons.
+
+- **A QR code joins the network.** It stands in the middle, the network's name above it and
+  `192.168.4.1` below. Scan it with the phone's camera to join.
+- **Turn the knob for the same in words**, for a computer without a camera: `join the network`,
+  the name, `with the password`, the password, `then open` and `192.168.4.1`. Turning again
+  brings the code back.
+- **The name is `TeeToTum-` and four hex digits** taken from the Knob's Wi-Fi address, so two
+  Knobs differ. **The password is made anew at every start**: a device that joined before needs
+  the new one after a restart.
+- **Then open `http://192.168.4.1` in a browser.** It lists the card's top folder: folders end in
+  `/`, files show their size. A folder opens its listing, `..` goes up, and a file is downloaded;
+  pictures (JPEG, PNG, GIF, BMP), text (`.txt`, `.log`, `.csv`) and sound (`.mp3`, `.wav`) the
+  browser shows or plays itself.
+- **Read-only.** Nothing on the card can be written, renamed or deleted over the network.
+- **No internet through the Knob.** It hands out addresses but no gateway, so a phone keeps its
+  own route to the internet.
+- **The network lasts as long as the dialog.** A tap on the screen closes the dialog, and so does
+  a long press; either takes the network down, and a download still running with it.
+- **Without a card** the dialog says `no card` and `none was found at boot`, and no network is
+  started. The card is looked for only when the Knob starts.
+- **While a file is on its way**, a moving [background](#background) holds still and the Wi-Fi
+  scans (for [Nearby](plugins.md), for example) wait, because either would slow the download.
+
+## 7. Settings
 
 Open the Settings from Home: select the gear at eleven o'clock and tap it again. The menu's title
 is `Settings`.
@@ -410,8 +446,8 @@ is `Settings`.
 ```
                           About
                            12
-     Music Player  11           1  Orientation
-                 10                 2  Theme
+  Card over Wi-Fi  11           1  Orientation
+     Music Player  10                 2  Theme
        Receive  9                     3  Brightness
          Nearby  8                  4  Haptics
         Teetotum  7             5  Background
@@ -420,7 +456,8 @@ is `Settings`.
 ```
 
 The firmware's own settings are About and the five entries clockwise from it; the fifth,
-Background, is a menu of its own. The Music Player's menu stands left of About. The bundled
+Background, is a menu of its own. [Card over Wi-Fi](#6-card-over-wi-fi) stands left of About,
+the Music Player's menu left of that. The bundled
 plugins' settings follow Background clockwise, one segment each, from six o'clock on. After the
 last of them stands `Receive`, which takes a plugin over Bluetooth.
 
@@ -428,7 +465,8 @@ While an entry is selected in the ring, its **current value** stands under its n
 read every setting without opening it. An entry that leads to a menu shows where that menu
 stands: `Background` whether the cloud is `still` or `moving`, `Music Player` the cover as
 `sharp` or `full screen`, and each plugin whether it is `loaded`, `not loaded` or `stopped`.
-`Receive` shows how many slots are free for a plugin, for example `13 free slots`.
+`Receive` shows how many slots are free for a plugin, for example `13 free slots`, and
+`Card over Wi-Fi` the card, as at Home.
 
 ### How a setting is changed and stored
 
@@ -577,7 +615,7 @@ With `Moving`, Home adds `moving` to the Settings' state line.
 
 ### Music Player menu
 
-The entry at eleven o'clock opens a menu of its own, titled `Music Player`, with the About at the
+The entry at ten o'clock opens a menu of its own, titled `Music Player`, with the About at the
 top and Cover at one o'clock. Its tick goes back up to the Settings.
 
 **About** shows what the second chip reports:
@@ -640,7 +678,7 @@ The Knob accepts a plugin only while this dialog is open. The tick closes it. Ho
 plugin, and what an orange message in the dialog means, is in
 [Using plugins](plugins.md#sending-a-plugin-over-bluetooth).
 
-## 7. Plugins
+## 8. Plugins
 
 A plugin is a small add-on program with a screen of its own, called its **face**. Plugins appear
 at Home to the right of the Home segment, and you start one the way you open the Player: select its
@@ -663,7 +701,7 @@ Everything else about plugins (each bundled plugin in detail, rights, removing a
 memory limits, and what is possible beyond the bundled ones) is in [Using plugins](plugins.md). If
 you want to write one, see [Writing plugins](plugin-development.md).
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 **The screen stays dark.**
 TeeToTum lights the screen only once Home is ready, so a short dark moment after switching on is
@@ -722,7 +760,7 @@ inserted**. The ESP32-S3, which runs TeeToTum, shows up as `303a:1001` (a serial
 `/dev/ttyACM0` on Linux). If `lsusb` shows a **CH340** instead, you are connected to the second
 chip: turn the plug over.
 
-## 9. Building and flashing it yourself
+## 10. Building and flashing it yourself
 
 This section is for people who put TeeToTum on the board. The web installer needs no toolchain;
 everything after it is for building from source. Either way, only the ESP32-S3 is written, never the
@@ -733,7 +771,7 @@ second chip.
 The [web installer](https://teetotum-rs.github.io/firmware/) writes the latest release from the
 browser. It needs desktop Chrome, Edge or Opera; Firefox and Safari cannot talk to serial ports.
 Connect the board so that the **ESP32-S3** is on USB (see the last item of
-[Troubleshooting](#8-troubleshooting)), press **Connect and install** and pick
+[Troubleshooting](#9-troubleshooting)), press **Connect and install** and pick
 `USB JTAG/serial debug unit`. Writing takes about half a minute.
 
 Your settings and the plugins installed in the flash slots are kept. On a first install the dialog
@@ -769,7 +807,7 @@ need to build them to build the firmware.
 ### Build and flash
 
 Connect the board so that the **ESP32-S3** is on USB (see the last item of
-[Troubleshooting](#8-troubleshooting)), then, from the repository root:
+[Troubleshooting](#9-troubleshooting)), then, from the repository root:
 
 ```
 cargo build --release     # build only
@@ -821,7 +859,7 @@ megabytes in one go time out, so it is written in two pieces. Follow
 The same folder describes a backup of the second chip. TeeToTum never writes that chip, so there
 is normally no reason to restore it.
 
-## 10. Glossary
+## 11. Glossary
 
 **About**
 : The entry at the top of every menu except Home. It shows information and marks which way is up.
@@ -832,6 +870,10 @@ is normally no reason to restore it.
 
 **Cancel**
 : The cross in a setting. Puts back the value the setting had when it was opened.
+
+**Card over Wi-Fi**
+: The entry that lets a browser read the TF card over a Wi-Fi network of the Knob's own, while
+  its dialog is open. See [Card over Wi-Fi](#6-card-over-wi-fi).
 
 **Detent**
 : One click-stop of the knob.

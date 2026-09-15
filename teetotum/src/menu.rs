@@ -1722,7 +1722,7 @@ impl Navigator {
                     target,
                     name,
                     CENTRE + Point::new(0, -48),
-                    &fonts::LARGE,
+                    largest_fitting(name, NAME_ROOM),
                     palette.name,
                 )?;
                 let at = CENTRE + Point::new(0, -14);
@@ -1783,7 +1783,7 @@ impl Navigator {
                 target,
                 name,
                 CENTRE + Point::new(0, -82),
-                title_font(name),
+                largest_fitting(name, TITLE_ROOM),
                 TITLE_ROOM,
                 palette.name,
             )?,
@@ -2260,21 +2260,27 @@ where
 const STATE_ROOM: i32 = 242;
 
 /// Room for an open dialog's name. It stands 82 px above the centre, so its upper edge is about
-/// 94 px up, where the inside of the ring leaves `2 * sqrt(135^2 - 94^2)` = 193 px. Twelve px off
-/// the ring on either side leaves this.
-const TITLE_ROOM: i32 = 169;
+/// 94 px up, where the inside of the ring leaves `2 * sqrt(135^2 - 94^2)` = 193 px. About eleven px
+/// off the ring on either side leaves this, just enough for "Card over Wi-Fi" in the body face.
+const TITLE_ROOM: i32 = 170;
 
-/// The face an open dialog's name is set in: the large one while it fits, the body one when it
-/// would otherwise run into the ring.
-fn title_font(name: &str) -> &'static FontRenderer {
-    if width(name, &fonts::LARGE) <= TITLE_ROOM {
+/// Room for the selected entry's name. It stands 48 px above the centre, so the top of a large
+/// face is about 64 px up, where the inside of the ring leaves `2 * sqrt(135^2 - 64^2)` = 237 px.
+/// Twelve px off the ring on either side leaves this.
+const NAME_ROOM: i32 = 213;
+
+/// The face a name is set in: the largest of large, body and small that fits into `room`, so a
+/// long name steps down before it is cut or runs into the ring.
+fn largest_fitting(name: &str, room: i32) -> &'static FontRenderer {
+    if width(name, &fonts::LARGE) <= room {
         &fonts::LARGE
-    } else {
+    } else if width(name, &fonts::BODY) <= room {
         &fonts::BODY
+    } else {
+        &fonts::SMALL
     }
 }
 
-/// One line centred on `at` like [`text`], cut with "..." where it would run past `room` pixels.
 /// The face a state line is set in: the body one while it fits, the small one when it would
 /// otherwise be cut.
 fn state_font(line: &str) -> &'static FontRenderer {
@@ -2285,6 +2291,7 @@ fn state_font(line: &str) -> &'static FontRenderer {
     }
 }
 
+/// One line centred on `at` like [`text`], cut with "..." where it would run past `room` pixels.
 fn fitted<D>(
     target: &mut D,
     line: &str,

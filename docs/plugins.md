@@ -56,14 +56,14 @@ o'clock. With the three bundled plugins, Home looks like this:
 ```
                          12  Home
             11  Settings            1  HID remote
-       10  Music Player                  2  Teetotum
-       9   (free)                          3  Nearby
+       10  Card over Wi-Fi               2  Teetotum
+       9   Music Player                    3  Nearby
        8   (free)                        4  (free)
             7  (free)               5  (free)
                           6  (free)
 
-   Segments 1 to 9 are the places for plugin faces, three in use. Beyond nine,
-   Home runs on to a second page; the Settings ring holds five on its first,
+   Segments 1 to 8 are the places for plugin faces, three in use. Beyond eight,
+   Home runs on to a second page; the Settings ring holds four on its first,
    see "Memory and limits".
 ```
 
@@ -507,8 +507,9 @@ What this means for you:
 - **The heap limits the largest plugin, not the number of plugins**, because only the one you
   are using is loaded.
 - **The number of plugins is limited by places, and the places run on to a second page.** Home
-  has nine places for plugin faces on its first page (one to nine o'clock), the Settings ring
-  five (six to ten o'clock). A sixth plugin puts the Settings on two pages, a tenth Home as well;
+  has eight places for plugin faces on its first page (one to eight o'clock), the Settings ring
+  four (six to nine o'clock), shared with `Receive` after the last plugin. A fourth plugin puts
+  the Settings on two pages, a ninth Home as well;
   a row of dots under the top segment says which page you are on, and the knob turns from the last entry
   of one page to the first of the next; on a second page the plugins fill the ring from one
   o'clock round to eleven, because nothing else stands there. See "How the menus work" in the
@@ -598,7 +599,7 @@ What you need:
 - `teetotum-pack`, from crates.io with `cargo install teetotum-pack --features cli`, or
   `tools/teetotum-pack` in a copy of this repository, which needs the `stable` Rust toolchain, and
   `espflash`, as in
-  [Building and flashing it yourself](user-guide.md#9-building-and-flashing-it-yourself).
+  [Building and flashing it yourself](user-guide.md#10-building-and-flashing-it-yourself).
 - A Knob running TeeToTum with the partition table from `partitions.csv`. `cargo run --release`
   writes it; a Knob flashed with espflash's own table has no `plugins` partition.
 
