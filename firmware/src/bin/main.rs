@@ -1172,6 +1172,7 @@ struct PluginView {
 #[derive(Clone, PartialEq, Eq)]
 struct Offer {
     slot: usize,
+    id: PluginId,
     /// Whether it replaces a plugin with the same id once accepted.
     update: bool,
     name: &'static str,
@@ -1192,14 +1193,15 @@ impl Offer {
     /// read.
     fn of(waiting: Waiting) -> Option<Self> {
         let wasm = waiting.wasm;
-        let (signed, manifest) = Signed::read(wasm)
-            .and_then(|signed| Ok((signed, Manifest::read(wasm)?)))
+        let (signed, manifest, id) = Signed::read(wasm)
+            .and_then(|signed| Ok((signed, Manifest::read(wasm)?, PluginId::of(wasm)?)))
             .inspect_err(|e| error!("Plugin: slot {} not offered -- {e}", waiting.slot))
             .ok()?;
         let mut key = [0; 8];
         key.copy_from_slice(&signed.key[..8]);
         Some(Self {
             slot: waiting.slot,
+            id,
             update: waiting.update,
             name: manifest.name(),
             version: manifest.version(),
@@ -3045,7 +3047,9 @@ async fn main(spawner: Spawner) -> ! {
                                     // OK is where a setting is decided, so it is where it is
                                     // written -- and only when it differs from what is kept.
                                     // Accepting writes one byte into the slot; the restart that
-                                    // gives the plugin its place comes after the last offer.
+                                    // gives the plugin its place comes after the last offer. A
+                                    // plugin removed earlier under the same id is installed
+                                    // again, or it would stay off home.
                                     Outcome::Ok {
                                         id: SETTING_INSTALL,
                                         owner: Owner::Firmware,
@@ -3054,6 +3058,17 @@ async fn main(spawner: Spawner) -> ! {
                                             && accept_slot(store.as_mut(), table, offer.slot)
                                         {
                                             offers.accepted += 1;
+                                            if !settings.installed(offer.id) {
+                                                settings.set_installed(offer.id, true);
+                                                if let Some(store) = store.as_mut() {
+                                                    save_settings(store, &settings);
+                                                }
+                                                stored = settings;
+                                                info!(
+                                                    "Plugin: slot {} was removed, installed again",
+                                                    offer.slot
+                                                );
+                                            }
                                         }
                                         offer_next(
                                             &mut state,

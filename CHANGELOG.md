@@ -11,6 +11,11 @@ of `teetotum-face`.
 
 - `teetotum-pack`: `slot::Digest` and `Header::matches_digest`, for a module that arrives in pieces.
 
+### Fixed
+
+- A plugin removed with Installed: No comes back on Home when the same plugin is installed again
+  through the install dialog ([#1](https://github.com/teetotum-rs/firmware/issues/1)).
+
 ## [0.2.0] - 2026-09-15
 
 A firmware release; `teetotum-face` and `teetotum-pack` stay at 0.1.0.
