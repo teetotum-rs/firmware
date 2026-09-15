@@ -4823,13 +4823,16 @@ fn settings_screen(
             (Some(_), Some(code)) if !state.share_text => {
                 code.draw(frame, share::HOST, &credentials.ssid);
             }
+            // Typed in by hand on another device, so the three values are green and as large as
+            // the longest of them allows.
             (Some(_), _) => {
-                line(-40, "join the network", quiet);
-                line(-22, &credentials.ssid, detail);
-                line(-2, "with the password", quiet);
-                line(16, &credentials.password, detail);
-                line(36, "then open", quiet);
-                line(54, share::HOST, detail);
+                let value = (&fonts::VALUE, palette.value);
+                line(-52, "join the network", quiet);
+                line(-28, &credentials.ssid, value);
+                line(2, "with the password", quiet);
+                line(26, &credentials.password, value);
+                line(56, "then open", quiet);
+                line(80, share::HOST, value);
             }
         },
         Some((id, Owner::Firmware)) => {

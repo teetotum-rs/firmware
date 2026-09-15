@@ -289,13 +289,17 @@ pub mod fonts {
     /// have to guess which version of the font crate to depend on.
     pub use u8g2_fonts::FontRenderer;
     use u8g2_fonts::fonts::{
-        u8g2_font_helvB24_tr, u8g2_font_helvR14_tf, u8g2_font_helvR14_tr, u8g2_font_helvR18_tf,
-        u8g2_font_helvR18_tr,
+        u8g2_font_helvB18_tr, u8g2_font_helvB24_tr, u8g2_font_helvR14_tf, u8g2_font_helvR14_tr,
+        u8g2_font_helvR18_tf, u8g2_font_helvR18_tr,
     };
 
     /// An entry's name, and a value to be read off the screen.
     pub const LARGE: FontRenderer =
         FontRenderer::new::<u8g2_font_helvB24_tr>().with_ignore_unknown_chars(true);
+    /// A value to be read off the screen that is too long for [`LARGE`]: a network's name, a
+    /// password, an address.
+    pub const VALUE: FontRenderer =
+        FontRenderer::new::<u8g2_font_helvB18_tr>().with_ignore_unknown_chars(true);
     /// A dialog's running text.
     pub const BODY: FontRenderer =
         FontRenderer::new::<u8g2_font_helvR18_tr>().with_ignore_unknown_chars(true);
