@@ -97,6 +97,7 @@ The plugins in `plugins/` depend only on `teetotum-face` from this repository.
 | `esp-synopsys-usb-otg` | 0.4.2 | MIT | https://github.com/esp-rs-compat/synopsys-usb-otg |
 | `esp-wifi-sys-esp32s3` | 0.2.0 | MIT OR Apache-2.0 | https://github.com/esp-rs/esp-wifi-sys |
 | `esp32s3` | 0.35.2 | MIT OR Apache-2.0 | https://github.com/esp-rs/esp-pacs |
+| `fatfs` | 0.4.0 | MIT | https://github.com/rafalh/rust-fatfs |
 | `float-cmp` | 0.9.0 | MIT | https://github.com/mikedilger/float-cmp |
 | `fugit` | 0.3.9 | MIT OR Apache-2.0 | https://github.com/korken89/fugit |
 | `futures` | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/futures-rs |

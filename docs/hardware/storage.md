@@ -11,8 +11,10 @@ first walk of the filesystem on 2026-09-06 showed what is on it: **119 files in 
 That walk was a measurement and printed a tree; it could not open anything.
 
 `teetotum/src/fat.rs` is the same knowledge as a library -- read-only FAT16/FAT32, `Volume::mount`,
-`open("/PIC/1.JPG")`, `File::read`, and a listing that is now just one of its callers. Writing
-is deliberately absent: it is the half that can destroy a card, and nothing needs it yet.
+`open("/PIC/1.JPG")`, `File::read`, and a listing that is now just one of its callers. It stays
+read-only. Writing, the half that can destroy a card, goes through the
+[`fatfs`](https://github.com/rafalh/rust-fatfs) crate, which writes long file names, over
+`SdCard::write_blocks` (CMD25) in `teetotum/src/sd.rs` and the adapter in `firmware/src/storage.rs`.
 
 ### What a read costs
 

@@ -82,10 +82,11 @@ def linked_crates():
     wanted = set()
     for line in tree.splitlines():
         name, version = line.split()[:2]
-        if "(" not in line.replace(" (*)", ""):  # path crates of this workspace carry "(dir)"
-            wanted.add((name, version.lstrip("v")))
+        wanted.add((name, version.lstrip("v")))
     meta = json.loads(cargo("metadata", "--format-version", "1", "--filter-platform", TARGET))
-    packages = [p for p in meta["packages"] if (p["name"], p["version"]) in wanted]
+    # Path crates of this workspace have no source; git crates do and are listed.
+    packages = [p for p in meta["packages"]
+                if p["source"] and (p["name"], p["version"]) in wanted]
     return sorted(packages, key=lambda p: (p["name"], p["version"]))
 
 

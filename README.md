@@ -42,8 +42,9 @@ browser</a>.</em></p>
 - **Settings that survive a power cut**: eleven colour themes, the picture's orientation in
   quarter turns, ten backlight levels, ten click strengths, the dot-cloud background, and
   how the cover art is scaled. Written to two alternating flash sectors, not to a file.
-- **The TF card over Wi-Fi**, read-only: while its dialog is open, the Knob runs an access point,
-  shows a QR code to join it, and lists the card's folders and serves its files to a browser.
+- **The TF card over Wi-Fi**: while its dialog is open, the Knob runs an access point, shows a QR
+  code to join it, and lists the card's folders to a browser, which downloads and uploads files,
+  makes folders and deletes.
 - **Plugins as WebAssembly**, loaded at runtime under [wasmi](https://github.com/wasmi-labs/wasmi),
   each with a manifest of rights the firmware enforces. Beyond the bundled ones, sixteen flash
   slots take plugins sent over Bluetooth or written over USB, and accepted on the screen. Bundled: a HID remote for the phone's
@@ -54,7 +55,7 @@ browser</a>.</em></p>
   FAT16/32 reader for the TF card, and the UART link to the other chip.
 
 Not there: sound of its own (the loudspeaker belongs to the other microcontroller — see
-[Audio](docs/hardware/audio.md)), loading a plugin over the air, and writing to the card.
+[Audio](docs/hardware/audio.md)).
 
 ## Documentation
 

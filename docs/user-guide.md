@@ -54,7 +54,7 @@ do:
 - Four picture orientations, eleven colour themes, ten brightness steps.
 - A background of points in the colours of the theme behind Home, the menus and the Music Player,
   still or moving.
-- The TF card read from a phone or computer over Wi-Fi, read-only, while its dialog is open.
+- The TF card read and written from a phone or computer over Wi-Fi while its dialog is open.
 - Plugins: small add-on programs that each get their own screen. Three come with the firmware.
 - Settings that survive a restart.
 
@@ -409,10 +409,10 @@ and its player app.
 
 ## 6. Card over Wi-Fi
 
-`Card over Wi-Fi` lets a phone or a computer read the TF card inside the Knob, without opening the
-housing. Open it from Home (select the entry at ten o'clock and tap it again) or from the
-Settings, where it stands at eleven o'clock. The line under its name shows the card TeeToTum found
-at start-up, for example `14.8 GB card`, or `no card`.
+`Card over Wi-Fi` lets a phone or a computer read and write the TF card inside the Knob, without
+opening the housing. Open it from Home (select the entry at ten o'clock and tap it again) or from
+the Settings, where it stands at eleven o'clock. The line under its name shows the card TeeToTum
+found at start-up, for example `14.8 GB card`, or `no card`.
 
 **While the dialog is open, the Knob runs a Wi-Fi network of its own.** The dialog has no buttons.
 
@@ -424,22 +424,31 @@ at start-up, for example `14.8 GB card`, or `no card`.
 - **The name is `TeeToTum-` and four hex digits** taken from the Knob's Wi-Fi address, so two
   Knobs differ. **The password is made anew at every start**: a device that joined before needs
   the new one after a restart.
-- **Then open `http://192.168.4.1` in a browser.** It lists the card's top folder as a table: name
-  (folders end in `/`), size, created, modified, the day of the last access, and the attributes as
-  letters (`R` read-only, `H` hidden, `S` system, `A` archive). Hidden entries are listed too. Times
-  are what the card stores, local time without a zone; `—` means the writer set none. A folder
-  opens its listing, `..` goes up, and a file is downloaded;
-  pictures (JPEG, PNG, GIF, BMP), text (`.txt`, `.log`, `.csv`) and sound (`.mp3`, `.wav`) the
-  browser shows or plays itself.
-- **Read-only.** Nothing on the card can be written, renamed or deleted over the network.
+- **Then open `http://192.168.4.1` in a browser**, with the `http://` written out: a browser that
+  tries `https://` first only reports that it cannot connect. The page lists the card's top folder
+  as a table: name (folders end in `/`), size, created, modified, the day of the last access, and
+  the attributes as letters (`R` read-only, `H` hidden, `S` system, `A` archive). Hidden entries
+  are listed too. Times are what the card stores, local time without a zone; `—` means the writer
+  set none. A folder opens its listing, `..` goes up, and a file is downloaded; pictures (JPEG,
+  PNG, GIF, BMP), text (`.txt`, `.log`, `.csv`) and sound (`.mp3`, `.wav`) the browser shows or
+  plays itself.
+- **Upload, New folder, Delete.** The file picker above the table sends one or more files into the
+  folder on screen, and a file of the same name is replaced; beside it each file counts up in
+  percent. A file that does not arrive whole is removed again. The Knob has no clock, so the times
+  come from the browser: the file's own modified time, and the moment of the upload as created.
+  `New folder` asks for a name, and `Delete` in a row removes that file or folder after asking; a
+  folder has to be empty first. When the card refuses, the reason stands beside the picker, for
+  example `the card is full` or `that name is taken`. Nothing can be renamed.
 - **No internet through the Knob.** It hands out addresses but no gateway, so a phone keeps its
   own route to the internet.
 - **The network lasts as long as the dialog.** A tap on the screen closes the dialog, and so does
   a long press; either takes the network down, and a download still running with it.
 - **Without a card** the dialog says `no card` and `none was found at boot`, and no network is
   started. The card is looked for only when the Knob starts.
-- **While a file is on its way**, a moving [background](#background) holds still and the Wi-Fi
-  scans (for [Nearby](plugins.md), for example) wait, because either would slow the download.
+- **While the dialog is open, the Knob does not scan for Wi-Fi networks** (for
+  [Nearby](plugins.md), for example): a scan drops a phone or computer off its network.
+- **While a file is on its way**, a moving [background](#background) holds still and the Bluetooth
+  scans wait, because either would slow the transfer.
 
 ## 7. Settings
 

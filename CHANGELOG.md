@@ -10,8 +10,9 @@ of `teetotum-face`.
 ### Added
 
 - Card over Wi-Fi, at ten o'clock on Home and eleven in the Settings: while its dialog is open, the
-  Knob runs an access point, shows a QR code to join it and serves the TF card read-only to a
-  browser as a table of name, size, created, modified, last access and attributes. The Music
+  Knob runs an access point, shows a QR code to join it and serves the TF card to a browser as a
+  table of name, size, created, modified, last access and attributes, where files are downloaded
+  and uploaded, folders made and entries deleted. No Wi-Fi scans run while it is open. The Music
   Player moves to nine o'clock on Home and ten in the Settings, and the first page of each ring
   holds one plugin fewer.
 - `teetotum-pack`: `slot::Digest` and `Header::matches_digest`, for a module that arrives in pieces.
