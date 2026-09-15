@@ -19,4 +19,5 @@ pub mod settings;
 pub mod share;
 pub mod shot;
 pub mod slots;
+pub mod storage;
 pub mod upload;

@@ -1,4 +1,4 @@
-//! The card over Wi-Fi, read-only, while its dialog is open.
+//! The card over Wi-Fi while its dialog is open.
 //!
 //! The dialog raises [`OPEN`]; the Wi-Fi task then runs an access point beside its station and
 //! leaves out its scans while [`busy`] says a file is on its way, because a scan switches
@@ -6,11 +6,14 @@
 //! point its sockets simply hear nothing.
 //!
 //! A client gets an address over DHCP and **no gateway**, so a phone keeps its own route to the
-//! internet. `GET` on a directory answers a listing, on a file the file.
+//! internet. `GET` on a directory answers a listing, on a file the file. `PUT` uploads a file,
+//! `MKCOL` makes a directory and `DELETE` removes a file or an empty directory; the listing's page
+//! drives all three and sends the times, since the Knob has no clock.
 
 use alloc::format;
 use alloc::string::String;
 
+use core::cell::Cell;
 use core::fmt::Write as _;
 use core::net::Ipv4Addr;
 use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
@@ -24,16 +27,20 @@ use embassy_net::{Ipv4Address, Ipv4Cidr, Stack, StaticConfigV4};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::{Duration, Instant};
+use fatfs::{Date, DateTime, Time};
 use log::{error, info, warn};
 use teetotum::fat::{self, Volume};
+use teetotum::sd::{self, SdCard};
+
+use crate::storage::{self, FsError, FsFile};
 
 /// Whether the dialog is open, and with it the access point. Set by the device loop.
 pub static OPEN: AtomicBool = AtomicBool::new(false);
 
-/// Files being sent right now.
+/// Files on their way to or from a client right now.
 static SENDING: AtomicU8 = AtomicU8::new(0);
 
-/// Whether a file is on its way to a client.
+/// Whether a file is on its way to or from a client.
 pub fn busy() -> bool {
     SENDING.load(Ordering::Relaxed) > 0
 }
@@ -50,8 +57,8 @@ pub const SOCKETS: usize = 1 + HTTP_SOCKETS;
 const HTTP_SOCKETS: usize = 2;
 /// TCP receive and transmit buffer, each.
 const TCP_BUFFER: usize = 8192;
-/// What a request head may take; the rest of it is not read.
-const HEAD: usize = 512;
+/// What a request head may take; a longer one is refused.
+const HEAD: usize = 2048;
 /// Bytes read off the card per write to the socket: one 4 KiB cluster, which the reader fetches
 /// in a single command, where smaller pieces pay a command and a stop each.
 const CHUNK: usize = 4096;
@@ -237,16 +244,31 @@ async fn answer(
     chunk: &mut [u8],
     card: &Card<'_>,
 ) -> Result<(), Gone> {
-    let Some(target) = head
-        .strip_prefix(b"GET ")
-        .and_then(|rest| rest.split(|&b| b == b' ').next())
-    else {
-        return status(socket, "405 Method Not Allowed").await;
+    let Some(end) = head.windows(4).position(|w| w == b"\r\n\r\n") else {
+        return status(socket, "431 Request Header Fields Too Large").await;
     };
-    let target = target.split(|&b| b == b'?').next().unwrap_or(target);
+    let (lines, body) = (&head[..end], &head[end + 4..]);
+    let mut request = lines
+        .split(|&b| b == b'\r')
+        .next()
+        .unwrap_or_default()
+        .split(|&b| b == b' ');
+    let (Some(method), Some(target)) = (request.next(), request.next()) else {
+        return status(socket, "400 Bad Request").await;
+    };
+    let (target, query) = match target.iter().position(|&b| b == b'?') {
+        Some(at) => (&target[..at], &target[at + 1..]),
+        None => (target, &[][..]),
+    };
     let Some(path) = percent_decode(target) else {
         return status(socket, "400 Bad Request").await;
     };
+    match method {
+        b"GET" => {}
+        b"PUT" => return upload(socket, lines, query, &path, body, chunk, card).await,
+        b"MKCOL" | b"DELETE" => return change(socket, method, query, &path, card).await,
+        _ => return status(socket, "405 Method Not Allowed").await,
+    }
 
     // Look the path up with the card held only as long as that takes.
     let found = {
@@ -279,15 +301,326 @@ enum Found {
 }
 
 async fn status(socket: &mut TcpSocket<'_>, line: &str) -> Result<(), Gone> {
+    explain(socket, line, line).await
+}
+
+/// A status with a sentence the page shows as it is.
+async fn explain(socket: &mut TcpSocket<'_>, line: &str, text: &str) -> Result<(), Gone> {
     let response = format!(
-        "HTTP/1.1 {line}\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{line}\n",
-        line.len() + 1
+        "HTTP/1.1 {line}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{text}\n",
+        text.len() + 1
     );
     write_all(socket, response.as_bytes()).await
 }
 
-/// Lists a directory as a page of links. Its length is not known ahead, so the page ends where
-/// the connection closes.
+/// What a `PUT` announced.
+struct Incoming<'r> {
+    name: &'r str,
+    created: DateTime,
+    modified: DateTime,
+    length: u32,
+    /// Body bytes that came with the head.
+    first: &'r [u8],
+}
+
+/// How an upload ended, if not with the file on the card.
+enum Received {
+    Gone,
+    Fs(FsError),
+}
+
+/// Receives a file into `path`, replacing one of that name. A file that does not arrive whole is
+/// removed again.
+async fn upload(
+    socket: &mut TcpSocket<'_>,
+    lines: &[u8],
+    query: &[u8],
+    path: &str,
+    first: &[u8],
+    chunk: &mut [u8],
+    card: &Card<'_>,
+) -> Result<(), Gone> {
+    let Some(name) = target_name(path) else {
+        return status(socket, "400 Bad Request").await;
+    };
+    let (Ok(created), Ok(modified)) = (time_param(query, "created"), time_param(query, "modified"))
+    else {
+        return status(socket, "400 Bad Request").await;
+    };
+    let Some(length) = header(lines, "content-length").and_then(|v| v.parse::<u32>().ok()) else {
+        return status(socket, "411 Length Required").await;
+    };
+    let incoming = Incoming {
+        name,
+        created,
+        modified,
+        length,
+        first,
+    };
+
+    let _sending = Sending::start();
+    let began = Instant::now();
+    let mut writing = Duration::from_ticks(0);
+    let failure = Cell::new(None);
+    let outcome = {
+        let mut guard = card.lock().await;
+        let Some((mut sd, start)) = take_card(&mut guard) else {
+            return status(socket, "503 Service Unavailable").await;
+        };
+        let outcome = receive(
+            socket,
+            &mut sd,
+            start,
+            &failure,
+            &incoming,
+            chunk,
+            &mut writing,
+        )
+        .await;
+        give_back(&mut guard, sd);
+        outcome
+    };
+    if let Some(err) = failure.take() {
+        error!("Share: {path}: the card failed after the upload: {err:?}");
+        return explain(socket, "500 Internal Server Error", "the card failed").await;
+    }
+    match outcome {
+        Ok(()) => {
+            let ms = began.elapsed().as_millis().max(1);
+            info!(
+                "Share: received {path}, {length} bytes in {ms} ms ({} KiB/s), card {} ms",
+                u64::from(length) * 1000 / 1024 / ms,
+                writing.as_millis()
+            );
+            status(socket, "201 Created").await
+        }
+        Err(Received::Gone) => {
+            warn!("Share: {path} did not arrive whole and was removed");
+            Err(Gone)
+        }
+        Err(Received::Fs(err)) => {
+            warn!("Share: receiving {path}: {err:?}");
+            let (line, why) = refusal(&err);
+            explain(socket, line, why).await
+        }
+    }
+}
+
+async fn receive(
+    socket: &mut TcpSocket<'_>,
+    sd: &mut SdCard<'_>,
+    start: u32,
+    failure: &Cell<Option<sd::Error>>,
+    incoming: &Incoming<'_>,
+    chunk: &mut [u8],
+    writing: &mut Duration,
+) -> Result<(), Received> {
+    let fs = storage::mount(sd, start, incoming.created, failure).map_err(Received::Fs)?;
+    let filled = {
+        let root = fs.root_dir();
+        let mut file = root.create_file(incoming.name).map_err(Received::Fs)?;
+        let filled = fill(socket, &mut file, incoming, chunk, writing).await;
+        drop(file);
+        if filled.is_err()
+            && let Err(err) = root.remove(incoming.name)
+        {
+            warn!("Share: removing what arrived of {}: {err:?}", incoming.name);
+        }
+        filled
+    };
+    filled.and(fs.unmount().map_err(Received::Fs))
+}
+
+/// Copies the body into `file` a chunk at a time, so the card is written in whole clusters.
+async fn fill(
+    socket: &mut TcpSocket<'_>,
+    file: &mut FsFile<'_, '_, '_>,
+    incoming: &Incoming<'_>,
+    chunk: &mut [u8],
+    writing: &mut Duration,
+) -> Result<(), Received> {
+    use fatfs::Write as _;
+
+    file.truncate().map_err(Received::Fs)?;
+    let mut left = incoming.length as usize;
+    let mut got = incoming.first.len().min(left);
+    chunk[..got].copy_from_slice(&incoming.first[..got]);
+    while left > 0 {
+        let want = left.min(chunk.len());
+        while got < want {
+            match socket.read(&mut chunk[got..want]).await {
+                Ok(0) | Err(_) => return Err(Received::Gone),
+                Ok(n) => got += n,
+            }
+        }
+        let started = Instant::now();
+        file.write_all(&chunk[..want]).map_err(Received::Fs)?;
+        *writing += started.elapsed();
+        left -= want;
+        got = 0;
+    }
+    file.set_created(incoming.created);
+    file.set_modified(incoming.modified);
+    file.flush().map_err(Received::Fs)
+}
+
+/// `MKCOL` makes a directory, `DELETE` removes a file or an empty directory.
+async fn change(
+    socket: &mut TcpSocket<'_>,
+    method: &[u8],
+    query: &[u8],
+    path: &str,
+    card: &Card<'_>,
+) -> Result<(), Gone> {
+    let Some(name) = target_name(path) else {
+        return status(socket, "400 Bad Request").await;
+    };
+    let Ok(created) = time_param(query, "created") else {
+        return status(socket, "400 Bad Request").await;
+    };
+    let make = method == b"MKCOL";
+    let failure = Cell::new(None);
+    let outcome = {
+        let mut guard = card.lock().await;
+        let Some((mut sd, start)) = take_card(&mut guard) else {
+            return status(socket, "503 Service Unavailable").await;
+        };
+        let outcome = alter(&mut sd, start, &failure, make, name, created);
+        give_back(&mut guard, sd);
+        outcome
+    };
+    if let Some(err) = failure.take() {
+        error!("Share: {path}: the card failed: {err:?}");
+        return explain(socket, "500 Internal Server Error", "the card failed").await;
+    }
+    match outcome {
+        Ok(()) if make => {
+            info!("Share: made {name}/");
+            status(socket, "201 Created").await
+        }
+        Ok(()) => {
+            info!("Share: removed {name}");
+            status(socket, "200 OK").await
+        }
+        Err(err) => {
+            warn!(
+                "Share: {} {name}: {err:?}",
+                if make { "making" } else { "removing" }
+            );
+            let (line, why) = refusal(&err);
+            explain(socket, line, why).await
+        }
+    }
+}
+
+fn alter(
+    sd: &mut SdCard<'_>,
+    start: u32,
+    failure: &Cell<Option<sd::Error>>,
+    make: bool,
+    name: &str,
+    clock: DateTime,
+) -> Result<(), FsError> {
+    let fs = storage::mount(sd, start, clock, failure)?;
+    {
+        let root = fs.root_dir();
+        if !make {
+            root.remove(name)?;
+        } else if root.open_dir(name).is_ok() {
+            // `create_dir` would open it and call that a success.
+            return Err(FsError::AlreadyExists);
+        } else {
+            root.create_dir(name)?;
+        }
+    }
+    fs.unmount()
+}
+
+/// Takes the card from the reader for a writer, with the first sector of its filesystem.
+fn take_card<'d>(slot: &mut Option<Volume<'d>>) -> Option<(SdCard<'d>, u32)> {
+    let volume = slot.take()?;
+    let start = volume.layout().partition_start;
+    Some((volume.into_card(), start))
+}
+
+/// Mounts the reader again after a writer. A card that no longer mounts stays unavailable.
+fn give_back<'d>(slot: &mut Option<Volume<'d>>, card: SdCard<'d>) {
+    match Volume::mount(card) {
+        Ok(volume) => *slot = Some(volume),
+        Err(err) => error!("Share: the card does not mount again: {err:?}"),
+    }
+}
+
+/// The response to a writer's failure, and a sentence for the page.
+fn refusal(err: &FsError) -> (&'static str, &'static str) {
+    match err {
+        FsError::NotFound => ("404 Not Found", "the folder is not there"),
+        FsError::AlreadyExists => ("409 Conflict", "that name is taken"),
+        FsError::InvalidInput => (
+            "409 Conflict",
+            "a file or folder of that name is in the way",
+        ),
+        FsError::DirectoryIsNotEmpty => ("409 Conflict", "the folder is not empty"),
+        FsError::InvalidFileNameLength | FsError::UnsupportedFileNameCharacter => {
+            ("400 Bad Request", "the name does not fit the card")
+        }
+        FsError::NotEnoughSpace => ("507 Insufficient Storage", "the card is full"),
+        _ => ("500 Internal Server Error", "the card failed"),
+    }
+}
+
+/// The path a change names, without the slashes around it, if every part of it is a name.
+fn target_name(path: &str) -> Option<&str> {
+    let name = path.trim_matches('/');
+    let named = !name.is_empty() && name.split('/').all(|part| !matches!(part, "" | "." | ".."));
+    named.then_some(name)
+}
+
+/// A header's value, its name compared without case.
+fn header<'h>(lines: &'h [u8], name: &str) -> Option<&'h str> {
+    lines.split(|&b| b == b'\n').skip(1).find_map(|line| {
+        let (key, value) = core::str::from_utf8(line).ok()?.split_once(':')?;
+        key.trim().eq_ignore_ascii_case(name).then(|| value.trim())
+    })
+}
+
+/// The time a query gives for `key` as `YYYYMMDDhhmmss`; without one, 1980-01-01 00:00, the
+/// first moment FAT can store. `Err` for a value that is not a time FAT can store.
+fn time_param(query: &[u8], key: &str) -> Result<DateTime, ()> {
+    let Some(value) = query
+        .split(|&b| b == b'&')
+        .find_map(|pair| pair.strip_prefix(key.as_bytes())?.strip_prefix(b"="))
+    else {
+        return Ok(DateTime::new(Date::new(1980, 1, 1), Time::new(0, 0, 0, 0)));
+    };
+    if value.len() != 14 || !value.iter().all(u8::is_ascii_digit) {
+        return Err(());
+    }
+    let part = |at: usize, len: usize| {
+        value[at..at + len]
+            .iter()
+            .fold(0u16, |n, d| n * 10 + u16::from(d - b'0'))
+    };
+    let (year, month, day) = (part(0, 4), part(4, 2), part(6, 2));
+    let (hour, minute, second) = (part(8, 2), part(10, 2), part(12, 2));
+    // `fatfs` asserts these ranges.
+    if !(1980..=2107).contains(&year)
+        || !(1..=12).contains(&month)
+        || !(1..=31).contains(&day)
+        || hour > 23
+        || minute > 59
+        || second > 59
+    {
+        return Err(());
+    }
+    Ok(DateTime::new(
+        Date::new(year, month, day),
+        Time::new(hour, minute, second, 0),
+    ))
+}
+
+/// Lists a directory as a page of links with the controls that change it. Its length is not known
+/// ahead, so the page ends where the connection closes.
 async fn listing(
     socket: &mut TcpSocket<'_>,
     path: &str,
@@ -307,8 +640,10 @@ async fn listing(
          <style>div{{overflow-x:auto}}table{{border-collapse:collapse}}\
          th,td{{padding:.15em 1em .15em 0;text-align:left;vertical-align:top}}\
          .n{{text-align:right}}span{{white-space:nowrap}}</style>\
-         <h1>{0}</h1><div><table>\
-         <tr><th>Name<th class=n>Size<th>Created<th>Modified<th>Accessed<th>Attributes",
+         <h1>{0}</h1>\
+         <p><input type=file multiple id=f onchange=up()> <button onclick=md()>New folder</button> \
+         <span id=s></span><div><table>\
+         <tr><th>Name<th class=n>Size<th>Created<th>Modified<th>Accessed<th>Attributes<th>",
         escape_html(&title)
     );
     if let Some(parent) = (!base.is_empty()).then(|| base.rsplit_once('/').map_or("", |(p, _)| p)) {
@@ -354,7 +689,8 @@ async fn listing(
             ("", size_text(entry.size))
         };
         let line = format!(
-            "<tr><td><a href=\"/{href}{slash}\">{}{slash}</a><td class=n>{size}<td>{}<td>{}<td>{}<td>{}",
+            "<tr><td><a href=\"/{href}{slash}\">{0}{slash}</a><td class=n>{size}<td>{1}<td>{2}<td>{3}<td>{4}\
+             <td><button data-p=\"/{href}{slash}\" data-n=\"{0}{slash}\" onclick=rm(this)>Delete</button>",
             escape_html(name),
             stamp_text(entry.created, true),
             stamp_text(entry.modified, true),
@@ -365,8 +701,28 @@ async fn listing(
         count += 1;
     }
     info!("Share: listed {title}, {count} entries");
-    write_all(socket, b"</table></div>").await
+    write_all(socket, b"</table></div>").await?;
+    write_all(socket, SCRIPT.as_bytes()).await
 }
+
+/// The listing's controls: uploads with the browser's times, a new folder, a delete per row.
+const SCRIPT: &str = "<script>\
+const s=document.getElementById('s'),\
+t=d=>[d.getFullYear(),d.getMonth()+1,d.getDate(),d.getHours(),d.getMinutes(),d.getSeconds()]\
+.map((n,i)=>String(n).padStart(i?2:4,'0')).join(''),\
+send=(m,u,body,what)=>new Promise(done=>{const x=new XMLHttpRequest();x.open(m,u);\
+x.upload.onprogress=e=>{if(e.lengthComputable)s.textContent=what+' '+Math.floor(e.loaded*100/e.total)+' %'};\
+x.onload=()=>{if(x.status<300)done(true);else{s.textContent=what+': '+x.responseText;done(false)}};\
+x.onerror=()=>{s.textContent=what+': connection lost';done(false)};x.send(body)}),\
+here=location.pathname.replace(/\\/?$/,'/');\
+async function up(){const now=t(new Date());\
+for(const f of document.getElementById('f').files){\
+if(!await send('PUT',here+encodeURIComponent(f.name)+'?created='+now+'&modified='+t(new Date(f.lastModified)),f,f.name))return}\
+location.reload()}\
+async function md(){const n=prompt('New folder');\
+if(n&&await send('MKCOL',here+encodeURIComponent(n)+'?created='+t(new Date()),null,n))location.reload()}\
+async function rm(b){if(confirm('Delete '+b.dataset.n+'?')&&await send('DELETE',b.dataset.p,null,b.dataset.n))location.reload()}\
+</script>";
 
 /// `2026-09-15 14:03`, date and time each unbroken so a narrow screen wraps between them.
 fn stamp_text(stamp: Option<fat::Stamp>, with_time: bool) -> String {

@@ -16,19 +16,17 @@ extern crate alloc;
 
 use alloc::vec;
 use alloc::vec::Vec;
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::cell::Cell;
 use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
 use esp_hal::delay::Delay;
 use esp_hal::gpio::{Level, Output, OutputConfig};
 use esp_hal::spi::master::{Config as SpiConfig, Spi};
-use fatfs::{
-    Date, DateTime, FileSystem, FsOptions, IoBase, IoError, Read, Seek, SeekFrom, Time,
-    TimeProvider, Write,
-};
+use fatfs::Write;
 use log::{error, info};
 use teetotum::fat::{self, SECTOR, Stamp, Volume};
 use teetotum::sd::{self, SdCard};
+use teetotum_firmware::storage::{self, date_time};
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
@@ -37,10 +35,6 @@ const FILE: &str = "Long name with \u{fc}mlaut, checked.txt";
 const PATH: &str = "Teetotum write test/Long name with \u{fc}mlaut, checked.txt";
 /// Three clusters and a bit on this card, and not a multiple of a sector.
 const FILE_BYTES: usize = 10_000;
-
-/// Set when [`Storage`] could not write its last sector back on drop, which `fatfs` relies on:
-/// its unmount writes the clean flag and never flushes.
-static LOST_WRITE: AtomicBool = AtomicBool::new(false);
 
 /// What the clock handed to `fatfs` says, so the directory's stamp can be told from the file's.
 const CLOCK: Stamp = Stamp {
@@ -114,14 +108,15 @@ fn run(card: SdCard<'_>) -> Result<(), ()> {
         before, DIR, flags
     );
 
+    // Where the storage reports a sector it could not write back when dropped.
+    let failure = Cell::new(None);
     let contents: Vec<u8> = (0..FILE_BYTES).map(|i| (i * 7 % 251) as u8).collect();
 
     let mut card = volume.into_card();
     {
-        let options = FsOptions::new().time_provider(Clock);
         let fs = check(
             "fatfs mount",
-            FileSystem::new(Storage::new(&mut card, partition), options),
+            storage::mount(&mut card, partition, date_time(CLOCK), &failure),
         )?;
         {
             let dir = check("create_dir", fs.root_dir().create_dir(DIR))?;
@@ -135,7 +130,7 @@ fn run(card: SdCard<'_>) -> Result<(), ()> {
         }
         check("fatfs unmount", fs.unmount())?;
     }
-    written_back()?;
+    written_back(&failure)?;
     info!("FW: fatfs made the directory and wrote the file");
 
     let mut volume = check("remount", Volume::mount(card))?;
@@ -178,16 +173,15 @@ fn run(card: SdCard<'_>) -> Result<(), ()> {
 
     let mut card = volume.into_card();
     {
-        let options = FsOptions::new().time_provider(Clock);
         let fs = check(
             "fatfs mount",
-            FileSystem::new(Storage::new(&mut card, partition), options),
+            storage::mount(&mut card, partition, date_time(CLOCK), &failure),
         )?;
         check("remove file", fs.root_dir().remove(PATH))?;
         check("remove directory", fs.root_dir().remove(DIR))?;
         check("fatfs unmount", fs.unmount())?;
     }
-    written_back()?;
+    written_back(&failure)?;
 
     let mut volume = check("remount", Volume::mount(card))?;
     same_flags(&mut volume, flags)?;
@@ -232,9 +226,12 @@ fn same_flags(volume: &mut Volume<'_>, before: u8) -> Result<(), ()> {
     Ok(())
 }
 
-fn written_back() -> Result<(), ()> {
-    if LOST_WRITE.load(Ordering::Relaxed) {
-        error!("FW: the last cached sector never reached the card");
+fn written_back(failure: &Cell<Option<sd::Error>>) -> Result<(), ()> {
+    if let Some(err) = failure.take() {
+        error!(
+            "FW: the last cached sector never reached the card: {:?}",
+            err
+        );
         return Err(());
     }
     Ok(())
@@ -248,193 +245,4 @@ fn count_root(volume: &mut Volume<'_>) -> Result<usize, fat::Error> {
         count += 1;
     }
     Ok(count)
-}
-
-fn date_time(stamp: Stamp) -> DateTime {
-    DateTime::new(
-        Date::new(stamp.year, stamp.month.into(), stamp.day.into()),
-        Time::new(
-            stamp.hour.into(),
-            stamp.minute.into(),
-            stamp.second.into(),
-            0,
-        ),
-    )
-}
-
-#[derive(Debug)]
-struct Clock;
-
-impl TimeProvider for Clock {
-    fn get_current_date(&self) -> Date {
-        date_time(CLOCK).date
-    }
-
-    fn get_current_date_time(&self) -> DateTime {
-        date_time(CLOCK)
-    }
-}
-
-/// The card as the seekable byte stream `fatfs` expects, starting at the partition's first
-/// sector.
-///
-/// Whole sectors from a sector boundary go to the card as one run; anything else passes through
-/// one cached sector, written back when a different sector is needed or on flush.
-struct Storage<'c, 'd> {
-    card: &'c mut SdCard<'d>,
-    start: u32,
-    position: u64,
-    sector: [u8; SECTOR],
-    /// The cached sector, counted from `start`.
-    cached: Option<u32>,
-    dirty: bool,
-}
-
-#[derive(Debug)]
-#[expect(
-    dead_code,
-    reason = "the fields are read through Debug when a failure is logged"
-)]
-enum StorageError {
-    Card(sd::Error),
-    UnexpectedEof,
-    WriteZero,
-    Seek,
-}
-
-impl From<sd::Error> for StorageError {
-    fn from(error: sd::Error) -> Self {
-        StorageError::Card(error)
-    }
-}
-
-impl IoError for StorageError {
-    fn is_interrupted(&self) -> bool {
-        false
-    }
-
-    fn new_unexpected_eof_error() -> Self {
-        StorageError::UnexpectedEof
-    }
-
-    fn new_write_zero_error() -> Self {
-        StorageError::WriteZero
-    }
-}
-
-impl<'c, 'd> Storage<'c, 'd> {
-    fn new(card: &'c mut SdCard<'d>, start: u32) -> Self {
-        Storage {
-            card,
-            start,
-            position: 0,
-            sector: [0u8; SECTOR],
-            cached: None,
-            dirty: false,
-        }
-    }
-
-    /// The sector the position is in, and the offset into it.
-    fn here(&self) -> (u32, usize) {
-        (
-            (self.position / SECTOR as u64) as u32,
-            (self.position % SECTOR as u64) as usize,
-        )
-    }
-
-    fn load(&mut self, index: u32) -> Result<(), StorageError> {
-        if self.cached == Some(index) {
-            return Ok(());
-        }
-        self.write_back()?;
-        self.card.read_block(self.start + index, &mut self.sector)?;
-        self.cached = Some(index);
-        Ok(())
-    }
-
-    fn write_back(&mut self) -> Result<(), StorageError> {
-        if let (true, Some(index)) = (self.dirty, self.cached) {
-            self.card.write_block(self.start + index, &self.sector)?;
-            self.dirty = false;
-        }
-        Ok(())
-    }
-}
-
-impl Drop for Storage<'_, '_> {
-    fn drop(&mut self) {
-        if let Err(err) = self.write_back() {
-            error!("FW: writing the cached sector back failed: {:?}", err);
-            LOST_WRITE.store(true, Ordering::Relaxed);
-        }
-    }
-}
-
-impl IoBase for Storage<'_, '_> {
-    type Error = StorageError;
-}
-
-impl Read for Storage<'_, '_> {
-    fn read(&mut self, buf: &mut [u8]) -> Result<usize, StorageError> {
-        let (index, offset) = self.here();
-        let whole = buf.len() / SECTOR * SECTOR;
-        let count = if offset == 0 && whole > 0 {
-            self.write_back()?;
-            self.card
-                .read_blocks(self.start + index, &mut buf[..whole])?;
-            whole
-        } else {
-            self.load(index)?;
-            let count = buf.len().min(SECTOR - offset);
-            buf[..count].copy_from_slice(&self.sector[offset..offset + count]);
-            count
-        };
-        self.position += count as u64;
-        Ok(count)
-    }
-}
-
-impl Write for Storage<'_, '_> {
-    fn write(&mut self, buf: &[u8]) -> Result<usize, StorageError> {
-        let (index, offset) = self.here();
-        let whole = buf.len() / SECTOR * SECTOR;
-        let count = if offset == 0 && whole > 0 {
-            let sectors = (whole / SECTOR) as u32;
-            if let Some(cached) = self.cached
-                && (index..index + sectors).contains(&cached)
-            {
-                // The run replaces the cached sector, pending changes included.
-                self.cached = None;
-                self.dirty = false;
-            }
-            self.card.write_blocks(self.start + index, &buf[..whole])?;
-            whole
-        } else {
-            self.load(index)?;
-            let count = buf.len().min(SECTOR - offset);
-            self.sector[offset..offset + count].copy_from_slice(&buf[..count]);
-            self.dirty = true;
-            count
-        };
-        self.position += count as u64;
-        Ok(count)
-    }
-
-    fn flush(&mut self) -> Result<(), StorageError> {
-        self.write_back()
-    }
-}
-
-impl Seek for Storage<'_, '_> {
-    fn seek(&mut self, pos: SeekFrom) -> Result<u64, StorageError> {
-        self.position = match pos {
-            SeekFrom::Start(to) => to,
-            SeekFrom::Current(by) => self
-                .position
-                .checked_add_signed(by)
-                .ok_or(StorageError::Seek)?,
-            SeekFrom::End(_) => return Err(StorageError::Seek),
-        };
-        Ok(self.position)
-    }
 }
