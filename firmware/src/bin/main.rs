@@ -1658,8 +1658,9 @@ async fn wifi_scan(mut controller: WifiController<'static>, access_point: Access
             sharing = wanted;
         }
 
-        // A scan switches channels, which stalls a download for seconds.
-        if !share::busy() {
+        // No scans while the access point is up: a scan switches channels, which stalls a
+        // download and drops a joined client for seconds.
+        if !sharing {
             match controller.scan_async(&config).await {
                 Ok(mut networks) => {
                     networks.sort_by_key(|ap| core::cmp::Reverse(ap.signal_strength));
