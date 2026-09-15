@@ -303,11 +303,16 @@ async fn listing(
     let mut page = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n\
          <!doctype html><meta name=viewport content=\"width=device-width\">\
-         <title>TeeToTum {0}</title><h1>{0}</h1><ul>",
+         <title>TeeToTum {0}</title>\
+         <style>div{{overflow-x:auto}}table{{border-collapse:collapse}}\
+         th,td{{padding:.15em 1em .15em 0;text-align:left;vertical-align:top}}\
+         .n{{text-align:right}}span{{white-space:nowrap}}</style>\
+         <h1>{0}</h1><div><table>\
+         <tr><th>Name<th class=n>Size<th>Created<th>Modified<th>Accessed<th>Attributes",
         escape_html(&title)
     );
     if let Some(parent) = (!base.is_empty()).then(|| base.rsplit_once('/').map_or("", |(p, _)| p)) {
-        let _ = write!(page, "<li><a href=\"/{}\">..</a>", percent_encode(parent));
+        let _ = write!(page, "<tr><td><a href=\"/{}\">..</a>", percent_encode(parent));
     }
     write_all(socket, page.as_bytes()).await?;
 
@@ -339,20 +344,50 @@ async fn listing(
         } else {
             format!("{}/{}", percent_encode(base), percent_encode(name))
         };
-        let line = if entry.directory {
-            format!("<li><a href=\"/{href}/\">{}/</a>", escape_html(name))
+        let (slash, size) = if entry.directory {
+            ("/", String::new())
         } else {
-            format!(
-                "<li><a href=\"/{href}\">{}</a> {}",
-                escape_html(name),
-                size_text(entry.size)
-            )
+            ("", size_text(entry.size))
         };
+        let line = format!(
+            "<tr><td><a href=\"/{href}{slash}\">{}{slash}</a><td class=n>{size}<td>{}<td>{}<td>{}<td>{}",
+            escape_html(name),
+            stamp_text(entry.created, true),
+            stamp_text(entry.modified, true),
+            stamp_text(entry.accessed, false),
+            attributes_text(entry.attributes)
+        );
         write_all(socket, line.as_bytes()).await?;
         count += 1;
     }
     info!("Share: listed {title}, {count} entries");
-    write_all(socket, b"</ul>").await
+    write_all(socket, b"</table></div>").await
+}
+
+/// `2026-09-15 14:03`, date and time each unbroken so a narrow screen wraps between them.
+fn stamp_text(stamp: Option<fat::Stamp>, with_time: bool) -> String {
+    let Some(s) = stamp else {
+        return String::from("\u{2014}");
+    };
+    let mut text = format!("<span>{:04}-{:02}-{:02}</span>", s.year, s.month, s.day);
+    if with_time {
+        let _ = write!(text, " <span>{:02}:{:02}</span>", s.hour, s.minute);
+    }
+    text
+}
+
+/// The set flags as letters: R read-only, H hidden, S system, A archive.
+fn attributes_text(a: fat::Attributes) -> String {
+    [
+        (a.read_only(), 'R'),
+        (a.hidden(), 'H'),
+        (a.system(), 'S'),
+        (a.archive(), 'A'),
+    ]
+    .iter()
+    .filter(|(set, _)| *set)
+    .map(|(_, letter)| *letter)
+    .collect()
 }
 
 /// Sends a file, with its length so the client shows progress.

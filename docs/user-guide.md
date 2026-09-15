@@ -424,8 +424,11 @@ at start-up, for example `14.8 GB card`, or `no card`.
 - **The name is `TeeToTum-` and four hex digits** taken from the Knob's Wi-Fi address, so two
   Knobs differ. **The password is made anew at every start**: a device that joined before needs
   the new one after a restart.
-- **Then open `http://192.168.4.1` in a browser.** It lists the card's top folder: folders end in
-  `/`, files show their size. A folder opens its listing, `..` goes up, and a file is downloaded;
+- **Then open `http://192.168.4.1` in a browser.** It lists the card's top folder as a table: name
+  (folders end in `/`), size, created, modified, the day of the last access, and the attributes as
+  letters (`R` read-only, `H` hidden, `S` system, `A` archive). Hidden entries are listed too. Times
+  are what the card stores, local time without a zone; `—` means the writer set none. A folder
+  opens its listing, `..` goes up, and a file is downloaded;
   pictures (JPEG, PNG, GIF, BMP), text (`.txt`, `.log`, `.csv`) and sound (`.mp3`, `.wav`) the
   browser shows or plays itself.
 - **Read-only.** Nothing on the card can be written, renamed or deleted over the network.

@@ -336,6 +336,67 @@ pub struct Entry {
     pub cluster: u32,
     /// Whether it is a directory.
     pub directory: bool,
+    /// The attribute byte.
+    pub attributes: Attributes,
+    /// When it was made, if whoever made it said.
+    pub created: Option<Stamp>,
+    /// When its contents last changed, if set.
+    pub modified: Option<Stamp>,
+    /// The day it was last read, if set; FAT keeps no time for it, so the time reads midnight.
+    pub accessed: Option<Stamp>,
+}
+
+/// The attribute byte of a directory entry.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Attributes(pub u8);
+
+impl Attributes {
+    pub fn read_only(self) -> bool {
+        self.0 & 0x01 != 0
+    }
+
+    pub fn hidden(self) -> bool {
+        self.0 & 0x02 != 0
+    }
+
+    pub fn system(self) -> bool {
+        self.0 & 0x04 != 0
+    }
+
+    /// Set by writers when the file changed since the last backup.
+    pub fn archive(self) -> bool {
+        self.0 & 0x20 != 0
+    }
+}
+
+/// A date and time as FAT stores it: local time, no zone, from 1980 on.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Stamp {
+    pub year: u16,
+    pub month: u8,
+    pub day: u8,
+    pub hour: u8,
+    pub minute: u8,
+    pub second: u8,
+}
+
+impl Stamp {
+    /// A packed date and time, or `None` for the zero date writers leave when they have no clock.
+    fn decode(date: u16, time: u16) -> Option<Stamp> {
+        let (month, day) = (((date >> 5) & 0x0F) as u8, (date & 0x1F) as u8);
+        if !(1..=12).contains(&month) || day == 0 {
+            return None;
+        }
+        Some(Stamp {
+            year: 1980 + (date >> 9),
+            month,
+            day,
+            hour: (time >> 11) as u8,
+            minute: ((time >> 5) & 0x3F) as u8,
+            // Two-second steps.
+            second: ((time & 0x1F) * 2) as u8,
+        })
+    }
 }
 
 impl Entry {
@@ -482,9 +543,19 @@ impl Entries {
                     continue;
                 }
 
+                let word = |at: usize| u16::from_le_bytes([entry[at], entry[at + 1]]);
+                // Byte 13 holds hundredths on top of the two-second step; only its whole second counts.
+                let created = Stamp::decode(word(16), word(14)).map(|mut stamp| {
+                    stamp.second += entry[13].min(199) / 100;
+                    stamp
+                });
                 return Ok(Some(Entry {
                     name,
                     length,
+                    attributes: Attributes(attributes),
+                    created,
+                    modified: Stamp::decode(word(24), word(22)),
+                    accessed: Stamp::decode(word(18), 0),
                     size: u32::from_le_bytes([entry[28], entry[29], entry[30], entry[31]]),
                     cluster: (u32::from(u16::from_le_bytes([entry[20], entry[21]])) << 16)
                         | u32::from(u16::from_le_bytes([entry[26], entry[27]])),
