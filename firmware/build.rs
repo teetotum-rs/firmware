@@ -80,7 +80,9 @@ fn commit() {
     use std::process::Command;
 
     let git = |args: &[&str]| {
+        // Without it `git status` refreshes the index, which the next build takes for a change.
         Command::new("git")
+            .env("GIT_OPTIONAL_LOCKS", "0")
             .args(args)
             .output()
             .ok()
