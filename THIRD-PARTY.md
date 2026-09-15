@@ -48,6 +48,8 @@ The plugins in `plugins/` depend only on `teetotum-face` from this repository.
 | `digest` | 0.10.7 | MIT OR Apache-2.0 | https://github.com/RustCrypto/traits |
 | `docsplay` | 0.1.3 | MIT OR Apache-2.0 | https://github.com/bugadani/docsplay |
 | `ed25519-compact` | 2.4.2 | MIT | https://github.com/jedisct1/rust-ed25519-compact |
+| `edge-dhcp` | 0.8.0 | MIT OR Apache-2.0 | https://github.com/sysgrok/edge-net |
+| `edge-raw` | 0.8.0 | MIT OR Apache-2.0 | https://github.com/sysgrok/edge-net |
 | `embassy-embedded-hal` | 0.6.0 | MIT OR Apache-2.0 | https://github.com/embassy-rs/embassy |
 | `embassy-executor` | 0.10.0 | MIT OR Apache-2.0 | https://github.com/embassy-rs/embassy |
 | `embassy-executor-timer-queue` | 0.1.0 | MIT OR Apache-2.0 | https://github.com/embassy-rs/embassy |
@@ -119,9 +121,11 @@ The plugins in `plugins/` depend only on `teetotum-face` from this repository.
 | `nb` | 0.1.3 | MIT OR Apache-2.0 | https://github.com/rust-embedded/nb |
 | `nb` | 1.1.0 | MIT OR Apache-2.0 | https://github.com/rust-embedded/nb |
 | `num-traits` | 0.2.19 | MIT OR Apache-2.0 | https://github.com/rust-num/num-traits |
+| `num_enum` | 0.7.6 | BSD-3-Clause OR MIT OR Apache-2.0 | https://github.com/illicitonion/num_enum |
 | `pin-project-lite` | 0.2.17 | Apache-2.0 OR MIT | https://github.com/taiki-e/pin-project-lite |
 | `portable-atomic` | 1.15.0 | Apache-2.0 OR MIT | https://github.com/taiki-e/portable-atomic |
 | `portable_atomic_enum` | 0.3.1 | MIT | https://github.com/bugadani/portable_atomic_enum |
+| `qrcodegen-no-heap` | 1.8.1 | MIT | https://github.com/nayuki/QR-Code-generator |
 | `ral-registers` | 0.1.3 | MIT OR Apache-2.0 | https://github.com/adamgreig/ral-registers |
 | `rand_core` | 0.10.1 | MIT OR Apache-2.0 | https://github.com/rust-random/rand_core |
 | `rand_core` | 0.6.4 | MIT OR Apache-2.0 | https://github.com/rust-random/rand |
