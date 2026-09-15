@@ -3,6 +3,7 @@ fn main() {
     // The linker calls this binary again to explain an error, and then there is no OUT_DIR.
     if std::env::var_os("OUT_DIR").is_some() {
         qr_codes();
+        commit();
     }
     // make sure linkall.x is the last linker script (otherwise might cause problems with flip-link)
     println!("cargo:rustc-link-arg=-Tlinkall.x");
@@ -71,6 +72,53 @@ fn linker_be_nice() {
         "cargo:rustc-link-arg=-Wl,--error-handling-script={}",
         std::env::current_exe().unwrap().display()
     );
+}
+
+/// Sets `TEETOTUM_COMMIT` for About: the short hash of the commit built from, with `+` when
+/// tracked files differ from it, or `unknown` outside a git checkout.
+fn commit() {
+    use std::process::Command;
+
+    let git = |args: &[&str]| {
+        Command::new("git")
+            .args(args)
+            .output()
+            .ok()
+            .filter(|out| out.status.success())
+            .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_owned())
+    };
+    // HEAD moves with a checkout, the branch with a commit, the index with a staged edit; the
+    // source trees catch the rest. A path that does not exist would rerun every build.
+    let branch = git(&["symbolic-ref", "-q", "HEAD"]);
+    let mut watched = vec![
+        String::from("HEAD"),
+        String::from("index"),
+        String::from("packed-refs"),
+    ];
+    watched.extend(branch);
+    for name in &watched {
+        let path = git(&["rev-parse", "--git-path", name]);
+        if let Some(path) = path.filter(|path| std::path::Path::new(path).exists()) {
+            println!("cargo:rerun-if-changed={path}");
+        }
+    }
+    for tree in [
+        "src",
+        "../teetotum/src",
+        "../teetotum-face/src",
+        "../teetotum-pack/src",
+    ] {
+        println!("cargo:rerun-if-changed={tree}");
+    }
+
+    let dirty = git(&["status", "--porcelain", "--untracked-files=no"])
+        .is_some_and(|changes| !changes.is_empty());
+    let commit = match git(&["rev-parse", "--short=7", "HEAD"]) {
+        Some(hash) if dirty => format!("{hash}+"),
+        Some(hash) => hash,
+        None => String::from("unknown"),
+    };
+    println!("cargo:rustc-env=TEETOTUM_COMMIT={commit}");
 }
 
 #[allow(dead_code)]

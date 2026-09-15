@@ -4315,7 +4315,7 @@ fn settings_screen(
     nav: &Navigator,
     ring: Option<&Ring>,
 ) {
-    const VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"));
+    const VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"), " ", env!("TEETOTUM_COMMIT"));
 
     let orientation = format!("{} deg", state.orientation * 90);
     let brightness = format!("{} %", state.brightness.percent());
