@@ -103,7 +103,7 @@ const SCAN_MAX_NETWORKS: usize = 20;
 const SCAN_DWELL_MIN: HalDuration = HalDuration::from_millis(100);
 const SCAN_DWELL_MAX: HalDuration = HalDuration::from_millis(300);
 
-const PAGE: &str ="<!doctype html><title>apheap</title><p>TeeToTum access point</p>";
+const PAGE: &str = "<!doctype html><title>apheap</title><p>TeeToTum access point</p>";
 
 /// Logs the heap after a stage, with the change since the previous one.
 fn stage(name: &str, last: &mut usize) {
@@ -136,7 +136,9 @@ async fn main(_spawner: Spawner) -> ! {
         },
     );
 
-    info!("--- apheap: sockets {SOCKETS}, tcp buffers {TCP_BUFFER}, in psram {BUFFERS_IN_PSRAM} ---");
+    info!(
+        "--- apheap: sockets {SOCKETS}, tcp buffers {TCP_BUFFER}, in psram {BUFFERS_IN_PSRAM} ---"
+    );
     let mut last = esp_alloc::HEAP.used();
     stage("1 empty heap", &mut last);
 
@@ -146,8 +148,8 @@ async fn main(_spawner: Spawner) -> ! {
     esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
     stage("1b scheduler", &mut last);
 
-    let (mut wifi, interfaces) = esp_radio::wifi::new(peripherals.WIFI, Default::default())
-        .expect("Wi-Fi controller");
+    let (mut wifi, interfaces) =
+        esp_radio::wifi::new(peripherals.WIFI, Default::default()).expect("Wi-Fi controller");
     stage("2a wifi controller", &mut last);
 
     let transport = BleConnector::new(peripherals.BT, Default::default()).expect("BLE connector");
@@ -233,7 +235,9 @@ async fn main(_spawner: Spawner) -> ! {
             let began = Instant::now();
             let sent = match path {
                 Some(Path::Root) => respond(&mut socket, "text/html", PAGE.as_bytes(), 0).await,
-                Some(Path::Blob) => respond(&mut socket, "application/octet-stream", &[], BLOB).await,
+                Some(Path::Blob) => {
+                    respond(&mut socket, "application/octet-stream", &[], BLOB).await
+                }
                 None => respond(&mut socket, "text/plain", b"not found", 0).await,
             };
             let ms = began.elapsed().as_millis().max(1);
@@ -403,13 +407,12 @@ async fn request_path(socket: &mut TcpSocket<'_>) -> Option<Path> {
 
 /// Sends a response: `body` as it is, or `generated` bytes of a counting pattern when it is
 /// empty. Returns the bytes of body that went out.
-async fn respond(
-    socket: &mut TcpSocket<'_>,
-    kind: &str,
-    body: &[u8],
-    generated: usize,
-) -> usize {
-    let length = if body.is_empty() { generated } else { body.len() };
+async fn respond(socket: &mut TcpSocket<'_>, kind: &str, body: &[u8], generated: usize) -> usize {
+    let length = if body.is_empty() {
+        generated
+    } else {
+        body.len()
+    };
     let head = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: {kind}\r\nContent-Length: {length}\r\nConnection: close\r\n\r\n"
     );
@@ -417,7 +420,11 @@ async fn respond(
         return 0;
     }
     if !body.is_empty() {
-        return if write_all(socket, body).await.is_ok() { body.len() } else { 0 };
+        return if write_all(socket, body).await.is_ok() {
+            body.len()
+        } else {
+            0
+        };
     }
     let mut chunk = [0u8; CHUNK];
     let mut sent = 0;
