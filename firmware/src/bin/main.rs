@@ -1598,6 +1598,14 @@ fn local_name(data: &[u8]) -> Option<String> {
     })
 }
 
+/// Keep a BLE scan window open for `window`, or until a file starts on its way over Wi-Fi.
+async fn hold_window(window: Duration) {
+    let began = Instant::now();
+    while began.elapsed() < window && !share::busy() {
+        Timer::after(NEARBY_POLL).await;
+    }
+}
+
 /// Waits `slow`, or only `fast` while a face that listens is on the screen -- and notices such a
 /// face coming up within [`NEARBY_POLL`].
 async fn pause(slow: Duration, fast: Duration) {
@@ -2190,8 +2198,9 @@ async fn main(spawner: Spawner) -> ! {
         };
 
         loop {
-            // Stand down while a peer is connected: scanning and a connection share the radio.
-            if PEER_CONNECTED.load(Ordering::Relaxed) {
+            // Stand down while a peer is connected or a file is on its way over Wi-Fi: scanning
+            // shares the radio with both, and a window beside a download halves its speed.
+            if PEER_CONNECTED.load(Ordering::Relaxed) || share::busy() {
                 Timer::after(CONNECTION_POLL).await;
                 continue;
             }
@@ -2203,7 +2212,7 @@ async fn main(spawner: Spawner) -> ! {
             };
             match scanner.scan(&config).await {
                 Ok(session) => {
-                    Timer::after(window).await;
+                    hold_window(window).await;
                     drop(session);
                 }
                 Err(err) => {

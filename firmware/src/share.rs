@@ -52,8 +52,9 @@ const HTTP_SOCKETS: usize = 2;
 const TCP_BUFFER: usize = 8192;
 /// What a request head may take; the rest of it is not read.
 const HEAD: usize = 512;
-/// Bytes read off the card per write to the socket.
-const CHUNK: usize = 1536;
+/// Bytes read off the card per write to the socket: one 4 KiB cluster, which the reader fetches
+/// in a single command, where smaller pieces pay a command and a stop each.
+const CHUNK: usize = 4096;
 /// DHCP socket buffer, each way, and the server's scratch for a message.
 const DHCP_BUFFER: usize = 1024;
 /// Leases the DHCP server keeps.
