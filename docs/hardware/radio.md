@@ -30,8 +30,9 @@ allocator on top of it.
 
 Measured on 2026-09-04, before the S3 was flashed: the factory demo brings up an access point of
 its own, SSID `My-Ap`, BSSID `fe:01:2c:xx:xx:d8` — the SoftAP address derived from the S3's base
-MAC. WPA2, password unknown. This firmware brings up an access point only while its Card over Wi-Fi
-dialog is open (see the [user guide](../user-guide.md#6-card-over-wi-fi)).
+MAC. WPA2, password unknown. This firmware names its own access point `TeeToTum-` and four hex
+digits, and brings it up only while its Card over Wi-Fi dialog is open (see the
+[user guide](../user-guide.md#6-card-over-wi-fi)).
 
 
 ## What the radios actually see
