@@ -46,7 +46,7 @@ header and the copy out of the scratch sector are about 2 % together.
 The demo's `*_360.bin` backgrounds are **259204 bytes = 360 x 360 x 2 + 4**: one screen of this
 panel's RGB565 behind a four-byte header that reads as 360 by 360. That is the shape of the
 framebuffer, so `firmware/src/bin/sdshow.rs` reads the file straight into it -- no decoder, no scaling,
-no drawing -- and a tap on the glass swaps the two bytes of every pixel, because no file format
+no drawing -- and a tap on the screen swaps the two bytes of every pixel, because no file format
 here declares its byte order.
 
 Judged on 2026-09-08: **the picture is right as it is stored**, and the tap turns it **grey**.

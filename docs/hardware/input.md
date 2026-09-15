@@ -75,7 +75,7 @@ counter that `Encoder::poll` collects: a polled pin is only as good as the slowe
 loop that reads it, and one slow pass steps straight over a pulse.
 
 Which pin is clockwise, and how many pulses make a revolution, are not things a pin can say —
-they need the hand and the glass in one picture. `firmware/src/bin/knob.rs` draws a dot on a circle with
+they need the hand and the screen in one picture. `firmware/src/bin/knob.rs` draws a dot on a circle with
 a fixed index mark at twelve o'clock and moves the dot with the knob:
 
 - **GPIO8 is clockwise.** Turning the knob clockwise counts up on GPIO8, and the dot follows the

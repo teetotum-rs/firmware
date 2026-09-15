@@ -3123,7 +3123,7 @@ async fn main(spawner: Spawner) -> ! {
                                             );
                                         }
                                         state.menu = None;
-                                        info!("Home: {:?} on the glass", state.face);
+                                        info!("Home: {:?} on the screen", state.face);
                                     }
                                     // Only a top menu with an OK closes, and the firmware's top
                                     // menu is home, which has none.
@@ -4513,7 +4513,7 @@ fn settings_screen(
         Some((SETTING_BRIGHTNESS, Owner::Firmware)) => {
             line(-14, &brightness, reading);
             line(16, "turn the knob", quiet);
-            line(34, "the glass shows it", quiet);
+            line(34, "the screen shows it", quiet);
         }
         Some((SETTING_HAPTICS, Owner::Firmware)) => {
             line(-14, &haptics, reading);

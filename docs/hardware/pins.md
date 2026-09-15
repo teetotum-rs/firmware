@@ -69,7 +69,7 @@ afternoon — see [Haptics](haptics.md).
 Nothing else answers. The factory image's `cst816s` is the driver's name, not the chip's; the
 register map is the same across the family, which is why the factory demo works anyway.
 
-A finger on the glass produces coordinates and pulls GPIO9 low, so the touch interrupt row is
+A finger on the screen produces coordinates and pulls GPIO9 low, so the touch interrupt row is
 real. GPIO10 is a different matter, and the table above has been corrected: `probe` pulses it
 before scanning, but a later run that never touched the pin at all read the identity and
 contact registers just as well. So the controller does not need it, and nothing so far shows

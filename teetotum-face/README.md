@@ -3,7 +3,7 @@
 Write a face -- a plugin -- for [teetotum](https://github.com/teetotum-rs/firmware), the
 firmware for the Waveshare ESP32-S3 Knob Touch LCD 1.8.
 
-A face is a WebAssembly module. It gets the taps and wipes on the glass, the knob if it asks for
+A face is a WebAssembly module. It gets the taps and wipes on the screen, the knob if it asks for
 it, and names what should be drawn; the firmware does the drawing. The crate has no dependencies
 and needs no allocator.
 
@@ -16,7 +16,7 @@ teetotum-face = "0.1"
 ```
 
 A face builds for `wasm32v1-none`, is signed with
-[`teetotum-pack`](https://crates.io/crates/teetotum-pack) and is accepted on the glass before any
+[`teetotum-pack`](https://crates.io/crates/teetotum-pack) and is accepted on the screen before any
 of its code runs. The whole way from an empty crate to a face on the device is in the
 [plugin guide](https://github.com/teetotum-rs/firmware/blob/main/docs/plugin-development.md).
 

@@ -17,7 +17,7 @@ enough to trust it.
 **It is not the table the factory uses.** Disassembling the app in `backup/` shows the factory
 installing its own 184-entry table through `ESP_PanelLcd::configVendorCommands`; Espressif's
 216-entry default is referenced exactly once, in a fallback branch that never runs. The two
-disagree in precisely the registers that decide whether the glass stays driven:
+disagree in precisely the registers that decide whether the screen stays driven:
 
 | Register | Espressif | factory | what it sets |
 |---|---|---|---|
@@ -31,7 +31,7 @@ AVDD, VGH, VGL and VCOM never appear on the display connector: the schematic run
 supply straight from the board's 3V3 rail, with no enable pin, no load switch and no boost
 converter. The controller makes those rails itself, from its own charge pumps, configured by
 exactly those registers. Too weak a VGH means the pixels charge and then relax back — an image
-that *fades* over a second rather than snapping to black, which is what was on the glass.
+that *fades* over a second rather than snapping to black, which is what was on the screen.
 
 Replaying the factory's table verbatim fixed it in one go. `teetotum/src/panel.rs` now holds that table,
 converted entry for entry, with the page structure marked in comments.
@@ -62,7 +62,7 @@ sized the transfer, the DMA buffer and the staging array together, so raising it
 things at once and the result could not speak about any of them. Separated — buffer and staging
 held at the largest size, only the transfer length varying — every size tried arrives.
 `firmware/src/bin/chunktest.rs` is the measurement: it paints six bands of the panel, each with a
-different transfer size, so one look at the glass reads out all six results at once. 720 bytes
+different transfer size, so one look at the screen reads out all six results at once. 720 bytes
 through 21600 all painted their band, the 4092-byte DMA descriptor boundary included. The upper
 bound is unknown; 21600 is the largest tried, not the largest that works.
 
@@ -73,22 +73,22 @@ transaction and bare continuation data is correct; framing every chunk as its ow
 the write after the first one and put nothing on the screen.
 
 **The panel is mounted upside down.** MADCTL (36h) is prepended to the table, and the driver's
-default of `0x00` puts row 0 at the bottom of the glass and column 0 on the right: what is drawn
+default of `0x00` puts row 0 at the bottom of the screen and column 0 on the right: what is drawn
 first arrives last, turned by 180 degrees. Stripes cannot show that on their own -- a full-width
 band looks identical mirrored in X -- so `firmware/src/bin/orientation.rs` draws a letter F, which is
 asymmetric in both axes, with a red square marking the corner the controller calls (0,0). With
 `0xC0`, both mirror bits set, the F reads upright and the right way round with the USB socket
 pointing away from the viewer, and `teetotum/src/panel.rs` now sends that as `PANEL_MOUNT_MADCTL`. Worth
-knowing for the next panel: the controller's RAM is 360x390 against 360 rows of glass, so
+knowing for the next panel: the controller's RAM is 360x390 against 360 visible rows, so
 mirroring in Y can shift the visible window by the difference. Here it does not.
 
-That constant describes how the glass is fitted, and a board that mounts the same panel the other
+That constant describes how the panel is fitted, and a board that mounts the same panel the other
 way up changes it there. It is **not** where a viewing orientation belongs: the orientation the
 user picks is a quarter turn on top of the mount correction, chosen on the device and kept in the
 settings (see [below](#the-panel-turns-in-quarters-and-nothing-in-between)).
 
 **Neither a host refresh nor TE is needed.** The ST77916 carries a full frame memory and scans
-the glass out of it on its own oscillator, so pixels are written once and stay. The tearing-effect
+the screen out of it on its own oscillator, so pixels are written once and stay. The tearing-effect
 line is a convenience for avoiding tearing, and on this board it is not wired to the ESP32-S3 at
 all — the net exists on the display connector and ends there. Advice for the ST77903, a RAM-less
 controller where the host really must stream every frame or the image dies, does not apply here
@@ -104,7 +104,7 @@ off. The factory firmware never reads the panel at all, so it offered no templat
 ## A frame: what it costs to build one and show it
 
 Measured on 2026-09-07 with `firmware/src/bin/render.rs`, which assembles one scene in a framebuffer and
-times every part of getting it onto the glass.
+times every part of getting it onto the screen.
 
 The picture is a 360x360 RGB565 framebuffer — **253 KiB** — and it lives in the external PSRAM,
 because the internal SRAM is 512 KiB and the Wi-Fi and Bluetooth stacks already have a large
@@ -119,7 +119,7 @@ that image carries `octal_psram`, the log tag of ESP-IDF's octal implementation,
 ### The panel takes 80 MHz, and that is the largest lever in this project
 
 Every run before this used 10 MHz because it was the first value that worked. All four clocks
-below were sent and all four looked clean on the glass — checked by eye, because a corrupt
+below were sent and all four looked clean on the screen — checked by eye, because a corrupt
 transfer shows as stripes and nothing in the log would say so.
 
 | clock | per frame | frames per second | 259200 bytes over 4 lines | difference |
@@ -137,7 +137,7 @@ At 80 MHz the copy is more than half the frame time.
 #### The copy cannot be removed, because the PSRAM cannot feed this bus
 
 Giving the DMA the PSRAM address directly is 6.6 ms a frame instead of 14.4 — and it puts thick
-bands of one colour on the glass. An SPI transfer does not wait for its DMA: once the
+bands of one colour on the screen. An SPI transfer does not wait for its DMA: once the
 transaction is running the clock runs, and a dry transmit FIFO sends whatever stood in it last.
 At 80 MHz over four lines the bus takes **40 MB/s** and the PSRAM gives about **32**.
 
@@ -159,7 +159,7 @@ per pixel took 13.47 ms; the same loop writing 32-bit words, a quarter of the st
 ### The panel turns in quarters, and nothing in between
 
 MADCTL (36h) has three geometry bits — mirror X, mirror Y, exchange axes — so the panel turns a
-picture by 0, 90, 180 or 270 degrees in one register write. The glass is round, so any angle would
+picture by 0, 90, 180 or 270 degrees in one register write. The screen is round, so any angle would
 be usable, but an angle in between has to be resampled pixel by pixel on its way out. Turning the
 picture band by band into internal RAM measured, at 80 MHz:
 
@@ -183,24 +183,24 @@ MV clear:  px = MX ? W-1-i : i      py = MY ? H-1-j : j
 MV set:    px = MX ? W-1-j : j      py = MY ? H-1-i : i
 ```
 
-The glass is fitted upside down, so the viewer's frame is the panel's turned by 180 — that is
+The panel is fitted upside down, so the viewer's frame is the panel's turned by 180 — that is
 `PANEL_MOUNT_MADCTL`, and it is the entry for zero. A quarter turn clockwise wants the viewer to
 see `(W-1-j, i)`, which on the panel is `(j, H-1-i)`: axes exchanged, Y mirrored, X not. So the
 four values are `0xC0`, `0xA0`, `0x00`, `0x60`.
 
-That is arithmetic on paper, so it was checked on the glass against the same quarter turns
+That is arithmetic on paper, so it was checked on the screen against the same quarter turns
 computed pixel by pixel: at 90 and 270 degrees **the picture does not move**, while the frame time
 drops from 45.6 ms to 14.4.
 
 ### One screen, one place for the numbers
 
-`teetotum/src/screen.rs` is the whole way from external RAM to the glass in one object: the PSRAM
+`teetotum/src/screen.rs` is the whole way from external RAM to the screen in one object: the PSRAM
 framebuffer, the QSPI bus, the vendor initialisation sequence and the orientation. A caller draws into `screen.frame()` with `embedded-graphics`, says how the device is
 being held with `set_orientation`, and calls `present`.
 
 The reason is not tidiness. Until 2026-09-08 that bring-up was copied into five binaries, and
 copied code is survivable where **copied constants are not**: the 80 MHz above had been measured
-and looked at on the glass, and the firmware in `firmware/src/bin/main.rs` was still driving the panel at
+and looked at on the screen, and the firmware in `firmware/src/bin/main.rs` was still driving the panel at
 the 10 MHz that was never a decision, only the first value that worked. A number that has been
 measured belongs in one place.
 

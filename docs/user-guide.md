@@ -505,7 +505,7 @@ the knob has reached.
 ### Brightness
 
 How bright the screen is, in ten steps from `10 %` to `100 %`. The screen changes as you turn
-(`the glass shows it`; for the word see the [glossary](#10-glossary)). The steps are spaced
+(`the screen shows it`). The steps are spaced
  for the eye rather than evenly, so each one looks
 like a similar change. **The range stops at both ends** rather than going round, so that one
 detent too far never jumps from the brightest to the darkest. The darkest step is dim, not off.
@@ -835,10 +835,6 @@ is normally no reason to restore it.
 
 **Face**
 : The screen of a plugin, or the Music Player's screen.
-
-**Glass**
-: What the firmware's own English texts call the touch screen, on the screen and in the
-  log, for example `the glass shows it` in [Brightness](#brightness).
 
 **Home**
 : The menu the device starts in and where a long press leads from anywhere else.

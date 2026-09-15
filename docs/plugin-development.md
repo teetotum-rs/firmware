@@ -21,7 +21,7 @@ If you want to know what the bundled plugins do or how a user removes one, read
 > - **Plugins come from two places:** the list `BUNDLED` in `firmware/src/bin/main.rs`, which
 >   embeds each `.wasm` file in the firmware image with `include_bytes!`, and the sixteen slots of
 >   the `plugins` partition, written over Bluetooth from Settings > Receive or over USB with
->   `tools/teetotum-pack pack`, and accepted on the glass (see [Quick start](#2-quick-start)).
+>   `tools/teetotum-pack pack`, and accepted on the screen (see [Quick start](#2-quick-start)).
 >   Loading a plugin from the SD card or over Wi-Fi is not implemented.
 
 ## Contents
@@ -339,7 +339,7 @@ tools/teetotum-pack pack firmware/assets/plugins/my-face.wasm --slot 0 --write
 `pack` checks the manifest and the signature, writes `my-face.slot` next to the module (a 64-byte header
 with a magic, the plugin's id, the length and the start of the module's SHA-512, then the module)
 and calls `espflash write-bin -B 921600` at the slot's address from `partitions.csv`. espflash
-restarts the board, and the firmware asks on the glass before the plugin gets a place (step 5).
+restarts the board, and the firmware asks on the screen before the plugin gets a place (step 5).
 There are sixteen slots of 64 KiB, the header included. Write a new build into the same slot: a
 slot written again asks again, and of two slots holding the same plugin the lower one is used.
 [Installing other plugins](plugins.md#installing-other-plugins) describes the same from the
@@ -1401,7 +1401,7 @@ The lines that concern plugins:
 | `Plugin: <name> sent N usages past the limit, dropped` | more than 4 usages in one event |
 | `Plugin: <name> stopped -- <error>` | a trap; see [Traps while running](#traps-while-running) |
 | `Plugin: N unloaded, heap N bytes free` | another plugin was started, or this one removed |
-| `Home: Plugin(N) on the glass` | a face was opened from Home |
+| `Home: Plugin(N) on the screen` | a face was opened from Home |
 | `Touch: <gesture>, nothing a face hears` | a controller gesture that is not delivered |
 
 **Check the module before you flash**: run the inspection script from

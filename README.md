@@ -34,7 +34,7 @@ browser</a>.</em></p>
 ## What it does today
 
 - **Home is a ring** of twelve segments: turn the knob to a segment, tap to choose, tap the
-  centre to open. Holding a finger on the glass goes back to Home; in an open dialog it cancels
+  centre to open. Holding a finger on the screen goes back to Home; in an open dialog it cancels
   first. Holding on Home itself opens a ring of QR codes: the firmware, the hardware, the plugin
   guide, the code-quality guide, the projects it is built on and where to report a problem.
 - **A music player** for whatever the phone is playing — title, artist, cover art and a volume
@@ -44,7 +44,7 @@ browser</a>.</em></p>
   how the cover art is scaled. Written to two alternating flash sectors, not to a file.
 - **Plugins as WebAssembly**, loaded at runtime under [wasmi](https://github.com/wasmi-labs/wasmi),
   each with a manifest of rights the firmware enforces. Beyond the bundled ones, sixteen flash
-  slots take plugins sent over Bluetooth or written over USB, and accepted on the glass. Bundled: a HID remote for the phone's
+  slots take plugins sent over Bluetooth or written over USB, and accepted on the screen. Bundled: a HID remote for the phone's
   player, a die that rolls when you turn the knob, and *Nearby*, which draws the Wi-Fi and
   Bluetooth signals around it as a radar.
 - **Drivers for all of it in one SDK crate**: the ST77916 panel over QSPI at 80 MHz, the CST816D
@@ -135,7 +135,7 @@ plugins.
 
 | | |
 |---|---|
-| `teetotum/` | the SDK crate — glass, knob, touch, haptics, card, and the link to the other chip |
+| `teetotum/` | the SDK crate — screen, knob, touch, haptics, card, and the link to the other chip |
 | `teetotum-face/` | what a plugin (a *face*) is written against — the `face!` macro, events, colours, HID usages, icons; no dependencies, builds for wasm32 and Xtensa |
 | `teetotum-pack/` | checks, signs and packs a face — the same checks in the firmware and in the `teetotum-pack` command on the host |
 | `firmware/` | the firmware, and the bring-up runs in `firmware/src/bin` that measured the board |
@@ -184,7 +184,7 @@ The work was done by one person and [Claude Code](https://claude.com/claude-code
 Claude models) working together, over the first half of September 2026. The split, honestly:
 
 - **The measurements are the person's.** Every claim about this board came from the device —
-  a logic level, a register read, a frame time, a byte on a wire, a finger on the glass. Runs
+  a logic level, a register read, a frame time, a byte on a wire, a finger on the screen. Runs
   whose result was a judgement ("is this scaler better?", "does the click feel right?") were
   decided by eye and by hand, at the device, and the answer went back into the code.
 - **The code and the prose were mostly drafted by the model**, in a conversation: the person
