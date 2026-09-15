@@ -23,7 +23,7 @@
 //! the same GDMA reading the same external RAM through the same cache, so a boundary here is
 //! the strongest cheap evidence there is, and it costs no hand at all.
 //!
-//! Headless: `python3 tools/listen.py --seconds 40`.
+//! Run it in the monitor with `cargo run --release --bin psramreach`.
 
 #![no_std]
 #![no_main]

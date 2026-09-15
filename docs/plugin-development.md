@@ -1369,16 +1369,13 @@ There is no simulator; a face is tested on the device.
 **A plugin cannot log.** There is no import for it. To see a value while you develop, draw it:
 a line of `Size::Small` in `Colour::QUIET` costs one of your 64 drawing calls.
 
-**Read the firmware log.** Everything the loader decides is logged. Three ways to read it:
+**Read the firmware log.** Everything the loader decides is logged. Two ways to read it:
 
 - `cargo run --release` from the repository root flashes and then stays in the interactive
   monitor. This is the normal way while you try a face with your hands.
 - `espflash monitor` reads without flashing. It needs a real terminal: started from a script or
   a background job it fails with `Failed to initialize input reader`, and by then it has already
   put the chip into its serial bootloader, so the firmware is not running at all.
-- `tools/listen.py --seconds 30 | tee run.log` resets the board and copies the port to standard
-  output, without needing a terminal (Python with `pyserial`). Use it for runs that do not need
-  a hand.
 
 The lines that concern plugins:
 

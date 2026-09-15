@@ -8,7 +8,7 @@
 //! ```text
 //! cargo build --release --bin slots
 //! espflash flash -B 921600 --partition-table partitions.csv target/xtensa-esp32s3-none-elf/release/slots
-//! tools/listen.py --seconds 20
+//! espflash monitor
 //! ```
 
 #![no_std]

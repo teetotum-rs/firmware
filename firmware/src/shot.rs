@@ -4,7 +4,7 @@
 //! something on its screen. Redrawing the interface a second time in another language would be a
 //! second implementation of the same rules, wrong the day either one changes. So the firmware
 //! hands over exactly what it drew: the framebuffer, byte for byte, base64 on stdout, bracketed
-//! by two markers `tools/shot.py` looks for.
+//! by two markers a reader on the host looks for.
 //!
 //! It is the log's own wire, so it costs nothing to set up and nothing when unused. A full
 //! picture is 259200 bytes, 345600 characters of base64; it takes a few seconds, during which

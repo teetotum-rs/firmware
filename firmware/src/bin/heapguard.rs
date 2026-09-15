@@ -20,7 +20,7 @@
 //!
 //! ```text
 //! cargo build --release --bin heapguard && espflash flash -B 921600 target/xtensa-esp32s3-none-elf/release/heapguard
-//! tools/listen.py --seconds 20
+//! espflash monitor
 //! ```
 
 #![no_std]

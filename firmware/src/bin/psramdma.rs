@@ -47,8 +47,7 @@
 //! is at `0x3c020000` in this run and `0x3c1a0000` in the firmware. The address does not decide
 //! whether the direct path stripes: with the scene filled, the same picture stripes at both
 //! addresses. Left at zero, and left in because the question is cheap to ask again.
-//! Headless: `python3 tools/listen.py`, or in the monitor with
-//! `cargo run --release --bin psramdma`.
+//! Run it in the monitor with `cargo run --release --bin psramdma`.
 
 #![no_std]
 #![no_main]

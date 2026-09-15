@@ -30,7 +30,7 @@
 //!
 //! ```text
 //! cargo build --release --bin faceheap && espflash flash -B 921600 target/xtensa-esp32s3-none-elf/release/faceheap
-//! tools/listen.py --seconds 40
+//! espflash monitor
 //! ```
 //!
 //! What it found:

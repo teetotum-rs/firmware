@@ -32,13 +32,13 @@
 //! And dropping everything must give back the whole heap, because uninstalling is planned for
 //! from the start -- even for the plugin that ships with the firmware.
 //!
-//! The run has no screen, no radio and no hand. It is read with `tools/listen.py`:
+//! The run has no screen, no radio and no hand. It is read from the log:
 //!
 //! ```text
 //! # the three modules are this run's frozen inputs, built once from plugins/hid-remote;
 //! # its build.sh no longer makes them
 //! cargo build --release --bin wasm && espflash flash -B 921600 target/xtensa-esp32s3-none-elf/release/wasm
-//! tools/listen.py --seconds 15
+//! espflash monitor
 //! ```
 //!
 //! The plan was to load the plugin from the card. It is embedded instead: the card sits inside

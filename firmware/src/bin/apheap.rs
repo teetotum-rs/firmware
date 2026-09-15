@@ -22,7 +22,7 @@
 //! ```text
 //! cargo build --release --bin apheap
 //! espflash flash --chip esp32s3 -B 921600 --partition-table partitions.csv --erase-parts otadata target/xtensa-esp32s3-none-elf/release/apheap
-//! tools/listen.py --seconds 180
+//! espflash monitor
 //! ```
 
 #![no_std]
