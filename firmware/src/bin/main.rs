@@ -3649,7 +3649,14 @@ async fn main(spawner: Spawner) -> ! {
                     // A phone camera reads a code best from a bright screen, so a shown QR code
                     // gets full brightness, and the stored level returns with the picture after it.
                     let qr_shown = state.menu.as_ref().and_then(Navigator::opened).is_some_and(
-                        |(id, owner)| owner == Owner::Firmware && qr_index(id).is_some(),
+                        |(id, owner)| {
+                            owner == Owner::Firmware
+                                && (qr_index(id).is_some()
+                                    || id == SETTING_SHARE
+                                        && state.card.is_some()
+                                        && share_code.is_some()
+                                        && !state.share_text)
+                        },
                     );
                     if lit && qr_shown != qr_lit {
                         if let Some(backlight) = backlight.as_ref() {
@@ -4592,15 +4599,15 @@ fn settings_screen(
         // developer -- looks first. The version is the ring's value above, so it is not repeated.
         // What the other chip reports lives in the player's About.
         Some((SETTING_ABOUT, Owner::Firmware)) => {
-            line(-42, "TeeToTum", (&fonts::BODY, palette.name));
-            line(-22, "MIT OR Apache-2.0", quiet);
+            line(-38, "TeeToTum", (&fonts::BODY, palette.name));
+            line(-18, "MIT OR Apache-2.0", quiet);
             line(
-                -4,
+                0,
                 &format!("up {} s  wi-fi {} nets", state.uptime, state.networks),
                 detail,
             );
             line(
-                12,
+                16,
                 &format!(
                     "ble {}  knob {:+}",
                     if state.peer {
@@ -4654,20 +4661,20 @@ fn settings_screen(
                 Motion::Still => "still",
                 Motion::Moving => "moving",
             };
-            line(-42, "Background", (&fonts::BODY, palette.name));
-            line(-22, "a cloud of points", quiet);
+            line(-38, "Background", (&fonts::BODY, palette.name));
+            line(-18, "a cloud of points", quiet);
             line(
-                -4,
+                0,
                 &format!("{} points, {} % bright", shape.points, shape.brightest),
                 detail,
             );
             line(
-                12,
+                16,
                 &format!("centre {} px, {} % icon colour", shape.centre, shape.accent),
                 detail,
             );
             line(
-                28,
+                32,
                 &format!(
                     "{motion}, ground {}.{} ms",
                     ground / 1000,
@@ -4771,15 +4778,15 @@ fn settings_screen(
                 } else {
                     format!("too large: {} KB heap", kb(offer.heap))
                 };
-                line(-45, offer.name, heading);
+                line(-38, offer.name, heading);
                 if offer.update {
-                    line(-24, &format!("update, {owner}"), owner_style);
+                    line(-17, &format!("update, {owner}"), owner_style);
                 } else {
-                    line(-24, owner, owner_style);
+                    line(-17, owner, owner_style);
                 }
-                line(-6, &format!("key {key}"), detail);
-                line(12, &format!("rights {}", offer.rights), detail);
-                line(30, &cost, detail);
+                line(1, &format!("key {key}"), detail);
+                line(19, &format!("rights {}", offer.rights), detail);
+                line(37, &cost, detail);
             }
         }
         // What the manifest says, and what loading cost -- read without running the plugin,
@@ -4827,12 +4834,12 @@ fn settings_screen(
             // the longest of them allows.
             (Some(_), _) => {
                 let value = (&fonts::VALUE, palette.value);
-                line(-52, "join the network", quiet);
-                line(-28, &credentials.ssid, value);
-                line(2, "with the password", quiet);
-                line(26, &credentials.password, value);
-                line(56, "then open", quiet);
-                line(80, share::HOST, value);
+                line(-43, "join the network", quiet);
+                line(-19, &credentials.ssid, value);
+                line(11, "with the password", quiet);
+                line(35, &credentials.password, value);
+                line(65, "then open", quiet);
+                line(89, share::HOST, value);
             }
         },
         Some((id, Owner::Firmware)) => {
