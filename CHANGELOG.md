@@ -29,6 +29,9 @@ A firmware release; `teetotum-face` and `teetotum-pack` stay at 0.1.0.
   `tools/ble-upload.py` sends one from a computer.
 - Settings > About shows the commit a firmware was built from after its version, with `+` for a
   build from changed files.
+- Every entry in the settings ring shows where it stands: Background whether the cloud moves,
+  Music Player the cover style, each plugin whether it is loaded, and Receive how many slots are
+  free.
 
 ## [0.1.0] - 2026-09-14
 

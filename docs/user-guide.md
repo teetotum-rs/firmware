@@ -425,7 +425,10 @@ plugins' settings follow Background clockwise, one segment each, from six o'cloc
 last of them stands `Receive`, which takes a plugin over Bluetooth.
 
 While an entry is selected in the ring, its **current value** stands under its name, so you can
-read every setting without opening it.
+read every setting without opening it. An entry that leads to a menu shows where that menu
+stands: `Background` whether the cloud is `still` or `moving`, `Music Player` the cover as
+`sharp` or `full screen`, and each plugin whether it is `loaded`, `not loaded` or `stopped`.
+`Receive` shows how many slots are free for a plugin, for example `13 free slots`.
 
 ### How a setting is changed and stored
 

@@ -693,7 +693,8 @@ type WaitingSlots = [Option<Waiting>; PLUGINS_MAX];
 
 /// The bundled plugins, then those accepted in the slots of the `plugins` partition, copied
 /// into external RAM so that each is a `'static` module like the bundled ones. Also how many
-/// there are, the slots that wait for the install dialog, and what is left of `spare`.
+/// there are, the slots that wait for the install dialog, what is left of `spare`, and how many
+/// slots hold nothing -- `None` if the slots were not read.
 ///
 /// **A slot with a bundled plugin's id takes that plugin's place**: same key and name are the
 /// same plugin, so a new build of it replaces the one in the image without a firmware build. A
@@ -716,6 +717,7 @@ fn gather_modules(
     WaitingSlots,
     FromSlot,
     Option<&'static mut [u8]>,
+    Option<usize>,
 ) {
     let mut modules: Modules = [None; PLUGINS_MAX];
     let mut from_slot: FromSlot = [None; PLUGINS_MAX];
@@ -728,18 +730,22 @@ fn gather_modules(
     ids[..BUNDLED.len()].copy_from_slice(&bundled_ids());
     let mut count = BUNDLED.len();
     let Some(region) = region else {
-        return (modules, count, waiting, from_slot, spare);
+        return (modules, count, waiting, from_slot, spare, None);
     };
     let Some(mut spare) = spare else {
         warn!("Plugin: no external RAM, only the bundled plugins");
-        return (modules, count, waiting, from_slot, None);
+        return (modules, count, waiting, from_slot, None, None);
     };
     let floor = spare.len() / 2;
     let mut slots = Slots::new(region);
+    let mut free = 0;
     for n in 0..slots.count() {
         let header = match slots.header(n) {
             Ok(Some(header)) => header,
-            Ok(None) => continue,
+            Ok(None) => {
+                free += 1;
+                continue;
+            }
             Err(e) => {
                 error!("Plugin: slot {n} unreadable -- {e:?}");
                 continue;
@@ -814,7 +820,7 @@ fn gather_modules(
     for waits in waiting.iter_mut().flatten() {
         waits.update = PluginId::of(waits.wasm).is_ok_and(|id| ids[..count].contains(&Some(id)));
     }
-    (modules, count, waiting, from_slot, Some(spare))
+    (modules, count, waiting, from_slot, Some(spare), Some(free))
 }
 
 /// What the firmware puts into a plugin's menu for it, while faces cannot bring entries of their
@@ -1106,6 +1112,9 @@ mod overview {
         /// The plugins as the settings show them, each `None` if its manifest could not be read,
         /// and `None` past the last.
         pub(super) plugins: [Option<PluginView>; PLUGINS_MAX],
+        /// Slots of the `plugins` partition that hold nothing, as read at boot. An upload fills
+        /// one and restarts, so the count stays true.
+        pub(super) free_slots: Option<usize>,
         /// The plugin the install dialog offers, while it is open.
         pub(super) offer: Option<Offer>,
         /// How the upload stands that the receive dialog shows.
@@ -1773,7 +1782,7 @@ async fn main(spawner: Spawner) -> ! {
     // The plugins in the `plugins` partition, read before the store takes the flash for good.
     // They are copied into the screen's external RAM, which it hands over once, so what is left
     // goes on to where the page, the ring and the cover come off it.
-    let (modules, plugin_count, waiting, from_slot, spare) = gather_modules(
+    let (modules, plugin_count, waiting, from_slot, spare, free_slots) = gather_modules(
         flash::plugins(flash, table)
             .inspect_err(|_| warn!("Plugin: no plugins partition, only the bundled plugins"))
             .ok(),
@@ -2419,6 +2428,7 @@ async fn main(spawner: Spawner) -> ! {
             cover: settings.cover,
             motion: settings.motion,
             shape: settings.shape,
+            free_slots,
             plugins: core::array::from_fn(|n| {
                 manifests[n].zip(ids[n]).map(|(manifest, id)| PluginView {
                     id,
@@ -4319,6 +4329,11 @@ fn settings_screen(
 
     let orientation = format!("{} deg", state.orientation * 90);
     let brightness = format!("{} %", state.brightness.percent());
+    let free = state.free_slots.map(|n| match n {
+        0 => String::from("no free slot"),
+        1 => String::from("1 free slot"),
+        n => format!("{n} free slots"),
+    });
     let haptics = match state.haptics.step() {
         0 => String::from("Off"),
         step => format!("{step} / {}", Haptics::MAX.step()),
@@ -4339,6 +4354,7 @@ fn settings_screen(
         (Owner::Firmware, Some(SETTING_HAPTICS)) => Some(haptics.as_str()),
         (Owner::Firmware, Some(SETTING_COVER)) => Some(state.cover.name()),
         (Owner::Firmware, Some(SETTING_MOTION)) => Some(state.motion.name()),
+        (Owner::Firmware, Some(SETTING_RECEIVE)) => free.as_deref(),
         (Owner::Plugin, Some(id)) => match PluginSetting::of(id) {
             Some((n, PluginSetting::Installed)) => Some(installed(n)),
             _ => None,
@@ -4353,12 +4369,38 @@ fn settings_screen(
         (Owner::Firmware, Some(SETTING_ACCENT)) => Some(format!("{} %", state.shape.accent)),
         _ => None,
     };
+    // Entries that lead deeper have no id; they are told apart by kind and name. The submenus are
+    // `const`s, so their addresses say nothing.
+    let deeper = match (nav.owner(), nav.selected()) {
+        (Owner::Firmware, Some(entry)) => match entry.kind {
+            Kind::Menu(_) if entry.name == PLAYER.title => Some(match state.cover {
+                CoverStyle::Sharp => "sharp",
+                CoverStyle::Full => "full screen",
+            }),
+            Kind::Menu(_) if entry.name == BACKGROUND.title => Some(match state.motion {
+                Motion::Still => "still",
+                Motion::Moving => "moving",
+            }),
+            Kind::Plugin(_) => state
+                .plugins
+                .iter()
+                .flatten()
+                .find(|view| view.name == entry.name)
+                .map(|view| match (&view.fault, view.loaded) {
+                    (Some(_), _) => "stopped",
+                    (None, Some(_)) => "loaded",
+                    (None, None) => "not loaded",
+                }),
+            _ => None,
+        },
+        _ => None,
+    };
     let home = if nav.menu().is_home() {
         nav.selected().and_then(|entry| home_state(state, entry))
     } else {
         None
     };
-    let value = value.or(shape.as_deref()).or(home.as_deref());
+    let value = value.or(shape.as_deref()).or(deeper).or(home.as_deref());
     let palette = state.theme.palette();
     match ring {
         Some(ring) => nav.draw_on(frame, ring, palette, value),
