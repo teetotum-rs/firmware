@@ -4529,7 +4529,7 @@ fn settings_screen(
                 UploadStatus::Idle if state.peer => line(-4, "connected", detail),
                 UploadStatus::Idle => {
                     line(-4, "waiting for a sender", detail);
-                    line(16, BLE_DEVICE_NAME, quiet);
+                    line(16, &format!("visible as {BLE_DEVICE_NAME}"), quiet);
                 }
                 UploadStatus::Ready => {
                     let percent = received.received * 100 / received.total.max(1);

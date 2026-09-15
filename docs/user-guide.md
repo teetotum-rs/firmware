@@ -629,7 +629,7 @@ What the rights mean, and what a plugin does when it is stopped, is explained in
 
 `Receive` stands after the last plugin's entry, at nine o'clock with the three bundled plugins. It
 opens a dialog that takes one plugin over Bluetooth: `a plugin over BLE`, then
-`waiting for a sender` and `TeeToTum`, the Knob's name on Bluetooth. When a sender connects, the
+`waiting for a sender` and `visible as TeeToTum`, the name the Knob announces over Bluetooth. When a sender connects, the
 dialog says `connected`, then shows how much has arrived and into which slot. At `written` the
 Knob restarts and asks in the install dialog whether to install the plugin.
 

@@ -552,7 +552,7 @@ What you need:
 Then:
 
 1. On the Knob, open **Settings > Receive** and leave it open. It says `waiting for a sender`,
-   and under it `TeeToTum`, the Knob's name on Bluetooth. The Knob takes a plugin only while this
+   and under it `visible as TeeToTum`, the name the Knob announces over Bluetooth. The Knob takes a plugin only while this
    dialog is on the glass.
 2. Open the [plugin page](https://teetotum-rs.github.io/firmware/plugins.html). Pick a plugin from
    the catalogue, or a `.wasm` file of your own, and choose **Send to knob**. The browser lists
