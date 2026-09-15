@@ -17,6 +17,11 @@ of `teetotum-face`.
 - Plugin page: each plugin shows its tags from the catalogue, and buttons filter the list by tag
   ([#2](https://github.com/teetotum-rs/firmware/issues/2)).
 
+### Changed
+
+- The centre of a ring leaves more room: the hint to tap sits lower, and a two-line state on Home
+  keeps clear of the entry name above it.
+
 ### Fixed
 
 - A long entry name on Home or a long dialog title steps down to a smaller face instead of

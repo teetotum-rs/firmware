@@ -1733,22 +1733,22 @@ impl Navigator {
                 match value {
                     Some(state) if level.menu.home => {
                         // Two lines if the state carries a newline: home says where to look
-                        // before it says what to look for, and the pair centres on the line a
-                        // single one would have used. The lead-in is set small and quiet, the
-                        // line that matters in the state colour.
+                        // before it says what to look for, and the pair sits a little below the
+                        // line a single one would use, clear of the large name. The lead-in is
+                        // set small and quiet, the line that matters in the state colour.
                         match state.split_once('\n') {
                             Some((lead, line)) => {
                                 text(
                                     target,
                                     lead,
-                                    at - Point::new(0, 11),
+                                    at + Point::new(0, -3),
                                     &fonts::SMALL,
                                     palette.quiet,
                                 )?;
                                 fitted(
                                     target,
                                     line,
-                                    at + Point::new(0, 11),
+                                    at + Point::new(0, 19),
                                     state_font(line),
                                     STATE_ROOM,
                                     palette.value,
@@ -1778,7 +1778,7 @@ impl Navigator {
                 text(
                     target,
                     hint,
-                    CENTRE + Point::new(0, 18),
+                    CENTRE + Point::new(0, 30),
                     &fonts::SMALL,
                     palette.quiet,
                 )?;
