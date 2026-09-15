@@ -44,7 +44,7 @@ browser</a>.</em></p>
   how the cover art is scaled. Written to two alternating flash sectors, not to a file.
 - **Plugins as WebAssembly**, loaded at runtime under [wasmi](https://github.com/wasmi-labs/wasmi),
   each with a manifest of rights the firmware enforces. Beyond the bundled ones, sixteen flash
-  slots take plugins written over USB and accepted on the glass. Bundled: a HID remote for the phone's
+  slots take plugins sent over Bluetooth or written over USB, and accepted on the glass. Bundled: a HID remote for the phone's
   player, a die that rolls when you turn the knob, and *Nearby*, which draws the Wi-Fi and
   Bluetooth signals around it as a radar.
 - **Drivers for all of it in one SDK crate**: the ST77916 panel over QSPI at 80 MHz, the CST816D
@@ -95,6 +95,8 @@ its factory firmware in place. Details, and everything else measured on this boa
 
 **Without building:** the [web installer](https://teetotum-rs.github.io/firmware/) writes the latest
 release from the browser (desktop Chrome, Edge or Opera). Settings and installed plugins are kept.
+Firmware after 0.1.0 also takes plugins over Bluetooth, sent from the
+[plugin page](https://teetotum-rs.github.io/firmware/plugins.html).
 The same files, with checksums, are attached to each [release](https://github.com/teetotum-rs/firmware/releases).
 
 To build it yourself:

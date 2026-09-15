@@ -530,22 +530,75 @@ to spare, and so does anything up to roughly 13 KB of module.
 
 Besides the plugins that come with the firmware, the Knob keeps up to sixteen more in a part of
 its flash memory set aside for them, the `plugins` partition. It is cut into sixteen **slots**,
-one plugin each. A plugin gets into a slot **over the USB cable, from a computer**, and the Knob
-asks on its screen before the plugin gets a place on Home. There is no way yet to install a
-plugin from the SD card, over Wi-Fi or over Bluetooth.
+one plugin each. A plugin gets into a slot **over Bluetooth**, from a web page or a script, or
+**over the USB cable**, from a computer with the Rust tools. Either way the Knob asks on its
+screen before the plugin gets a place on Home. There is no way yet to install a plugin from the
+SD card or over Wi-Fi.
+
+Every plugin comes as a `.wasm` file, signed by its author. How to build and sign one is
+described in [plugin development](plugin-development.md).
+
+### Sending a plugin over Bluetooth
 
 What you need:
 
-- The plugin's `.wasm` file, signed by its author. How to build and sign one is described in
-  [plugin development](plugin-development.md).
+- A Knob whose firmware can receive: its Settings ring has a `Receive` entry. Releases after
+  0.1.0 have it; the [web installer](https://teetotum-rs.github.io/firmware/) writes the latest
+  release and keeps settings and plugins.
+- Chrome, Edge or Opera on the desktop, or Chrome on Android. Firefox and Safari cannot talk to
+  Bluetooth devices. On Linux, Chrome offers Bluetooth only with a flag: open
+  `chrome://flags/#enable-web-bluetooth`, set it to Enabled and restart the browser.
+
+Then:
+
+1. On the Knob, open **Settings > Receive** and leave it open. It says `waiting for a sender`,
+   and under it `TeeToTum`, the Knob's name on Bluetooth. The Knob takes a plugin only while this
+   dialog is on the glass.
+2. Open the [plugin page](https://teetotum-rs.github.io/firmware/plugins.html). Pick a plugin from
+   the catalogue, or a `.wasm` file of your own, and choose **Send to knob**. The browser lists
+   the Knob as `TeeToTum`.
+3. The dialog shows how much has arrived and into which slot. At `written` the Knob restarts and
+   opens the [install dialog](#the-install-dialog).
+
+The catalogue is the list of known plugins in
+[teetotum-rs/plugins](https://github.com/teetotum-rs/plugins). Before it sends one, the page
+checks that the file's size, SHA-256, id and key match that list.
+
+The Knob chooses a free slot itself. A new version of a plugin it already holds goes into another
+slot, and the install dialog marks it as an update.
+
+Without a browser, `tools/ble-upload.py` in a copy of this repository sends the same file. It
+needs Python with [bleak](https://pypi.org/project/bleak/) and the `stable` Rust toolchain, which
+builds `tools/teetotum-pack` for the slot header:
+
+```
+pip install bleak
+tools/ble-upload.py my-face.wasm
+```
+
+`--address` picks a Knob by its Bluetooth address instead of its name.
+
+If a transfer fails, the dialog names the reason in orange above `send it again`, and the slot
+stays empty:
+
+| Reason | What happened |
+|---|---|
+| "every slot is taken" | All sixteen slots hold a plugin. Empty one, see [After installing](#after-installing). |
+| "a piece went missing" | The connection lost part of the plugin. Send it again. |
+| "not what was announced" | The file that arrived differs from the one announced. Send it again. |
+| "not an upload" | The Knob received data without the start of a transfer. Send it again. |
+| "flash failed" | The Knob could not write its flash. Send it again. |
+
+### Writing a plugin into a slot over USB
+
+What you need:
+
 - `teetotum-pack`, from crates.io with `cargo install teetotum-pack --features cli`, or
   `tools/teetotum-pack` in a copy of this repository, which needs the `stable` Rust toolchain, and
   `espflash`, as in
   [Building and flashing it yourself](user-guide.md#9-building-and-flashing-it-yourself).
 - A Knob running TeeToTum with the partition table from `partitions.csv`. `cargo run --release`
   writes it; a Knob flashed with espflash's own table has no `plugins` partition.
-
-### Writing a plugin into a slot
 
 Connect the board so that the ESP32-S3 is on USB, then, from the repository root:
 
@@ -584,6 +637,7 @@ plugin's code**:
 | Name | The plugin's name, as it will stand on Home. |
 | "project key" | It is signed with the same key as the bundled plugins. |
 | "unknown key", in orange | It is signed with any other key. The Knob cannot know whose key that is: compare the next line with the key the author publishes. |
+| "update, …" before the key | It is a new version of a plugin the Knob already has, with the same key and name. The tick installs it in place of the old one, and an old copy in another slot is erased. |
 | "key …" | The first eight bytes of the author's key. Plugins with the same key come from the same author. |
 | "rights …" | What it will be allowed to do. See [Rights](#rights). |
 | "v…  … bytes" | Its version and the size of its file. |

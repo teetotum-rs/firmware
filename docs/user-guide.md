@@ -67,8 +67,9 @@ do:
   Its pictures are still on the microSD card, but TeeToTum does not use them. How to go back to the
   demo is in
   [section 9](#restoring-the-factory-firmware).
-- **No installing plugins without a computer.** Plugins beyond the bundled ones go onto the Knob
-  over the USB cable, not from the SD card, over Wi-Fi or over Bluetooth. See
+- **No installing plugins from the Knob alone.** Plugins beyond the bundled ones come from a
+  browser over Bluetooth or from a computer over the USB cable, not from the SD card or over
+  Wi-Fi. See
   [Using plugins](plugins.md#installing-other-plugins).
 - **The knob cannot be pressed.** It only turns. Everything that works like a button is done on
   the touch screen.
@@ -411,7 +412,7 @@ is `Settings`.
                            12
      Music Player  11           1  Orientation
                  10                 2  Theme
-                9                     3  Brightness
+       Receive  9                     3  Brightness
          Nearby  8                  4  Haptics
         Teetotum  7             5  Background
                            6
@@ -420,7 +421,8 @@ is `Settings`.
 
 The firmware's own settings are About and the five entries clockwise from it; the fifth,
 Background, is a menu of its own. The Music Player's menu stands left of About. The bundled
-plugins' settings follow Background clockwise, one segment each, from six o'clock on.
+plugins' settings follow Background clockwise, one segment each, from six o'clock on. After the
+last of them stands `Receive`, which takes a plugin over Bluetooth.
 
 While an entry is selected in the ring, its **current value** stands under its name, so you can
 read every setting without opening it.
@@ -622,6 +624,18 @@ six, seven and eight o'clock). It opens the **plugin's menu**, titled with the p
 
 What the rights mean, and what a plugin does when it is stopped, is explained in
 [Using plugins](plugins.md#plugin-settings).
+
+### Receive
+
+`Receive` stands after the last plugin's entry, at nine o'clock with the three bundled plugins. It
+opens a dialog that takes one plugin over Bluetooth: `a plugin over BLE`, then
+`waiting for a sender` and `TeeToTum`, the Knob's name on Bluetooth. When a sender connects, the
+dialog says `connected`, then shows how much has arrived and into which slot. At `written` the
+Knob restarts and asks in the install dialog whether to install the plugin.
+
+The Knob accepts a plugin only while this dialog is open. The tick closes it. How to send a
+plugin, and what an orange message in the dialog means, is in
+[Using plugins](plugins.md#sending-a-plugin-over-bluetooth).
 
 ## 7. Plugins
 

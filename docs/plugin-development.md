@@ -20,9 +20,9 @@ If you want to know what the bundled plugins do or how a user removes one, read
 >   formats 1 and 2 are no longer read.
 > - **Plugins come from two places:** the list `BUNDLED` in `firmware/src/bin/main.rs`, which
 >   embeds each `.wasm` file in the firmware image with `include_bytes!`, and the sixteen slots of
->   the `plugins` partition, written over USB with `tools/teetotum-pack pack` and accepted on the glass
->   (see [Quick start](#2-quick-start)). Loading a plugin from the SD card, over Wi-Fi or over
->   Bluetooth is not implemented.
+>   the `plugins` partition, written over Bluetooth from Settings > Receive or over USB with
+>   `tools/teetotum-pack pack`, and accepted on the glass (see [Quick start](#2-quick-start)).
+>   Loading a plugin from the SD card or over Wi-Fi is not implemented.
 
 ## Contents
 
@@ -344,6 +344,13 @@ There are sixteen slots of 64 KiB, the header included. Write a new build into t
 slot written again asks again, and of two slots holding the same plugin the lower one is used.
 [Installing other plugins](plugins.md#installing-other-plugins) describes the same from the
 user's side, emptying a slot included.
+
+**Or send it over Bluetooth**, without the cable: open Settings > Receive on the Knob, then run
+`tools/ble-upload.py firmware/assets/plugins/my-face.wasm` or choose the file on the
+[plugin page](https://teetotum-rs.github.io/firmware/plugins.html). The Knob picks a free slot
+and restarts into the same install dialog; a new build of a plugin it already holds replaces the
+old copy once you accept it. See
+[Sending a plugin over Bluetooth](plugins.md#sending-a-plugin-over-bluetooth).
 
 **Or build it into the firmware**, the way the bundled plugins are. Open `firmware/src/bin/main.rs` and find `BUNDLED`. Add your module **at the end** and raise
 the array length by one:
