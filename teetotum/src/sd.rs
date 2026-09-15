@@ -29,7 +29,7 @@ use esp_hal::Blocking;
 use esp_hal::delay::Delay;
 use esp_hal::gpio::Output;
 use esp_hal::spi::master::{Config as SpiConfig, Spi};
-use esp_hal::time::Rate;
+use esp_hal::time::{Instant, Rate};
 
 /// How fast the bus may run until the card is initialised. The specification allows 100-400 kHz
 /// in this window and nothing above it.
@@ -59,6 +59,12 @@ const BUSY_TIMEOUT_MS: u32 = 500;
 
 /// The token that precedes a block of data the card sends.
 const TOKEN_START_BLOCK: u8 = 0xFE;
+/// The token that precedes each block of a multi-block write.
+const TOKEN_START_MULTI: u8 = 0xFC;
+/// The token that ends a multi-block write.
+const TOKEN_STOP_MULTI: u8 = 0xFD;
+/// The status bits of a data response that accepted its block.
+const DATA_ACCEPTED: u8 = 0x05;
 
 /// What kind of card answered, and therefore how it wants to be addressed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -85,6 +91,9 @@ pub enum Error {
     Response(u8),
     /// The card sent an error token instead of data. The byte is the token.
     DataError(u8),
+    /// The card refused a block it was sent. The byte is the status of its data response:
+    /// `0x0B` for a CRC error, `0x0D` for a write error.
+    Rejected(u8),
     /// The SPI peripheral itself refused the transfer.
     Bus(esp_hal::spi::Error),
 }
@@ -239,10 +248,7 @@ impl<'d> SdCard<'d> {
     /// Read one 512-byte block. `lba` is a block number regardless of the card's addressing --
     /// the byte offset a standard capacity card wants is worked out here.
     pub fn read_block(&mut self, lba: u32, buffer: &mut [u8; 512]) -> Result<(), Error> {
-        let address = match self.kind {
-            Kind::HighCapacity => lba,
-            Kind::StandardCapacity => lba * 512,
-        };
+        let address = self.address(lba);
         let response = self.command(17, address)?;
         if response != 0x00 {
             self.release();
@@ -269,10 +275,7 @@ impl<'d> SdCard<'d> {
         if buffer.is_empty() {
             return Ok(());
         }
-        let address = match self.kind {
-            Kind::HighCapacity => lba,
-            Kind::StandardCapacity => lba * 512,
-        };
+        let address = self.address(lba);
         let response = self.command(18, address)?;
         if response != 0x00 {
             self.release();
@@ -288,6 +291,50 @@ impl<'d> SdCard<'d> {
         let result = self.stop_transmission();
         self.release();
         result
+    }
+
+    /// Write one 512-byte block. `lba` is a block number, as for [`SdCard::read_block`].
+    ///
+    /// Returns once the card has finished programming the block, not once it has received it:
+    /// until then it holds the data line low, and a command sent into that is lost.
+    pub fn write_block(&mut self, lba: u32, data: &[u8; 512]) -> Result<(), Error> {
+        let response = self.command(24, self.address(lba))?;
+        if response != 0x00 {
+            self.release();
+            return Err(Error::Response(response));
+        }
+        let result = self.write_data(TOKEN_START_BLOCK, data);
+        self.release();
+        result
+    }
+
+    /// Write a run of consecutive blocks in one command.
+    ///
+    /// `data` must be a whole number of blocks. This is CMD25, the counterpart of
+    /// [`SdCard::read_blocks`]. A refused block still ends the run with the stop token, so the
+    /// card has left write mode by the time the error comes back.
+    pub fn write_blocks(&mut self, lba: u32, data: &[u8]) -> Result<(), Error> {
+        if !data.len().is_multiple_of(512) {
+            return Err(Error::Unsupported);
+        }
+        if data.is_empty() {
+            return Ok(());
+        }
+        let response = self.command(25, self.address(lba))?;
+        if response != 0x00 {
+            self.release();
+            return Err(Error::Response(response));
+        }
+        let mut result = Ok(());
+        for block in data.chunks_exact(512) {
+            result = self.write_data(TOKEN_START_MULTI, block);
+            if result.is_err() {
+                break;
+            }
+        }
+        let stopped = self.stop_write();
+        self.release();
+        result.and(stopped)
     }
 
     /// Change the bus clock of an initialised card.
@@ -443,18 +490,61 @@ impl<'d> SdCard<'d> {
         self.wait_ready()
     }
 
+    /// Send one block behind its token and wait until the card has programmed it.
+    fn write_data(&mut self, token: u8, block: &[u8]) -> Result<(), Error> {
+        // One idle byte between the command response and the token.
+        self.exchange(0xFF)?;
+        self.exchange(token)?;
+        self.spi.write(block)?;
+        // A placeholder CRC: the card only checks it after CMD59, which is never sent.
+        self.spi.write(&[0xFF, 0xFF])?;
+        // The data response has the form `xxx0sss1`; 0xFF is the card still shifting.
+        let mut status = None;
+        for _ in 0..RESPONSE_TRIES {
+            let byte = self.exchange(0xFF)?;
+            if byte & 0x11 == 0x01 {
+                status = Some(byte & 0x1F);
+                break;
+            }
+        }
+        match status {
+            Some(DATA_ACCEPTED) => self.wait_ready(),
+            Some(refused) => {
+                let _ = self.wait_ready();
+                Err(Error::Rejected(refused))
+            }
+            None => Err(Error::Timeout),
+        }
+    }
+
+    /// End a multi-block write: the stop token, a stuff byte, then the card's busy time.
+    fn stop_write(&mut self) -> Result<(), Error> {
+        self.exchange(TOKEN_STOP_MULTI)?;
+        self.exchange(0xFF)?;
+        self.wait_ready()
+    }
+
+    /// The command argument for a block: the block number itself, or its byte offset on a
+    /// standard capacity card.
+    fn address(&self, lba: u32) -> u32 {
+        match self.kind {
+            Kind::HighCapacity => lba,
+            Kind::StandardCapacity => lba * 512,
+        }
+    }
+
     /// Wait out a card that is holding the data line low.
+    ///
+    /// Polled without sleeping, so the wait ends on the first byte the card lets go of.
     fn wait_ready(&mut self) -> Result<(), Error> {
-        let mut elapsed = 0;
+        let began = Instant::now();
         loop {
             if self.exchange(0xFF)? == 0xFF {
                 return Ok(());
             }
-            if elapsed >= BUSY_TIMEOUT_MS {
+            if began.elapsed().as_millis() >= u64::from(BUSY_TIMEOUT_MS) {
                 return Err(Error::Timeout);
             }
-            self.delay.delay_millis(1);
-            elapsed += 1;
         }
     }
 

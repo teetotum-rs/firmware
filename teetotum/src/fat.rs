@@ -8,9 +8,10 @@
 //!
 //! Three things are worth knowing before reading the code.
 //!
-//! - **The volume owns the card.** [`Volume::mount`] takes an [`SdCard`] and does not give it
-//!   back, because a cached FAT sector and a card that someone else is also seeking are not
-//!   compatible. [`Volume::card`] hands out the block device for the runs that want it raw.
+//! - **The volume owns the card.** [`Volume::mount`] takes an [`SdCard`] and keeps it, because a
+//!   cached FAT sector and a card that someone else is also seeking are not compatible.
+//!   [`Volume::card`] hands out the block device for the runs that want it raw, and
+//!   [`Volume::into_card`] ends the mount to give it back.
 //! - **Reading is done in runs, not in blocks.** A read that starts on a sector boundary and
 //!   asks for whole sectors goes out as one CMD18 for everything the current cluster still
 //!   holds ([`SdCard::read_blocks`]); only the ragged head and tail of a request pass through
@@ -178,6 +179,11 @@ impl<'d> Volume<'d> {
     /// The block device underneath, for whatever wants the card and not the filesystem.
     pub fn card(&mut self) -> &mut SdCard<'d> {
         &mut self.card
+    }
+
+    /// End the mount and return the card, for a writer that would leave this volume's cache stale.
+    pub fn into_card(self) -> SdCard<'d> {
+        self.card
     }
 
     /// The root directory.

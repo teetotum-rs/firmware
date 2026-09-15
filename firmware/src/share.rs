@@ -312,7 +312,11 @@ async fn listing(
         escape_html(&title)
     );
     if let Some(parent) = (!base.is_empty()).then(|| base.rsplit_once('/').map_or("", |(p, _)| p)) {
-        let _ = write!(page, "<tr><td><a href=\"/{}\">..</a>", percent_encode(parent));
+        let _ = write!(
+            page,
+            "<tr><td><a href=\"/{}\">..</a>",
+            percent_encode(parent)
+        );
     }
     write_all(socket, page.as_bytes()).await?;
 

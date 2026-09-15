@@ -41,6 +41,7 @@ embassy-time           = { workspace = true }
 embedded-graphics      = { workspace = true }
 embedded-io            = { workspace = true }
 embedded-io-async      = { workspace = true }
+fatfs                  = { workspace = true }
 # `internal-heap-stats` keeps the heap's high-water mark, which `faceheap` needs to see what
 # loading a face costs at its peak and not only afterwards.
 esp-alloc              = { workspace = true, features = ["internal-heap-stats"] }

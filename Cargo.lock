@@ -1179,6 +1179,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fatfs"
+version = "0.4.0"
+source = "git+https://github.com/rafalh/rust-fatfs?rev=2aefc2a027ce94ed0671752814dac203f0450e11#2aefc2a027ce94ed0671752814dac203f0450e11"
+dependencies = [
+ "bitflags 2.13.1",
+ "log",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2137,6 +2146,7 @@ dependencies = [
  "esp-radio",
  "esp-rtos",
  "esp-storage",
+ "fatfs",
  "log",
  "qrcodegen",
  "qrcodegen-no-heap",

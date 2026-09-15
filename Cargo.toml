@@ -50,6 +50,8 @@ embedded-graphics      = "0.8"
 embedded-io            = "0.7.1"
 embedded-io-async      = "0.7.0"
 embedded-storage       = "0.3.1"
+# FAT with long names that also writes. 0.4 is unreleased, hence the pinned commit.
+fatfs                  = { git = "https://github.com/rafalh/rust-fatfs", rev = "2aefc2a027ce94ed0671752814dac203f0450e11", default-features = false, features = ["lfn", "log_level_warn"] }
 esp-alloc              = "0.10.0"
 esp-backtrace          = { version = "0.19.0", features = [
   "esp32s3",
