@@ -701,27 +701,31 @@ async fn listing(
     } else {
         format!("/{base}/")
     };
-    let mut page = format!(
+    // A button to the folder above, where the listing used to carry a `..` link: one line of text
+    // is a small target for a mouse.
+    let above = match base.rsplit_once('/') {
+        _ if base.is_empty() => String::new(),
+        Some((parent, _)) => format!(
+            "<button onclick=\"location='/{}/'\">Up</button> ",
+            percent_encode(parent)
+        ),
+        None => String::from("<button onclick=\"location='/'\">Up</button> "),
+    };
+    let page = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n\
          <!doctype html><meta name=viewport content=\"width=device-width\">\
          <title>TeeToTum {0}</title>\
          <link rel=icon href={2}>{1}\
          <h1><img src={2} width=26 height=26 alt=\"\"> TeeToTum card over Wi-Fi</h1>\
          <h2>{0}</h2>\
-         <p><input type=file multiple id=f onchange=up()> <button onclick=md()>New folder</button> \
+         <p>{3}<input type=file multiple id=f onchange=up()> <button onclick=md()>New folder</button> \
          <span id=s></span><div><table>\
          <tr><th>Name<th class=n>Size<th>Created<th>Modified<th>Accessed<th>Attributes<th>",
         escape_html(&title),
         style(),
-        ICON_PATH
+        ICON_PATH,
+        above
     );
-    if let Some(parent) = (!base.is_empty()).then(|| base.rsplit_once('/').map_or("", |(p, _)| p)) {
-        let _ = write!(
-            page,
-            "<tr><td><a href=\"/{}\">..</a>",
-            percent_encode(parent)
-        );
-    }
     write_all(socket, page.as_bytes()).await?;
 
     let mut entries = card.lock().await.as_mut().map(|volume| volume.entries(dir));

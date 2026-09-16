@@ -20,7 +20,8 @@ of `teetotum-face`.
   ([#2](https://github.com/teetotum-rs/firmware/issues/2)).
 - The shared card's page carries the project's mark and a title line, and wears the knob's own
   colour theme: the links take the ring's selected colour, the buttons its darker shades. Its
-  footer names the firmware version, the card's size and how many entries the folder holds.
+  footer names the firmware version, the card's size and how many entries the folder holds. A
+  button leads to the folder above, where a `..` link used to be.
 
 ### Changed
 
