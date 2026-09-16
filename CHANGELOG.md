@@ -22,7 +22,8 @@ of `teetotum-face`.
   colour theme: the links take the ring's selected colour, the buttons its darker shades. Its
   footer names the firmware version, the card's size and how many entries the folder holds. A
   button leads to the folder above, where a `..` link used to be, and the listing scrolls under
-  the title line and over the footer, both of which stay put.
+  the title line and over the footer, both of which stay put. Uploading is a button of its own,
+  `Upload files`, in place of the browser's file field.
 
 ### Changed
 

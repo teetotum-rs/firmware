@@ -718,7 +718,9 @@ async fn listing(
          <link rel=icon href={2}>{1}\
          <h1><img src={2} width=26 height=26 alt=\"\"> TeeToTum card over Wi-Fi</h1>\
          <h2>{0}</h2>\
-         <p>{3}<button onclick=md()>New folder</button> <input type=file multiple id=f onchange=up()> \
+         <p>{3}<button onclick=md()>New folder</button> \
+         <button onclick=\"f.click()\">Upload files</button>\
+         <input type=file multiple id=f onchange=up() hidden> \
          <span id=s></span><div><table>\
          <tr><th>Name<th class=n>Size<th>Created<th>Modified<th>Accessed<th>Attributes<th>",
         escape_html(&title),
@@ -822,10 +824,9 @@ fn style() -> String {
          th,td{{padding:.25em 1em .25em 0;text-align:left;vertical-align:top}}\
          th{{position:sticky;top:0;background:var(--bg);color:var(--dim);font-weight:600}}td{{color:var(--dim)}}td:first-child{{color:var(--fg)}}\
          .n{{text-align:right;white-space:nowrap}}span{{white-space:nowrap}}\
-         button,::file-selector-button{{padding:.25em .9em;border:1px solid var(--line);\
-         border-radius:6px;background:var(--btn);color:var(--fg);font:inherit;cursor:pointer}}\
-         button:hover,::file-selector-button:hover{{background:var(--btn-hi)}}\
-         input{{font:inherit;color:var(--dim)}}\
+         button{{padding:.25em .9em;border:1px solid var(--line);border-radius:6px;\
+         background:var(--btn);color:var(--fg);font:inherit;cursor:pointer}}\
+         button:hover{{background:var(--btn-hi)}}\
          #s{{color:var(--dim)}}\
          footer{{margin-top:auto;padding-top:.6em;border-top:1px solid var(--line);\
          color:var(--dim);font-size:.9em}}\

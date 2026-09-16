@@ -432,12 +432,13 @@ found at start-up, for example `14.8 GB card`, or `no card`.
   set none. A folder opens its listing, the `Up` button goes to the folder above, and a file is
   downloaded; pictures (JPEG, PNG, GIF, BMP), text (`.txt`, `.log`, `.csv`) and sound (`.mp3`,
   `.wav`) the browser shows or plays itself.
-- **Up, New folder, Upload, Delete.** Above the table stand `Up`, `New folder` and the file
-  picker. The picker sends one or more files into the folder on screen, and a file of the same
-  name is replaced; beside it each file counts up in percent. A file that does not arrive whole is removed again. The Knob has no clock, so the times
+- **Up, New folder, Upload files, Delete.** Above the table stand `Up`, `New folder` and
+  `Upload files`. `Upload files` asks for one or more files and sends them into the folder on
+  screen, and a file of the same name is replaced; beside the buttons each file counts up in
+  percent. A file that does not arrive whole is removed again. The Knob has no clock, so the times
   come from the browser: the file's own modified time, and the moment of the upload as created.
   `New folder` asks for a name, and `Delete` in a row removes that file or folder after asking; a
-  folder has to be empty first. When the card refuses, the reason stands beside the picker, for
+  folder has to be empty first. When the card refuses, the reason stands beside the buttons, for
   example `the card is full` or `that name is taken`. Nothing can be renamed.
 - **The page looks like the Knob.** The title line, the buttons and the footer stay in place
   while the listing scrolls between them, with the column names in sight. It is dark, and its
