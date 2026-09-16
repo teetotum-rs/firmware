@@ -16,7 +16,7 @@ use alloc::string::String;
 use core::cell::Cell;
 use core::fmt::Write as _;
 use core::net::Ipv4Addr;
-use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 
 use edge_dhcp::server::{Server as DhcpServer, ServerOptions};
 use edge_dhcp::{Options, Packet};
@@ -27,9 +27,11 @@ use embassy_net::{Ipv4Address, Ipv4Cidr, Stack, StaticConfigV4};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::{Duration, Instant};
+use embedded_graphics::pixelcolor::{Rgb565, RgbColor as _};
 use fatfs::{Date, DateTime, Time};
 use log::{error, info, warn};
 use teetotum::fat::{self, Volume};
+use teetotum::menu::Palette;
 use teetotum::sd::{self, SdCard};
 
 use crate::storage::{self, FsError, FsFile};
@@ -39,6 +41,57 @@ pub static OPEN: AtomicBool = AtomicBool::new(false);
 
 /// Files on their way to or from a client right now.
 static SENDING: AtomicU8 = AtomicU8::new(0);
+
+/// The page's accent, its lines, its buttons and their hover, as `0xRRGGBB`. They start on
+/// GitHub's own dark colours, which is what the page keeps if no theme is ever handed over.
+static COLOURS: [AtomicU32; 4] = [
+    AtomicU32::new(0x4493F8),
+    AtomicU32::new(0x3D444D),
+    AtomicU32::new(0x212830),
+    AtomicU32::new(0x262C36),
+];
+
+/// Dresses the page in the knob's theme: the selected segment's colour becomes the links, the
+/// ring the lines and the hovered button, the empty segment the button's face. Called while the
+/// dialog is open, which is the only time a client can ask for a page.
+pub fn set_palette(palette: &Palette) {
+    for (colour, at) in [
+        (lift(hex(palette.selected)), 0),
+        (hex(palette.ring), 1),
+        (hex(palette.empty), 2),
+        (hex(palette.ring), 3),
+    ] {
+        COLOURS[at].store(colour, Ordering::Relaxed);
+    }
+}
+
+/// A screen colour as `0xRRGGBB`, the low bits filled from the high ones the way a 565 panel
+/// stretches them back.
+fn hex(colour: Rgb565) -> u32 {
+    let (r, g, b) = (
+        u32::from(colour.r()),
+        u32::from(colour.g()),
+        u32::from(colour.b()),
+    );
+    (((r << 3) | (r >> 2)) << 16) | (((g << 2) | (g >> 4)) << 8) | ((b << 3) | (b >> 2))
+}
+
+/// Mixes a colour towards white until it carries text on the dark ground. The ring's colours are
+/// chosen against black glass, and the darkest of them -- indigo, violet -- would be a link no
+/// one can read.
+fn lift(colour: u32) -> u32 {
+    let (mut r, mut g, mut b) = (colour >> 16 & 0xFF, colour >> 8 & 0xFF, colour & 0xFF);
+    // Brightness as the eye weighs it, against a threshold found by eye on the darkest theme.
+    for _ in 0..8 {
+        if (r * 299 + g * 587 + b * 114) / 1000 >= 140 {
+            break;
+        }
+        for channel in [&mut r, &mut g, &mut b] {
+            *channel += (255 - *channel) / 6;
+        }
+    }
+    (r << 16) | (g << 8) | b
+}
 
 /// Whether a file is on its way to or from a client.
 pub fn busy() -> bool {
@@ -273,6 +326,15 @@ async fn answer(
         b"PUT" => return upload(socket, lines, query, &path, body, chunk, card).await,
         b"MKCOL" | b"DELETE" => return change(socket, method, query, &path, card).await,
         _ => return status(socket, "405 Method Not Allowed").await,
+    }
+
+    if path == ICON_PATH {
+        let head = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: image/svg+xml\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            ICON.len()
+        );
+        write_all(socket, head.as_bytes()).await?;
+        return write_all(socket, ICON.as_bytes()).await;
     }
 
     // Look the path up with the card held only as long as that takes.
@@ -642,14 +704,15 @@ async fn listing(
         "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n\
          <!doctype html><meta name=viewport content=\"width=device-width\">\
          <title>TeeToTum {0}</title>\
-         <style>div{{overflow-x:auto}}table{{border-collapse:collapse}}\
-         th,td{{padding:.15em 1em .15em 0;text-align:left;vertical-align:top}}\
-         .n{{text-align:right}}span{{white-space:nowrap}}</style>\
-         <h1>{0}</h1>\
+         <link rel=icon href={2}>{1}\
+         <h1><img src={2} width=26 height=26 alt=\"\"> TeeToTum card over Wi-Fi</h1>\
+         <h2>{0}</h2>\
          <p><input type=file multiple id=f onchange=up()> <button onclick=md()>New folder</button> \
          <span id=s></span><div><table>\
          <tr><th>Name<th class=n>Size<th>Created<th>Modified<th>Accessed<th>Attributes<th>",
-        escape_html(&title)
+        escape_html(&title),
+        style(),
+        ICON_PATH
     );
     if let Some(parent) = (!base.is_empty()).then(|| base.rsplit_once('/').map_or("", |(p, _)| p)) {
         let _ = write!(
@@ -708,6 +771,47 @@ async fn listing(
     info!("Share: listed {title}, {count} entries");
     write_all(socket, b"</table></div>").await?;
     write_all(socket, SCRIPT.as_bytes()).await
+}
+
+/// The project's mark, served to the page's title line and to the browser's tab. It is the
+/// organisation's avatar, so the share looks like the rest of the project.
+const ICON: &str = include_str!("../../web/favicon.svg");
+
+/// Where [`ICON`] is fetched from. A card holding a file of that name at its root would be
+/// covered by it, which is a name no card is likely to carry.
+const ICON_PATH: &str = "/favicon.svg";
+
+/// Dark throughout, in GitHub's dark colours with the knob's theme for the accents: the page is
+/// read next to an editor, not on paper. `color-scheme` is what turns the file picker, the
+/// scrollbars and the dialogs dark as well.
+fn style() -> String {
+    let colour = |at: usize| COLOURS[at].load(Ordering::Relaxed);
+    format!(
+        "<style>\
+         :root{{color-scheme:dark;--bg:#0d1117;--fg:#e6edf3;--dim:#9198a1;\
+         --link:#{:06x};--line:#{:06x};--btn:#{:06x};--btn-hi:#{:06x}}}\
+         body{{margin:1.2em;background:var(--bg);color:var(--fg);\
+         font-family:-apple-system,\"Segoe UI\",Helvetica,Arial,sans-serif}}\
+         h1{{display:flex;align-items:center;gap:.45em;font-size:1.3em;font-weight:600;\
+         margin:0 0 .5em}}\
+         h1 img{{border-radius:5px}}\
+         h2{{font-size:1.05em;font-weight:600;color:var(--dim);margin:0 0 .8em}}\
+         a{{color:var(--link);text-decoration:none}}a:hover{{text-decoration:underline}}\
+         div{{overflow-x:auto}}table{{border-collapse:collapse}}\
+         th,td{{padding:.25em 1em .25em 0;text-align:left;vertical-align:top}}\
+         th{{color:var(--dim);font-weight:600}}td{{color:var(--dim)}}td:first-child{{color:var(--fg)}}\
+         .n{{text-align:right}}span{{white-space:nowrap}}\
+         button,::file-selector-button{{padding:.25em .9em;border:1px solid var(--line);\
+         border-radius:6px;background:var(--btn);color:var(--fg);font:inherit;cursor:pointer}}\
+         button:hover,::file-selector-button:hover{{background:var(--btn-hi)}}\
+         input{{color:var(--dim)}}\
+         #s{{color:var(--dim)}}\
+         </style>",
+        colour(0),
+        colour(1),
+        colour(2),
+        colour(3)
+    )
 }
 
 /// The listing's controls: uploads with the browser's times, a new folder, a delete per row.

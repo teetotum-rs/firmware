@@ -3509,6 +3509,10 @@ async fn main(spawner: Spawner) -> ! {
             if !sharing {
                 state.share_text = false;
             }
+            if sharing {
+                // The page a client fetches wears the ring's colours.
+                share::set_palette(state.theme.palette());
+            }
             share::OPEN.store(sharing && state.card.is_some(), Ordering::Relaxed);
             if !receiving {
                 if let Some(dropped) = upload.take() {
