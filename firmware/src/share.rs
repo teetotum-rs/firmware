@@ -55,8 +55,12 @@ pub const SOCKETS: usize = 1 + HTTP_SOCKETS;
 /// Connections served at once. Browsers open a second one on their own, for the icon or ahead
 /// of the next click, and with one socket that one would hold up the real request.
 const HTTP_SOCKETS: usize = 2;
-/// TCP receive and transmit buffer, each.
-const TCP_BUFFER: usize = 8192;
+/// TCP receive buffer. An upload arrives about five times faster than the card takes it, and a
+/// card write blocks the executor, so how much the window can swallow during one write sets the
+/// rate: 8 KiB gives 36 KiB/s, 64 KiB gives 54 KiB/s over a megabyte.
+const TCP_RX_BUFFER: usize = 65536;
+/// TCP transmit buffer. A download is not held up this way: the card reads faster than the air.
+const TCP_TX_BUFFER: usize = 8192;
 /// What a request head may take; a longer one is refused.
 const HEAD: usize = 2048;
 /// Bytes read off the card per write to the socket: one 4 KiB cluster, which the reader fetches
@@ -71,7 +75,8 @@ const TIMEOUT: Duration = Duration::from_secs(10);
 
 /// The bytes [`serve`] takes for its buffers. They are only copied by the CPU, so external RAM
 /// does: the driver builds every frame in its own memory.
-pub const BUFFER_BYTES: usize = HTTP_SOCKETS * (2 * TCP_BUFFER + HEAD + CHUNK) + 4 * DHCP_BUFFER;
+pub const BUFFER_BYTES: usize =
+    HTTP_SOCKETS * (TCP_RX_BUFFER + TCP_TX_BUFFER + HEAD + CHUNK) + 4 * DHCP_BUFFER;
 
 /// The IP configuration of the access point interface.
 pub fn ip_config() -> embassy_net::Config {
@@ -201,8 +206,8 @@ fn now_secs() -> u64 {
 
 /// One HTTP socket, answering one connection after another.
 async fn http(stack: Stack<'_>, area: &mut [u8], card: &Card<'_>) {
-    let (rx, rest) = area.split_at_mut(TCP_BUFFER);
-    let (tx, rest) = rest.split_at_mut(TCP_BUFFER);
+    let (rx, rest) = area.split_at_mut(TCP_RX_BUFFER);
+    let (tx, rest) = rest.split_at_mut(TCP_TX_BUFFER);
     let (head, chunk) = rest.split_at_mut(HEAD);
     let mut socket = TcpSocket::new(stack, rx, tx);
     socket.set_timeout(Some(TIMEOUT));

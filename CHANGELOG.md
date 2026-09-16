@@ -21,6 +21,8 @@ of `teetotum-face`.
 
 ### Changed
 
+- Uploads to the shared card are about half again as fast: the receive buffer now holds what
+  arrives while the card is being written, where before those packets were lost and resent.
 - The centre of a ring leaves more room: the hint to tap sits lower, and a two-line state on Home
   keeps clear of the entry name above it.
 
