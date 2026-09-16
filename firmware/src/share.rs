@@ -829,7 +829,8 @@ fn style() -> String {
          button{{padding:.25em .9em;border:1px solid var(--line);border-radius:6px;\
          background:var(--btn);color:var(--fg);font:inherit;cursor:pointer}}\
          button:hover{{background:var(--btn-hi)}}\
-         #s{{color:var(--dim)}}\
+         #s{{color:var(--dim)}}#s.e{{display:inline-block;white-space:normal;padding:.25em .7em;color:#ffdcd7;\
+         background:#f851491a;border:1px solid #f8514966;border-radius:6px}}\
          footer{{margin-top:auto;padding-top:.6em;border-top:1px solid var(--line);\
          color:var(--dim);font-size:.9em}}\
          </style>",
@@ -846,9 +847,9 @@ const s=document.getElementById('s'),\
 t=d=>[d.getFullYear(),d.getMonth()+1,d.getDate(),d.getHours(),d.getMinutes(),d.getSeconds()]\
 .map((n,i)=>String(n).padStart(i?2:4,'0')).join(''),\
 send=(m,u,body,what)=>new Promise(done=>{const x=new XMLHttpRequest();x.open(m,u);\
-x.upload.onprogress=e=>{if(e.lengthComputable)s.textContent=what+' '+Math.floor(e.loaded*100/e.total)+' %'};\
-x.onload=()=>{if(x.status<300)done(true);else{s.textContent=what+': '+x.responseText;done(false)}};\
-x.onerror=()=>{s.textContent=what+': connection lost';done(false)};x.send(body)}),\
+x.upload.onprogress=e=>{if(e.lengthComputable){s.className='';s.textContent=what+' '+Math.floor(e.loaded*100/e.total)+' %'}};\
+x.onload=()=>{if(x.status<300)done(true);else{s.className='e';s.textContent=what+': '+x.responseText.trim();done(false)}};\
+x.onerror=()=>{s.className='e';s.textContent=what+': connection lost';done(false)};x.send(body)}),\
 here=location.pathname.replace(/\\/?$/,'/');\
 async function up(){const now=t(new Date());\
 for(const f of document.getElementById('f').files){\
