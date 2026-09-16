@@ -19,7 +19,8 @@ of `teetotum-face`.
 - Plugin page: each plugin shows its tags from the catalogue, and buttons filter the list by tag
   ([#2](https://github.com/teetotum-rs/firmware/issues/2)).
 - The shared card's page carries the project's mark and a title line, and wears the knob's own
-  colour theme: the links take the ring's selected colour, the buttons its darker shades.
+  colour theme: the links take the ring's selected colour, the buttons its darker shades. Its
+  footer names the firmware version, the card's size and how many entries the folder holds.
 
 ### Changed
 

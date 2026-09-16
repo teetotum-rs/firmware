@@ -770,8 +770,26 @@ async fn listing(
     }
     info!("Share: listed {title}, {count} entries");
     write_all(socket, b"</table></div>").await?;
+    let capacity = {
+        let mut guard = card.lock().await;
+        guard.as_mut().map(|volume| {
+            let layout = volume.layout();
+            let tenths =
+                (u64::from(layout.clusters) * u64::from(layout.cluster_bytes()) * 10) >> 30;
+            format!("{}.{} GB card", tenths / 10, tenths % 10)
+        })
+    };
+    let footer = format!(
+        "<footer>teetotum {VERSION} &middot; {} &middot; {count} {}</footer>",
+        capacity.as_deref().unwrap_or("no card"),
+        if count == 1 { "entry" } else { "entries" }
+    );
+    write_all(socket, footer.as_bytes()).await?;
     write_all(socket, SCRIPT.as_bytes()).await
 }
+
+/// What About says on the glass, so a screenshot of the page and one of the knob agree.
+const VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"), " ", env!("TEETOTUM_COMMIT"));
 
 /// The project's mark, served to the page's title line and to the browser's tab. It is the
 /// organisation's avatar, so the share looks like the rest of the project.
@@ -806,6 +824,7 @@ fn style() -> String {
          button:hover,::file-selector-button:hover{{background:var(--btn-hi)}}\
          input{{color:var(--dim)}}\
          #s{{color:var(--dim)}}\
+         footer{{display:block;margin-top:1.2em;color:var(--dim);font-size:.9em}}\
          </style>",
         colour(0),
         colour(1),
