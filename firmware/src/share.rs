@@ -689,7 +689,8 @@ fn time_param(query: &[u8], key: &str) -> Result<DateTime, ()> {
 }
 
 /// Lists a directory as a page of links with the controls that change it. Its length is not known
-/// ahead, so the page ends where the connection closes.
+/// ahead, so the page ends where the connection closes. It is never stored: a browser that shows a
+/// stored copy after a change lists what is no longer on the card.
 async fn listing(
     socket: &mut TcpSocket<'_>,
     path: &str,
@@ -713,7 +714,7 @@ async fn listing(
         None => String::from("<button onclick=\"location='/'\">Up</button> "),
     };
     let page = format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n\
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n\
          <!doctype html><meta name=viewport content=\"width=device-width\">\
          <title>TeeToTum {0}</title>\
          <link rel=icon href={2}>{1}\
