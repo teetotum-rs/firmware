@@ -74,6 +74,7 @@ use teetotum::store::Store;
 use teetotum::touch::{Gesture, Press, Taps, Touch};
 use teetotum_face::manifest::{Manifest, Signed, Version};
 use teetotum_face::{Event as FaceEvent, HINT, Radio, Rights, Usage};
+use teetotum_firmware::VERSION;
 use teetotum_firmware::backlight::Backlight;
 use teetotum_firmware::flash::{self, Region, TABLE_SCRATCH};
 use teetotum_firmware::nearby::{self, Heard};
@@ -4509,8 +4510,6 @@ fn settings_screen(
     credentials: &share::Credentials,
     code: Option<&qr::Encoded>,
 ) {
-    const VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"), " ", env!("TEETOTUM_COMMIT"));
-
     let orientation = format!("{} deg", state.orientation * 90);
     let brightness = format!("{} %", state.brightness.percent());
     let free = state.free_slots.map(|n| match n {

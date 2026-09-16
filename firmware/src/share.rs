@@ -34,6 +34,7 @@ use teetotum::fat::{self, Volume};
 use teetotum::menu::Palette;
 use teetotum::sd::{self, SdCard};
 
+use crate::VERSION;
 use crate::storage::{self, FsError, FsFile};
 
 /// Whether the dialog is open, and with it the access point. Set by the device loop.
@@ -788,9 +789,6 @@ async fn listing(
     write_all(socket, SCRIPT.as_bytes()).await
 }
 
-/// What About says on the glass, so a screenshot of the page and one of the knob agree.
-const VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"), " ", env!("TEETOTUM_COMMIT"));
-
 /// The project's mark, served to the page's title line and to the browser's tab. It is the
 /// organisation's avatar, so the share looks like the rest of the project.
 const ICON: &str = include_str!("../../web/favicon.svg");
@@ -808,10 +806,11 @@ fn style() -> String {
         "<style>\
          :root{{color-scheme:dark;--bg:#0d1117;--fg:#e6edf3;--dim:#9198a1;\
          --link:#{:06x};--line:#{:06x};--btn:#{:06x};--btn-hi:#{:06x}}}\
-         body{{margin:1.2em;background:var(--bg);color:var(--fg);\
+         body{{display:flex;flex-direction:column;min-height:100vh;box-sizing:border-box;\
+         margin:0;padding:1.2em;background:var(--bg);color:var(--fg);\
          font-family:-apple-system,\"Segoe UI\",Helvetica,Arial,sans-serif}}\
          h1{{display:flex;align-items:center;gap:.45em;font-size:1.3em;font-weight:600;\
-         margin:0 0 .5em}}\
+         margin:0 0 .6em;padding-bottom:.5em;border-bottom:1px solid var(--line)}}\
          h1 img{{border-radius:5px}}\
          h2{{font-size:1.05em;font-weight:600;color:var(--dim);margin:0 0 .8em}}\
          a{{color:var(--link);text-decoration:none}}a:hover{{text-decoration:underline}}\
@@ -824,7 +823,8 @@ fn style() -> String {
          button:hover,::file-selector-button:hover{{background:var(--btn-hi)}}\
          input{{color:var(--dim)}}\
          #s{{color:var(--dim)}}\
-         footer{{display:block;margin-top:1.2em;color:var(--dim);font-size:.9em}}\
+         footer{{margin-top:auto;padding-top:.6em;border-top:1px solid var(--line);\
+         color:var(--dim);font-size:.9em}}\
          </style>",
         colour(0),
         colour(1),

@@ -10,6 +10,10 @@
 
 extern crate alloc;
 
+/// What this build calls itself, on the About screen and under the shared card's listing: the
+/// release version and the commit it was built from.
+pub const VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"), " ", env!("TEETOTUM_COMMIT"));
+
 pub mod backlight;
 pub mod flash;
 pub mod nearby;
