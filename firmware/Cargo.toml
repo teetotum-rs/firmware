@@ -11,7 +11,7 @@ name         = "teetotum-firmware"
 publish      = false
 repository   = { workspace = true }
 rust-version = { workspace = true }
-version      = "0.2.1"
+version      = "0.3.0"
 
 # The firmware. Sharing the package's name is not what makes `cargo run` choose
 # it -- `default-run` above is, and without that line cargo refuses to guess

@@ -9,13 +9,20 @@ of `teetotum-face`.
 
 ### Added
 
+- `teetotum-pack`: `slot::Digest` and `Header::matches_digest`, for a module that arrives in pieces.
+
+## [0.3.0] - 2026-09-16
+
+A firmware release; `teetotum-face` and `teetotum-pack` stay at 0.1.0.
+
+### Added
+
 - Card over Wi-Fi, at ten o'clock on Home and eleven in the Settings: while its dialog is open, the
   Knob runs an access point, shows a QR code to join it and serves the TF card to a browser as a
   table of name, size, created, modified, last access and attributes, where files are downloaded
   and uploaded, folders made and entries deleted. No Wi-Fi scans run while it is open. The Music
   Player moves to nine o'clock on Home and ten in the Settings, and the first page of each ring
   holds one plugin fewer.
-- `teetotum-pack`: `slot::Digest` and `Header::matches_digest`, for a module that arrives in pieces.
 - Plugin page: each plugin shows its tags from the catalogue, and buttons filter the list by tag
   ([#2](https://github.com/teetotum-rs/firmware/issues/2)).
 - The shared card's page carries the project's mark and a title line, and wears the knob's own
@@ -87,7 +94,8 @@ The first release.
 - `teetotum-pack` 0.1.0, which checks, signs and packs plugins, as a library and a command-line
   tool for Linux, macOS and Windows.
 
-[Unreleased]: https://github.com/teetotum-rs/firmware/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/teetotum-rs/firmware/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/teetotum-rs/firmware/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/teetotum-rs/firmware/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/teetotum-rs/firmware/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/teetotum-rs/firmware/releases/tag/v0.1.0
