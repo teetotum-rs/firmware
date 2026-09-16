@@ -71,3 +71,36 @@ jobs:
           gh release view "$TAG" > /dev/null 2>&1 ||
             gh release create "$TAG" --verify-tag --title "TeeToTum $TAG" --notes-file "$RUNNER_TEMP/notes.md"
           gh release upload "$TAG" dist/* --clobber
+
+  citation:
+    name: Citation version
+    # Only a new tag moves the citation; building an older tag again leaves it alone.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+      - name: Set version and release date in CITATION.cff
+        run: |
+          version="${TAG#v}"
+          current=$(sed -n 's/^version: //p' CITATION.cff)
+          if [ "$(printf '%s\n%s\n' "$current" "$version" | sort -V | tail -1)" != "$version" ]; then
+            echo "CITATION.cff names $current, newer than $version"
+            exit 0
+          fi
+          date=$(git log -1 --format=%cs "$TAG")
+          sed -i "s/^version: .*/version: $version/" CITATION.cff
+          if grep -q '^date-released:' CITATION.cff; then
+            sed -i "s/^date-released: .*/date-released: \"$date\"/" CITATION.cff
+          else
+            sed -i "/^version: /a date-released: \"$date\"" CITATION.cff
+          fi
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898187+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Cite version $version"
+          git push
