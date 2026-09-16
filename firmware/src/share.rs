@@ -9,7 +9,8 @@
 //! A client gets an address over DHCP and **no gateway**, so a phone keeps its own route to the
 //! internet. `GET` on a directory answers a listing, on a file the file. `PUT` uploads a file,
 //! `MKCOL` makes a directory and `DELETE` removes a file or an empty directory; the listing's page
-//! drives all three and sends the times, since the Knob has no clock.
+//! drives all three and sends the times, since the Knob has no clock. A `GET` on a directory that
+//! accepts `application/json` answers the listing as JSON, for programs.
 
 use alloc::format;
 use alloc::string::String;
@@ -352,6 +353,7 @@ async fn answer(
         }
     };
     match found {
+        Ok(Found::Dir(dir)) if accepts_json(lines) => listing_json(socket, &path, dir, card).await,
         Ok(Found::Dir(dir)) => listing(socket, &path, dir, card).await,
         Ok(Found::File(entry)) => send_file(socket, &path, entry, chunk, card).await,
         Err(fat::Error::NotFound | fat::Error::NotADirectory) => {
@@ -734,27 +736,8 @@ async fn listing(
 
     let mut entries = card.lock().await.as_mut().map(|volume| volume.entries(dir));
     let mut count = 0usize;
-    loop {
-        // One entry at a time, so a second connection can use the card in between.
-        let next = {
-            let mut guard = card.lock().await;
-            match (guard.as_mut(), entries.as_mut()) {
-                (Some(volume), Some(entries)) => entries.next(volume),
-                _ => Ok(None),
-            }
-        };
-        let entry = match next {
-            Ok(Some(entry)) => entry,
-            Ok(None) => break,
-            Err(err) => {
-                error!("Share: listing {title}: {err:?}");
-                break;
-            }
-        };
+    while let Ok(Some(entry)) = next_entry(card, &mut entries, &title).await {
         let name = entry.name();
-        if name == "." || name == ".." {
-            continue;
-        }
         let href = if base.is_empty() {
             percent_encode(name)
         } else {
@@ -779,15 +762,10 @@ async fn listing(
     }
     info!("Share: listed {title}, {count} entries");
     write_all(socket, b"</table></div>").await?;
-    let capacity = {
-        let mut guard = card.lock().await;
-        guard.as_mut().map(|volume| {
-            let layout = volume.layout();
-            let tenths =
-                (u64::from(layout.clusters) * u64::from(layout.cluster_bytes()) * 10) >> 30;
-            format!("{}.{} GB card", tenths / 10, tenths % 10)
-        })
-    };
+    let capacity = card_bytes(card).await.map(|bytes| {
+        let tenths = (bytes * 10) >> 30;
+        format!("{}.{} GB card", tenths / 10, tenths % 10)
+    });
     let footer = format!(
         "<footer>TeeToTum {VERSION} &middot; {} &middot; {count} {}</footer>",
         capacity.as_deref().unwrap_or("no card"),
@@ -795,6 +773,104 @@ async fn listing(
     );
     write_all(socket, footer.as_bytes()).await?;
     write_all(socket, SCRIPT.as_bytes()).await
+}
+
+/// Lists a directory as one JSON object, for programs:
+///
+/// ```text
+/// {"version":"0.3.3","path":"/music/","card_bytes":15931539456,"entries":[
+///  {"name":"a.mp3","directory":false,"size":4096,"created":"2026-09-16T12:00:00",
+///   "modified":"2026-09-16T12:00:00","accessed":"2026-09-16","attributes":"A"}]}
+/// ```
+///
+/// A time the writer did not set is `null`, and so is `card_bytes` without a card. When the card
+/// fails partway, the object is left open, so a client sees an error instead of a shorter list.
+async fn listing_json(
+    socket: &mut TcpSocket<'_>,
+    path: &str,
+    dir: fat::Dir,
+    card: &Card<'_>,
+) -> Result<(), Gone> {
+    let base = path.trim_matches('/');
+    let title = if base.is_empty() {
+        String::from("/")
+    } else {
+        format!("/{base}/")
+    };
+    let capacity = card_bytes(card).await;
+    let head = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nCache-Control: no-store\r\nVary: Accept\r\nConnection: close\r\n\r\n\
+         {{\"version\":{},\"path\":{},\"card_bytes\":{},\"entries\":[",
+        escape_json(VERSION),
+        escape_json(&title),
+        capacity.map_or(String::from("null"), |bytes| format!("{bytes}"))
+    );
+    write_all(socket, head.as_bytes()).await?;
+
+    let mut entries = card.lock().await.as_mut().map(|volume| volume.entries(dir));
+    let mut count = 0usize;
+    loop {
+        let entry = match next_entry(card, &mut entries, &title).await {
+            Ok(Some(entry)) => entry,
+            Ok(None) => break,
+            Err(()) => return Ok(()),
+        };
+        let line = format!(
+            "{}{{\"name\":{},\"directory\":{},\"size\":{},\"created\":{},\"modified\":{},\"accessed\":{},\"attributes\":\"{}\"}}",
+            if count == 0 { "" } else { "," },
+            escape_json(entry.name()),
+            entry.directory,
+            entry.size,
+            stamp_json(entry.created, true),
+            stamp_json(entry.modified, true),
+            stamp_json(entry.accessed, false),
+            attributes_text(entry.attributes)
+        );
+        write_all(socket, line.as_bytes()).await?;
+        count += 1;
+    }
+    info!("Share: listed {title} as JSON, {count} entries");
+    write_all(socket, b"]}").await
+}
+
+/// Whether the request's `Accept` names JSON.
+fn accepts_json(lines: &[u8]) -> bool {
+    header(lines, "Accept").is_some_and(|value| value.contains("application/json"))
+}
+
+/// The next entry of a listing other than `.` and `..`, with the card held only for that entry,
+/// so a second connection can use the card in between. `Err` when the card fails.
+async fn next_entry(
+    card: &Card<'_>,
+    entries: &mut Option<fat::Entries>,
+    title: &str,
+) -> Result<Option<fat::Entry>, ()> {
+    loop {
+        let next = {
+            let mut guard = card.lock().await;
+            match (guard.as_mut(), entries.as_mut()) {
+                (Some(volume), Some(entries)) => entries.next(volume),
+                _ => Ok(None),
+            }
+        };
+        match next {
+            Ok(Some(entry)) if matches!(entry.name(), "." | "..") => {}
+            Ok(next) => return Ok(next),
+            Err(err) => {
+                error!("Share: listing {title}: {err:?}");
+                return Err(());
+            }
+        }
+    }
+}
+
+/// The card's size in bytes, if there is a card.
+async fn card_bytes(card: &Card<'_>) -> Option<u64> {
+    let mut guard = card.lock().await;
+    guard.as_mut().map(|volume| {
+        let layout = volume.layout();
+        u64::from(layout.clusters) * u64::from(layout.cluster_bytes())
+    })
 }
 
 /// The project's mark, served to the page's title line and to the browser's tab. It is the
@@ -869,6 +945,19 @@ fn stamp_text(stamp: Option<fat::Stamp>, with_time: bool) -> String {
     if with_time {
         let _ = write!(text, " <span>{:02}:{:02}</span>", s.hour, s.minute);
     }
+    text
+}
+
+/// A stamp as an ISO 8601 string without a zone, or `null`.
+fn stamp_json(stamp: Option<fat::Stamp>, with_time: bool) -> String {
+    let Some(s) = stamp else {
+        return String::from("null");
+    };
+    let mut text = format!("\"{:04}-{:02}-{:02}", s.year, s.month, s.day);
+    if with_time {
+        let _ = write!(text, "T{:02}:{:02}:{:02}", s.hour, s.minute, s.second);
+    }
+    text.push('"');
     text
 }
 
@@ -1011,6 +1100,24 @@ fn escape_html(text: &str) -> String {
             c => out.push(c),
         }
     }
+    out
+}
+
+/// A JSON string, quotes included.
+fn escape_json(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() + 2);
+    out.push('"');
+    for c in text.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            c if u32::from(c) < 0x20 => {
+                let _ = write!(out, "\\u{:04x}", u32::from(c));
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
     out
 }
 

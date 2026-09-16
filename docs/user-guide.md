@@ -453,6 +453,12 @@ found at start-up, for example `14.8 GB card`, or `no card`.
   two rules -- take the colours of the [theme](#theme) the Knob is set to, so a red Knob serves a
   red page. The title line carries the project's mark, and the footer names the firmware version
   the Knob runs, the size of the card and how many entries the folder holds.
+- **For programs, a folder answers as JSON.** A request with `Accept: application/json` gets the
+  listing as one object: `version`, `path`, `card_bytes` and `entries`, each entry with `name`,
+  `directory`, `size`, `created`, `modified`, `accessed` and `attributes` (the letters above).
+  Times read `2026-09-16T12:00:00`, the last access only as a date, and `null` where the writer
+  set none. When the card fails partway, the object stays open, so a client gets an error rather
+  than a shorter list. `PUT`, `MKCOL` and `DELETE` work as they do for the page.
 - **No internet through the Knob.** It hands out addresses but no gateway, so a phone keeps its
   own route to the internet.
 - **The network lasts as long as the dialog.** A tap on the screen closes the dialog, and so does

@@ -9,6 +9,8 @@ of `teetotum-face`.
 
 ### Added
 
+- Card over Wi-Fi: a folder requested with `Accept: application/json` answers its listing as
+  JSON, for programs.
 - `teetotum-pack`: `slot::Digest` and `Header::matches_digest`, for a module that arrives in pieces.
 
 ## [0.3.2] - 2026-09-16
