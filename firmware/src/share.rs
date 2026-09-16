@@ -718,7 +718,7 @@ async fn listing(
          <link rel=icon href={2}>{1}\
          <h1><img src={2} width=26 height=26 alt=\"\"> TeeToTum card over Wi-Fi</h1>\
          <h2>{0}</h2>\
-         <p>{3}<input type=file multiple id=f onchange=up()> <button onclick=md()>New folder</button> \
+         <p>{3}<button onclick=md()>New folder</button> <input type=file multiple id=f onchange=up()> \
          <span id=s></span><div><table>\
          <tr><th>Name<th class=n>Size<th>Created<th>Modified<th>Accessed<th>Attributes<th>",
         escape_html(&title),
@@ -810,7 +810,7 @@ fn style() -> String {
         "<style>\
          :root{{color-scheme:dark;--bg:#0d1117;--fg:#e6edf3;--dim:#9198a1;\
          --link:#{:06x};--line:#{:06x};--btn:#{:06x};--btn-hi:#{:06x}}}\
-         body{{display:flex;flex-direction:column;min-height:100vh;box-sizing:border-box;\
+         body{{display:flex;flex-direction:column;height:100vh;overflow:hidden;box-sizing:border-box;\
          margin:0;padding:1.2em;background:var(--bg);color:var(--fg);\
          font-family:-apple-system,\"Segoe UI\",Helvetica,Arial,sans-serif}}\
          h1{{display:flex;align-items:center;gap:.45em;font-size:1.3em;font-weight:600;\
@@ -818,14 +818,14 @@ fn style() -> String {
          h1 img{{border-radius:5px}}\
          h2{{font-size:1.05em;font-weight:600;color:var(--dim);margin:0 0 .8em}}\
          a{{color:var(--link);text-decoration:none}}a:hover{{text-decoration:underline}}\
-         div{{overflow-x:auto}}table{{border-collapse:collapse}}\
+         div{{flex:1;min-height:0;overflow:auto}}table{{border-collapse:collapse}}\
          th,td{{padding:.25em 1em .25em 0;text-align:left;vertical-align:top}}\
-         th{{color:var(--dim);font-weight:600}}td{{color:var(--dim)}}td:first-child{{color:var(--fg)}}\
-         .n{{text-align:right}}span{{white-space:nowrap}}\
+         th{{position:sticky;top:0;background:var(--bg);color:var(--dim);font-weight:600}}td{{color:var(--dim)}}td:first-child{{color:var(--fg)}}\
+         .n{{text-align:right;white-space:nowrap}}span{{white-space:nowrap}}\
          button,::file-selector-button{{padding:.25em .9em;border:1px solid var(--line);\
          border-radius:6px;background:var(--btn);color:var(--fg);font:inherit;cursor:pointer}}\
          button:hover,::file-selector-button:hover{{background:var(--btn-hi)}}\
-         input{{color:var(--dim)}}\
+         input{{font:inherit;color:var(--dim)}}\
          #s{{color:var(--dim)}}\
          footer{{margin-top:auto;padding-top:.6em;border-top:1px solid var(--line);\
          color:var(--dim);font-size:.9em}}\

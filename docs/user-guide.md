@@ -429,16 +429,22 @@ found at start-up, for example `14.8 GB card`, or `no card`.
   as a table: name (folders end in `/`), size, created, modified, the day of the last access, and
   the attributes as letters (`R` read-only, `H` hidden, `S` system, `A` archive). Hidden entries
   are listed too. Times are what the card stores, local time without a zone; `—` means the writer
-  set none. A folder opens its listing, `..` goes up, and a file is downloaded; pictures (JPEG,
-  PNG, GIF, BMP), text (`.txt`, `.log`, `.csv`) and sound (`.mp3`, `.wav`) the browser shows or
-  plays itself.
-- **Upload, New folder, Delete.** The file picker above the table sends one or more files into the
-  folder on screen, and a file of the same name is replaced; beside it each file counts up in
-  percent. A file that does not arrive whole is removed again. The Knob has no clock, so the times
+  set none. A folder opens its listing, the `Up` button goes to the folder above, and a file is
+  downloaded; pictures (JPEG, PNG, GIF, BMP), text (`.txt`, `.log`, `.csv`) and sound (`.mp3`,
+  `.wav`) the browser shows or plays itself.
+- **Up, New folder, Upload, Delete.** Above the table stand `Up`, `New folder` and the file
+  picker. The picker sends one or more files into the folder on screen, and a file of the same
+  name is replaced; beside it each file counts up in percent. A file that does not arrive whole is removed again. The Knob has no clock, so the times
   come from the browser: the file's own modified time, and the moment of the upload as created.
   `New folder` asks for a name, and `Delete` in a row removes that file or folder after asking; a
   folder has to be empty first. When the card refuses, the reason stands beside the picker, for
   example `the card is full` or `that name is taken`. Nothing can be renamed.
+- **The page looks like the Knob.** The title line, the buttons and the footer stay in place
+  while the listing scrolls between them, with the column names in sight. It is dark, and its
+  accents -- the links, the buttons, the
+  two rules -- take the colours of the [theme](#theme) the Knob is set to, so a red Knob serves a
+  red page. The title line carries the project's mark, and the footer names the firmware version
+  the Knob runs, the size of the card and how many entries the folder holds.
 - **No internet through the Knob.** It hands out addresses but no gateway, so a phone keeps its
   own route to the internet.
 - **The network lasts as long as the dialog.** A tap on the screen closes the dialog, and so does

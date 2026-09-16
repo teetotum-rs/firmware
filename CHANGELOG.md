@@ -21,7 +21,8 @@ of `teetotum-face`.
 - The shared card's page carries the project's mark and a title line, and wears the knob's own
   colour theme: the links take the ring's selected colour, the buttons its darker shades. Its
   footer names the firmware version, the card's size and how many entries the folder holds. A
-  button leads to the folder above, where a `..` link used to be.
+  button leads to the folder above, where a `..` link used to be, and the listing scrolls under
+  the title line and over the footer, both of which stay put.
 
 ### Changed
 
