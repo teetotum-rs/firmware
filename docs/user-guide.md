@@ -452,10 +452,12 @@ found at start-up, for example `14.8 GB card`, or `no card`.
   a long press; either takes the network down, and a download still running with it.
 - **Without a card** the dialog says `no card` and `none was found at boot`, and no network is
   started. The card is looked for only when the Knob starts.
-- **While the dialog is open, the Knob does not scan for Wi-Fi networks** (for
-  [Nearby](plugins.md), for example): a scan drops a phone or computer off its network.
-- **While a file is on its way**, a moving [background](#background) holds still and the Bluetooth
-  scans wait, because either would slow the transfer.
+- **While the dialog is open, the Knob does not scan** -- neither for Wi-Fi networks nor over
+  Bluetooth (for [Nearby](plugins.md), for example). A scan shares the one radio with the network:
+  it drops a phone or computer off it, and a page that would take half a second takes three to
+  eight.
+- **While a file is on its way**, a moving [background](#background) holds still, because it would
+  slow the transfer.
 
 ## 7. Settings
 

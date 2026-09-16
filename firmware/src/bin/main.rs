@@ -1599,10 +1599,10 @@ fn local_name(data: &[u8]) -> Option<String> {
     })
 }
 
-/// Keep a BLE scan window open for `window`, or until a file starts on its way over Wi-Fi.
+/// Keep a BLE scan window open for `window`, or until the card's dialog raises its access point.
 async fn hold_window(window: Duration) {
     let began = Instant::now();
-    while began.elapsed() < window && !share::busy() {
+    while began.elapsed() < window && !share::OPEN.load(Ordering::Relaxed) {
         Timer::after(NEARBY_POLL).await;
     }
 }
@@ -2200,9 +2200,11 @@ async fn main(spawner: Spawner) -> ! {
         };
 
         loop {
-            // Stand down while a peer is connected or a file is on its way over Wi-Fi: scanning
-            // shares the radio with both, and a window beside a download halves its speed.
-            if PEER_CONNECTED.load(Ordering::Relaxed) || share::busy() {
+            // Stand down while a peer is connected or the card is shared over Wi-Fi: scanning
+            // shares the radio with both. Not only during a transfer -- a window beside the
+            // access point costs a joined client three to eight seconds for a plain page, once
+            // per scan cycle, measured.
+            if PEER_CONNECTED.load(Ordering::Relaxed) || share::OPEN.load(Ordering::Relaxed) {
                 Timer::after(CONNECTION_POLL).await;
                 continue;
             }

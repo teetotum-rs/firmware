@@ -11,6 +11,12 @@ of `teetotum-face`.
 
 - `teetotum-pack`: `slot::Digest` and `Header::matches_digest`, for a module that arrives in pieces.
 
+### Fixed
+
+- Card over Wi-Fi: the Bluetooth scans now stand down for as long as the dialog is open, not only
+  while a file is on its way. A scan window beside the access point cost a joined client three to
+  eight seconds for a plain page, once every thirty seconds.
+
 ## [0.3.0] - 2026-09-16
 
 A firmware release; `teetotum-face` and `teetotum-pack` stay at 0.1.0.

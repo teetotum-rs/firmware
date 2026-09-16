@@ -2,8 +2,9 @@
 //!
 //! The dialog raises [`OPEN`]; the Wi-Fi task then runs an access point beside its station and
 //! leaves out its scans, because a scan switches channels, stalls a download and drops a joined
-//! client for seconds. [`busy`] says a file is on its way, for the BLE scans and the background. [`serve`] runs all the time: without the access
-//! point its sockets simply hear nothing.
+//! client for seconds. The BLE scans stand down for the same reason and as long. [`busy`] says a
+//! file is on its way, which is what the moving background waits for. [`serve`] runs all the
+//! time: without the access point its sockets simply hear nothing.
 //!
 //! A client gets an address over DHCP and **no gateway**, so a phone keeps its own route to the
 //! internet. `GET` on a directory answers a listing, on a file the file. `PUT` uploads a file,
