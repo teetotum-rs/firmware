@@ -787,7 +787,7 @@ async fn listing(
         })
     };
     let footer = format!(
-        "<footer>teetotum {VERSION} &middot; {} &middot; {count} {}</footer>",
+        "<footer>TeeToTum {VERSION} &middot; {} &middot; {count} {}</footer>",
         capacity.as_deref().unwrap_or("no card"),
         if count == 1 { "entry" } else { "entries" }
     );
