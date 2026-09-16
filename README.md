@@ -36,7 +36,8 @@ browser</a>.</em></p>
 - **Home is a ring** of twelve segments: turn the knob to a segment, tap to choose, tap the
   centre to open. Holding a finger on the screen goes back to Home; in an open dialog it cancels
   first. Holding on Home itself opens a ring of QR codes: the firmware, the hardware, the plugin
-  guide, the code-quality guide, the projects it is built on and where to report a problem.
+  guide, the code-quality guide, the projects it is built on, where to report a problem and the
+  web installer.
 - **A music player** for whatever the phone is playing — title, artist, cover art and a volume
   arc — over the classic ESP32 next to the S3, which is the chip the phone is paired with.
 - **Settings that survive a power cut**: eleven colour themes, the picture's orientation in

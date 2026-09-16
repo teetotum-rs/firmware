@@ -10,6 +10,19 @@ of `teetotum-face`.
 ### Added
 
 - `teetotum-pack`: `slot::Digest` and `Header::matches_digest`, for a module that arrives in pieces.
+- A QR code for the web installer, at eleven o'clock in the ring of QR codes.
+
+### Changed
+
+- The ring of QR codes: `Issues` moves to ten o'clock; `Author's blog`, `Plugin guide` and
+  `Code quality` move up to seven, eight and nine.
+- Card over Wi-Fi: a refused change, such as deleting a folder that is not empty, stands in a red
+  box next to the buttons instead of in dim text.
+
+### Fixed
+
+- Card over Wi-Fi: a deleted folder no longer stays in the listing until the page is refreshed by
+  hand. Some browsers showed a stored copy of the page (#3).
 
 ## [0.3.1] - 2026-09-16
 
