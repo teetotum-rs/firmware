@@ -5,6 +5,10 @@ off the device — a ROM banner, a register, a logic level, a byte on a wire, a 
 read out of the factory firmware image and then checked against the device. Where something is
 still only a datasheet claim, it says so.
 
+How these answers were found — short tool chains that ended on paper, in a firmware image, or at
+the device itself — is told in the blog series
+[Toolchains](https://stefangruehn.github.io/series/toolchains/).
+
 | Topic | What it covers |
 |---|---|
 | [Pins and the I²C bus](pins.md) | every pin measured, and the two chips that answer on I²C |

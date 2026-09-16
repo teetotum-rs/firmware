@@ -203,7 +203,8 @@ Claude models) working together, over the first half of September 2026. The spli
 
 If that mix matters to you — for citation, for trust, or for a bug report — the guides mark
 what is measured, what is read out of a factory image, and what is still only a datasheet
-claim.
+claim. How those three kinds of answer were found, one short tool chain per question, is told
+in the blog series [Toolchains](https://stefangruehn.github.io/series/toolchains/).
 
 ## Acknowledgements
 
