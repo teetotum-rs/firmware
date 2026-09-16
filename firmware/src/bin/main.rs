@@ -518,6 +518,7 @@ const QR_ICONS: [&Icon; LINKS.len()] = [
     &qr::icons::CRAB,
     &qr::icons::BUG,
     &qr::icons::CHECKLIST,
+    &qr::icons::INSTALL,
 ];
 
 #[expect(
