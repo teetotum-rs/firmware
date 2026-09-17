@@ -16,6 +16,7 @@ of `teetotum-face`.
   from a slot while Settings > Receive is open.
 - `teetotum-pack`: `listing`, the bytes of one entry of that list.
 - Bluetooth: the knob pairs without a passkey and keeps a bond with one device across reboots; a new pairing replaces it. It advertises from a fixed address derived from the board's MAC.
+- Bluetooth: uploading and deleting plugins needs an encrypted link, so a program pairs first; reading the status and the plugin list does not.
 
 ### Changed
 

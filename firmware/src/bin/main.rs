@@ -1575,13 +1575,15 @@ mod gatt {
     }
 
     /// Where a plugin is uploaded into a slot, and the plugins are listed and deleted; the protocol
-    /// is [`upload`]'s.
+    /// is [`upload`]'s. Commands and pieces need an encrypted link, so only the bonded peer changes
+    /// the card; the list stays readable.
     #[gatt_service(uuid = "4a729af2-063c-451a-8c73-60e5fab61ccb")]
     pub(super) struct UploadService {
         /// A command: begin with a slot header, commit, abort, or delete a slot.
         #[characteristic(
             uuid = "19792d5c-9458-40ba-b233-c82b87d3dd4e",
             write,
+            permissions(write = encrypted),
             value = [0; upload::CONTROL_MAX]
         )]
         pub(super) control: [u8; upload::CONTROL_MAX],
@@ -1589,6 +1591,7 @@ mod gatt {
         #[characteristic(
             uuid = "81bcd10c-d2eb-4f6a-b4db-e196026f9f7c",
             write,
+            permissions(write = encrypted),
             value = [0; upload::DATA_MAX]
         )]
         pub(super) data: [u8; upload::DATA_MAX],
