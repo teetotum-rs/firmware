@@ -3892,8 +3892,9 @@ async fn main(spawner: Spawner) -> ! {
             let on_cloud =
                 state.menu.is_some() || (state.face == Face::Player && state.backdrop.is_none());
             // A cloud frame is drawn synchronously for some 47 ms, which starves the network
-            // stack: while a file goes out over Wi-Fi the cloud holds still.
-            state.cloud = match state.motion == Motion::Moving && on_cloud && !share::busy() {
+            // stack: while a file goes out over Wi-Fi or comes in over BLE the cloud holds still.
+            let transfer = share::busy() || upload.is_some() || update.is_some();
+            state.cloud = match state.motion == Motion::Moving && on_cloud && !transfer {
                 true => (now.as_millis() / CLOUD_FRAME.as_millis()) as u32 + 1,
                 false => 0,
             };
