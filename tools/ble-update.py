@@ -60,7 +60,12 @@ def drain(statuses: asyncio.Queue) -> None:
 
 
 async def update(
-    signed: Path, address: str | None, timeout: float, wait: float, stop_at: int | None
+    signed: Path,
+    address: str | None,
+    timeout: float,
+    wait: float,
+    stop_at: int | None,
+    sync: int,
 ) -> None:
     raw = signed.read_bytes()
     image, signature = raw[:-SIGNATURE], raw[-SIGNATURE:]
@@ -106,8 +111,12 @@ async def update(
                     print(f"\nstopped at {offset} bytes, as asked")
                     return
                 chunk = image[offset : offset + piece]
+                # Only every sync-th piece waits for its reply; the knob answers requests in order,
+                # so that reply stands for every piece before it.
                 await client.write_gatt_char(
-                    DATA, struct.pack("<I", offset) + chunk, response=True
+                    DATA,
+                    struct.pack("<I", offset) + chunk,
+                    response=(offset // piece + 1) % sync == 0 or offset + piece >= len(image),
                 )
                 drain(statuses)
                 done = offset + len(chunk)
@@ -133,11 +142,19 @@ def main() -> int:
         "--wait", type=float, default=0.0, help="seconds to keep asking while the dialog is closed"
     )
     parser.add_argument(
+        "--sync",
+        type=int,
+        default=8,
+        help="send this many pieces for each one that waits for a reply; the knob queues 8",
+    )
+    parser.add_argument(
         "--stop-at", type=int, help="disconnect after this many bytes, to test a broken upload"
     )
     args = parser.parse_args()
     try:
-        asyncio.run(update(args.signed, args.address, args.timeout, args.wait, args.stop_at))
+        asyncio.run(
+            update(args.signed, args.address, args.timeout, args.wait, args.stop_at, args.sync)
+        )
     except (UpdateError, BleakError, TimeoutError) as e:
         print(f"ble-update: {e or type(e).__name__}", file=sys.stderr)
         return 1

@@ -1730,6 +1730,7 @@ mod gatt {
         #[characteristic(
             uuid = "81bcd10c-d2eb-4f6a-b4db-e196026f9f7c",
             write,
+            write_without_response,
             permissions(write = encrypted),
             value = [0; upload::DATA_MAX]
         )]
@@ -2567,7 +2568,8 @@ async fn main(spawner: Spawner) -> ! {
 
     // An upload's commands go from the advertising loop to the device loop, which holds the
     // flash, and its status comes back.
-    let uploads: Channel<NoopRawMutex, Command, 2> = Channel::new();
+    // Room for a sender's window of pieces without reply, so the loop drains them in one pass.
+    let uploads: Channel<NoopRawMutex, Command, 16> = Channel::new();
     let upload_status: Signal<NoopRawMutex, [u8; upload::STATUS_LEN]> = Signal::new();
     // A new bond goes the same way, to be kept in the settings, and forgetting it the other way.
     let bonds: Signal<NoopRawMutex, Bond> = Signal::new();
@@ -2655,6 +2657,11 @@ async fn main(spawner: Spawner) -> ! {
             let since = Instant::now();
             let mut security = SecurityLevel::NoEncryption;
             info!("BLE: a device connected");
+            // A piece of 247 bytes in one link-layer packet instead of ten. 2M is not asked for: a
+            // laptop's adapter lost the link on it within seconds.
+            if let Err(err) = connection.raw().update_data_length(&stack, 251, 2120).await {
+                warn!("BLE: data length stays short -- {err:?}");
+            }
 
             loop {
                 match select3(
