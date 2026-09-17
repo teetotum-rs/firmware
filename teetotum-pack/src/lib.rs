@@ -12,6 +12,7 @@ use ed25519_compact::{PublicKey, Signature, sha512};
 pub use teetotum_face::manifest::{self, Manifest, Signed};
 
 pub mod listing;
+pub mod settings;
 pub mod slot;
 
 /// Who a face is, in the eight bytes the settings record keeps of it.

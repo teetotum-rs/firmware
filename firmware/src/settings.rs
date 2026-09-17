@@ -41,6 +41,8 @@ use teetotum::menu::{
 };
 use teetotum::screen::ORIENTATIONS;
 
+use teetotum_pack::settings as remote;
+
 use crate::plugin::PluginId;
 
 /// The version this build writes.
@@ -78,6 +80,13 @@ use crate::plugin::PluginId;
 /// **From 12 to 13 the bonded peer was appended** after the removed plugins' ids. A version 12
 /// record is read as one with no bond, which is what it was.
 const VERSION: u8 = 13;
+
+// The BLE format checks ranges without knowing these types.
+const _: () = assert!(Theme::ALL.len() == remote::THEMES as usize);
+const _: () = assert!(Brightness::MIN.0 == remote::BRIGHTNESS_MIN);
+const _: () = assert!(Brightness::MAX.0 == remote::BRIGHTNESS_MAX);
+const _: () = assert!(Haptics::MAX.0 == remote::HAPTICS_MAX);
+const _: () = assert!(ORIENTATIONS == remote::ORIENTATIONS as usize);
 
 /// How many bytes an encoded record takes at most.
 pub const LEN: usize = LEN_12 + BOND_LEN;
@@ -686,6 +695,24 @@ impl Settings {
         } else {
             self.removed.insert(id);
         }
+    }
+
+    /// The settings a sender reads over BLE.
+    pub fn remote(&self) -> remote::Settings {
+        remote::Settings {
+            theme: self.theme as u8,
+            brightness: self.brightness.0,
+            haptics: self.haptics.0,
+            orientation: self.orientation,
+        }
+    }
+
+    /// Takes the settings a sender wrote; [`remote::Settings::decode`] has checked their ranges.
+    pub fn set_remote(&mut self, settings: remote::Settings) {
+        self.theme = Theme::from_byte(settings.theme);
+        self.brightness = Brightness::from_byte(settings.brightness);
+        self.haptics = Haptics::from_byte(settings.haptics);
+        self.orientation = settings.orientation;
     }
 
     /// Write the record into `buf` and return how much of it was used.

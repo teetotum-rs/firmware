@@ -12,7 +12,7 @@
 use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
-use core::cell::RefCell;
+use core::cell::{Cell, RefCell};
 use core::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
 
 use bt_hci::controller::ExternalController;
@@ -171,6 +171,12 @@ static WIFI_NETWORKS: AtomicU8 = AtomicU8::new(0);
 ///
 /// Set by the device loop, read by the advertising loop.
 static RECEIVING: AtomicBool = AtomicBool::new(false);
+
+/// The settings a sender reads over BLE, as [`teetotum_pack::settings`] encodes them.
+///
+/// Set by the device loop, read by the advertising loop.
+static SHARED_SETTINGS: Mutex<Cell<[u8; teetotum_pack::settings::LEN]>> =
+    Mutex::new(Cell::new([0; teetotum_pack::settings::LEN]));
 
 /// How often the connected peer's view of the characteristics is refreshed.
 const GATT_REFRESH: Duration = Duration::from_secs(1);
@@ -1651,6 +1657,17 @@ mod gatt {
         /// The card's size in bytes, or zero without a card.
         #[characteristic(uuid = "5bd092f3-61c8-4fc5-b755-f19328dd0172", read)]
         pub(super) card_bytes: u64,
+        /// Theme, brightness, clicks and orientation, from [`teetotum_pack::settings`]. Anyone
+        /// reads them; only the bonded peer changes them.
+        #[characteristic(
+            uuid = "dcec6510-5a6a-41c3-b83f-a638357034ff",
+            read,
+            write,
+            notify,
+            permissions(read, write = encrypted, cccd),
+            value = [0; teetotum_pack::settings::LEN]
+        )]
+        pub(super) settings: [u8; teetotum_pack::settings::LEN],
     }
 }
 
@@ -2425,6 +2442,9 @@ async fn main(spawner: Spawner) -> ! {
             &server.knob.networks,
             &WIFI_NETWORKS.load(Ordering::Relaxed),
         );
+        let settings = critical_section::with(|cs| SHARED_SETTINGS.borrow(cs).get());
+        let _ = server.set(&server.knob.settings, &settings);
+        settings
     };
 
     // An upload's commands go from the advertising loop to the device loop, which holds the
@@ -2434,6 +2454,8 @@ async fn main(spawner: Spawner) -> ! {
     // A new bond goes the same way, to be kept in the settings, and forgetting it the other way.
     let bonds: Signal<NoopRawMutex, Bond> = Signal::new();
     let forget: Signal<NoopRawMutex, ()> = Signal::new();
+    // Settings a sender wrote go to the device loop, which applies and keeps them.
+    let setting_writes: Signal<NoopRawMutex, teetotum_pack::settings::Settings> = Signal::new();
 
     let advertising = async {
         // Flags, appearance and the name come to 17 of the 31 bytes; the 128-bit service UUID
@@ -2509,7 +2531,7 @@ async fn main(spawner: Spawner) -> ! {
             }
             PEER_CONNECTED.store(true, Ordering::Relaxed);
             // A peer may read before the first refresh, or before it selects an entry.
-            publish();
+            let mut told = publish();
             let first = critical_section::with(|cs| PLUGIN_LIST.borrow_ref(cs).entry(0));
             let _ = server.set(&server.upload.entry, &first);
             let since = Instant::now();
@@ -2563,8 +2585,19 @@ async fn main(spawner: Spawner) -> ! {
                             });
                             let _ = server.set(&server.upload.entry, &raw);
                         }
+                        let written = match &event {
+                            GattEvent::Write(write)
+                                if write.handle() == server.knob.settings.handle =>
+                            {
+                                Some(teetotum_pack::settings::Settings::decode(write.data()))
+                            }
+                            _ => None,
+                        };
+                        if let Some(Some(written)) = written {
+                            setting_writes.signal(written);
+                        }
                         let reply = match command {
-                            None if selected == Some(None) => {
+                            None if selected == Some(None) || written == Some(None) => {
                                 event.reject(AttErrorCode::VALUE_NOT_ALLOWED)
                             }
                             None => event.accept(),
@@ -2618,7 +2651,14 @@ async fn main(spawner: Spawner) -> ! {
                             forget_bonds(&stack);
                             connection.raw().disconnect();
                         }
-                        publish();
+                        // Settings changed on the glass or by the peer are told as they change.
+                        let settings = publish();
+                        if settings != told {
+                            match server.knob.settings.notify(&connection, &settings).await {
+                                Ok(()) => told = settings,
+                                Err(err) => warn!("BLE: settings not sent -- {err:?}"),
+                            }
+                        }
                         // A known peer encrypts without pairing, and nothing reports that.
                         if let Ok(level) = connection.raw().security_level()
                             && level != security
@@ -3776,6 +3816,27 @@ async fn main(spawner: Spawner) -> ! {
                 });
                 listed = Some(kept);
             }
+            // Settings a sender wrote stand at once, like an OK on the glass, and an open
+            // dialog's Cancel keeps them.
+            if let Some(written) = setting_writes.try_take() {
+                settings.set_remote(written);
+                before.set_remote(written);
+                stored.set_remote(written);
+                take_back(
+                    &settings,
+                    &mut state,
+                    backlight.as_ref(),
+                    &mut haptic,
+                    &mut i2c,
+                    screen.as_mut(),
+                );
+                if let Some(store) = store.as_mut() {
+                    save_settings(store, &stored);
+                }
+                info!("Settings: written over BLE");
+            }
+            let shared = stored.remote().encode();
+            critical_section::with(|cs| SHARED_SETTINGS.borrow(cs).set(shared));
             // Encrypting with a known bond reports it again; only a new one is written.
             if let Some(bond) = bonds.try_take()
                 && stored.bond != Some(bond)
