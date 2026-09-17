@@ -12,6 +12,9 @@ of `teetotum-face`.
 - Bluetooth: the knob's status service also reports the firmware version.
 - Bluetooth: the knob's status service reports the card's size, 0 without a card.
 - `teetotum-pack`: `slot::Digest` and `Header::matches_digest`, for a module that arrives in pieces.
+- Bluetooth: a program reads the list of plugins at any time, and deletes a plugin installed
+  from a slot while Settings > Receive is open.
+- `teetotum-pack`: `listing`, the bytes of one entry of that list.
 
 ### Changed
 

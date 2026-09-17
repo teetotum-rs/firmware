@@ -175,8 +175,8 @@ static RECEIVING: AtomicBool = AtomicBool::new(false);
 /// How often the connected peer's view of the characteristics is refreshed.
 const GATT_REFRESH: Duration = Duration::from_secs(1);
 
-/// How long the knob waits after an upload before it restarts: long enough for the status to
-/// reach the sender.
+/// How long the knob waits after an upload or a delete before it restarts: long enough for the
+/// status to reach the sender.
 const UPLOAD_RESTART: Duration = Duration::from_millis(500);
 
 /// How long the loop sleeps before coming round again.
@@ -1167,6 +1167,46 @@ impl Received {
     }
 }
 
+/// The plugin list a sender reads over BLE, encoded as the device loop last filled it.
+struct Listing {
+    count: u8,
+    entries: [[u8; upload::ENTRY]; PLUGINS_MAX],
+}
+
+/// The device loop fills it, the advertising loop answers from it and never reads flash. A
+/// static, because the table is larger than a stack frame may be.
+static PLUGIN_LIST: Mutex<RefCell<Listing>> = Mutex::new(RefCell::new(Listing {
+    count: 0,
+    entries: [[0; upload::ENTRY]; PLUGINS_MAX],
+}));
+
+impl Listing {
+    /// The entry characteristic's bytes for `index`.
+    fn entry(&self, index: u8) -> [u8; upload::ENTRY] {
+        match self.entries.get(usize::from(index)) {
+            Some(raw) if index < self.count => *raw,
+            _ => upload::listing::past_end(index, self.count),
+        }
+    }
+
+    /// The plugins the settings show, in their order, installed as `kept` says.
+    fn fill(&mut self, plugins: &[Option<PluginView>], kept: &Settings) {
+        self.count = plugins.iter().flatten().count() as u8;
+        for (k, view) in plugins.iter().flatten().enumerate() {
+            let entry = upload::listing::Entry {
+                slot: view.slot.map(|n| n as u8),
+                installed: kept.installed(view.id),
+                id: view.id,
+                len: view.bytes as u32,
+                version: view.version,
+                name: view.name,
+                summary: view.summary,
+            };
+            self.entries[k] = entry.encode(k as u8, self.count);
+        }
+    }
+}
+
 /// What the settings know about the bundled plugin.
 #[derive(Clone, PartialEq, Eq)]
 struct PluginView {
@@ -1176,6 +1216,7 @@ struct PluginView {
     /// The line from its manifest that home shows under its name.
     summary: &'static str,
     bytes: usize,
+    version: Version,
     rights: Rights,
     /// The slot it was installed from; `None` for a bundled plugin.
     slot: Option<usize>,
@@ -1424,6 +1465,44 @@ fn receive(
             }
             Received::default()
         }
+        // Deleting changes the settings, which the device loop holds; see [`delete_slot`].
+        Command::Delete(_) => failed(UploadStatus::Refused),
+    }
+}
+
+/// Erases the slot of a plugin in the list, through the flash the settings store holds; the id
+/// of the plugin it held, or why not.
+fn delete_slot(
+    store: Option<&mut Store<Region<'_, '_>>>,
+    table: &mut [u8; TABLE_SCRATCH],
+    plugins: &[Option<PluginView>],
+    slot: usize,
+) -> Result<PluginId, UploadStatus> {
+    let Some(view) = plugins
+        .iter()
+        .flatten()
+        .find(|view| view.slot == Some(slot))
+    else {
+        warn!("Plugin: delete refused, no plugin in slot {slot}");
+        return Err(UploadStatus::NoPlugin);
+    };
+    let Some(store) = store else {
+        error!("Plugin: delete refused, no flash to write to");
+        return Err(UploadStatus::Flash);
+    };
+    let Ok(region) = flash::plugins(store.flash_mut().storage(), table) else {
+        error!("Plugin: delete refused, no plugins partition");
+        return Err(UploadStatus::Flash);
+    };
+    match Slots::new(region).erase(slot) {
+        Ok(()) => {
+            info!("Plugin: slot {slot} erased, {} deleted", view.name);
+            Ok(view.id)
+        }
+        Err(e) => {
+            error!("Plugin: slot {slot} not erased -- {e:?}");
+            Err(UploadStatus::Flash)
+        }
     }
 }
 
@@ -1495,10 +1574,11 @@ mod gatt {
         pub(super) upload: UploadService,
     }
 
-    /// Where a plugin is uploaded into a slot; the protocol is [`upload`]'s.
+    /// Where a plugin is uploaded into a slot, and the plugins are listed and deleted; the protocol
+    /// is [`upload`]'s.
     #[gatt_service(uuid = "4a729af2-063c-451a-8c73-60e5fab61ccb")]
     pub(super) struct UploadService {
-        /// A command: begin with a slot header, commit or abort.
+        /// A command: begin with a slot header, commit, abort, or delete a slot.
         #[characteristic(
             uuid = "19792d5c-9458-40ba-b233-c82b87d3dd4e",
             write,
@@ -1515,6 +1595,16 @@ mod gatt {
         /// How the upload stands, from [`upload::Status::encode`].
         #[characteristic(uuid = "1236b81e-8a6e-49bf-817a-210b74ac7990", read, notify)]
         pub(super) status: [u8; upload::STATUS_LEN],
+        /// Which entry of the plugin list `entry` holds.
+        #[characteristic(uuid = "8d86b41e-f676-4ba8-896f-0d3baee6bae3", write)]
+        pub(super) select: u8,
+        /// The plugin list's entry at the selected index, from [`upload::listing`].
+        #[characteristic(
+            uuid = "2e229d9b-b681-4220-85ff-eb82a309ebcf",
+            read,
+            value = [0; upload::ENTRY]
+        )]
+        pub(super) entry: [u8; upload::ENTRY],
     }
 
     /// A service exposing what the firmware currently knows about itself.
@@ -2360,8 +2450,10 @@ async fn main(spawner: Spawner) -> ! {
             };
 
             PEER_CONNECTED.store(true, Ordering::Relaxed);
-            // A peer may read before the first refresh.
+            // A peer may read before the first refresh, or before it selects an entry.
             publish();
+            let first = critical_section::with(|cs| PLUGIN_LIST.borrow_ref(cs).entry(0));
+            let _ = server.set(&server.upload.entry, &first);
             let since = Instant::now();
             info!("BLE: a device connected");
 
@@ -2397,7 +2489,25 @@ async fn main(spawner: Spawner) -> ! {
                             }
                             _ => None,
                         };
+                        // A select is answered here, from the list, and taken at any time.
+                        let selected = match &event {
+                            GattEvent::Write(write)
+                                if write.handle() == server.upload.select.handle =>
+                            {
+                                Some(<[u8; 1]>::try_from(write.data()).ok())
+                            }
+                            _ => None,
+                        };
+                        if let Some(Some([index])) = selected {
+                            let raw = critical_section::with(|cs| {
+                                PLUGIN_LIST.borrow_ref(cs).entry(index)
+                            });
+                            let _ = server.set(&server.upload.entry, &raw);
+                        }
                         let reply = match command {
+                            None if selected == Some(None) => {
+                                event.reject(AttErrorCode::VALUE_NOT_ALLOWED)
+                            }
                             None => event.accept(),
                             Some(_) if !RECEIVING.load(Ordering::Relaxed) => {
                                 event.reject(AttErrorCode::WRITE_NOT_PERMITTED)
@@ -2564,6 +2674,7 @@ async fn main(spawner: Spawner) -> ! {
                     name: manifest.name(),
                     summary: manifest.summary(),
                     bytes: modules[n].map_or(0, <[u8]>::len),
+                    version: manifest.version(),
                     rights: manifest.rights(),
                     slot: from_slot[n],
                     installed: settings.installed(id),
@@ -2584,6 +2695,8 @@ async fn main(spawner: Spawner) -> ! {
         // The upload under way over BLE, and when the knob restarts after one was written.
         let mut upload: Option<Upload> = None;
         let mut restart_at: Option<Instant> = None;
+        // Which plugins were installed when the list for BLE was last filled, one bit each.
+        let mut listed: Option<u16> = None;
         // What the screen is currently showing. The picture is sent only when the gathered
         // state differs from it, which makes the redraw rate a consequence of what changed
         // rather than a timer: `uptime` moves once a second and everything else on demand.
@@ -3536,23 +3649,68 @@ async fn main(spawner: Spawner) -> ! {
                 }
                 state.received = Received::default();
             }
+            let kept = state
+                .plugins
+                .iter()
+                .flatten()
+                .enumerate()
+                .fold(0u16, |bits, (k, view)| {
+                    bits | u16::from(stored.installed(view.id)) << k
+                });
+            if listed != Some(kept) {
+                critical_section::with(|cs| {
+                    PLUGIN_LIST.borrow_ref_mut(cs).fill(&state.plugins, &stored);
+                });
+                listed = Some(kept);
+            }
             while let Ok(command) = uploads.try_receive() {
                 if !receiving {
                     continue;
                 }
-                state.received = receive(store.as_mut(), table, &mut upload, command);
+                state.received = match command {
+                    // Kept as removed in the settings, so a bundled plugin the slot had replaced
+                    // comes back off home.
+                    Command::Delete(slot) => {
+                        let slot = usize::from(slot);
+                        match delete_slot(store.as_mut(), table, &state.plugins, slot) {
+                            Ok(id) => {
+                                if let Some(dropped) = upload.take() {
+                                    info!("Plugin: upload into slot {} dropped", dropped.slot());
+                                }
+                                settings.set_installed(id, false);
+                                if let Some(store) = store.as_mut() {
+                                    save_settings(store, &settings);
+                                }
+                                stored = settings;
+                                Received {
+                                    status: UploadStatus::Deleted,
+                                    slot,
+                                    ..Received::default()
+                                }
+                            }
+                            Err(status) => Received {
+                                status,
+                                ..Received::default()
+                            },
+                        }
+                    }
+                    command => receive(store.as_mut(), table, &mut upload, command),
+                };
                 upload_status.signal(
                     state
                         .received
                         .status
                         .encode(state.received.slot, state.received.received),
                 );
-                if state.received.status == UploadStatus::Written {
+                if matches!(
+                    state.received.status,
+                    UploadStatus::Written | UploadStatus::Deleted
+                ) {
                     restart_at = Some(Instant::now() + UPLOAD_RESTART);
                 }
             }
             if restart_at.is_some_and(|at| Instant::now() >= at) {
-                info!("Plugin: uploaded -- restarting");
+                info!("Plugin: slots changed -- restarting");
                 software_reset();
             }
 
@@ -4786,9 +4944,17 @@ fn settings_screen(
                     line(-14, "written", reading);
                     line(16, "restarting", quiet);
                 }
+                UploadStatus::Deleted => {
+                    line(-14, "deleted", reading);
+                    line(16, "restarting", quiet);
+                }
                 failed => {
                     line(-14, failed.reason(), (&fonts::SMALL, Rgb565::CSS_ORANGE));
-                    line(16, "send it again", quiet);
+                    let hint = match failed {
+                        UploadStatus::NoPlugin => "nothing deleted",
+                        _ => "send it again",
+                    };
+                    line(16, hint, quiet);
                 }
             }
         }

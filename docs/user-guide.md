@@ -707,6 +707,8 @@ opens a dialog that takes one plugin over Bluetooth: `a plugin over BLE`, then
 `waiting for a sender` and `visible as TeeToTum`, the name the Knob announces over Bluetooth. When a sender connects, the
 dialog says `connected`, then shows how much has arrived and into which slot. At `written` the
 Knob restarts and asks in the install dialog whether to install the plugin.
+A program can also delete an installed plugin while the dialog is open: it says `deleted`, and
+the Knob restarts without it.
 
 The Knob accepts a plugin only while this dialog is open. The tick closes it. How to send a
 plugin, and what an orange message in the dialog means, is in

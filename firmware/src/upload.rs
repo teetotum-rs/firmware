@@ -6,9 +6,15 @@
 //! comes ([`crate::slots`]), checks length and hash at the commit, writes the header and
 //! restarts; the install dialog at boot checks the signature and asks the user.
 //!
-//! Writes are taken only while the receive dialog is open on the screen.
+//! A sender lists the plugins by writing an index to the select characteristic and reading the
+//! entry characteristic ([`listing`]), and deletes one by writing [`DELETE`] and its slot; the
+//! knob answers [`Status::Deleted`] and restarts.
+//!
+//! Writes to control and data are taken only while the receive dialog is open on the screen;
+//! the list can be read at any time.
 
 use crate::slots::{HEADER, Header};
+pub use teetotum_pack::listing::{self, ENTRY};
 
 /// Control: a header follows; a free slot is erased for its module.
 pub const BEGIN: u8 = 1;
@@ -16,6 +22,8 @@ pub const BEGIN: u8 = 1;
 pub const COMMIT: u8 = 2;
 /// Control: the upload is dropped, and the slot left empty.
 pub const ABORT: u8 = 3;
+/// Control: the slot in the next byte is erased, with the plugin it holds.
+pub const DELETE: u8 = 4;
 
 /// The longest control write: a command and a header.
 pub const CONTROL_MAX: usize = 1 + HEADER;
@@ -39,6 +47,7 @@ pub enum Command {
     },
     Commit,
     Abort,
+    Delete(u8),
 }
 
 impl Command {
@@ -51,6 +60,7 @@ impl Command {
             }
             [COMMIT] => Some(Self::Commit),
             [ABORT] => Some(Self::Abort),
+            [DELETE, slot] => Some(Self::Delete(*slot)),
             _ => None,
         }
     }
@@ -81,6 +91,8 @@ pub enum Status {
     Ready,
     /// The module and its header are written; the knob restarts.
     Written,
+    /// A plugin's slot is erased; the knob restarts.
+    Deleted,
     /// Every slot holds a plugin.
     NoSlot,
     /// A write that is no command, or a piece or commit with no upload begun.
@@ -91,6 +103,8 @@ pub enum Status {
     Mismatch,
     /// The flash failed.
     Flash,
+    /// A delete names a slot that holds no plugin in the list.
+    NoPlugin,
 }
 
 impl Status {
@@ -99,23 +113,26 @@ impl Status {
             Self::Idle => 0,
             Self::Ready => 1,
             Self::Written => 2,
+            Self::Deleted => 3,
             Self::NoSlot => 0x81,
             Self::Refused => 0x82,
             Self::OutOfOrder => 0x83,
             Self::Mismatch => 0x84,
             Self::Flash => 0x85,
+            Self::NoPlugin => 0x86,
         }
     }
 
     /// What went wrong, short enough for the screen; empty for a status that is no failure.
     pub fn reason(self) -> &'static str {
         match self {
-            Self::Idle | Self::Ready | Self::Written => "",
+            Self::Idle | Self::Ready | Self::Written | Self::Deleted => "",
             Self::NoSlot => "every slot is taken",
             Self::Refused => "not an upload",
             Self::OutOfOrder => "a piece went missing",
             Self::Mismatch => "not what was announced",
             Self::Flash => "flash failed",
+            Self::NoPlugin => "no plugin in that slot",
         }
     }
 

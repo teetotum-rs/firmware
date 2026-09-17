@@ -592,6 +592,42 @@ stays empty:
 | "not an upload" | The Knob received data without the start of a transfer. Send it again. |
 | "flash failed" | The Knob could not write its flash. Send it again. |
 
+### Listing and deleting plugins over Bluetooth
+
+A program connected to the Knob can read which plugins it holds at any time, and delete one
+that was installed from a slot while **Settings > Receive** is open. The Knob then shows
+`deleted`, erases the slot, marks the plugin as removed in its settings and restarts. A bundled
+plugin cannot be deleted; if the slot held a newer build of a bundled plugin, the bundled one
+comes back but stays off Home until it is installed again. If the slot holds no plugin from the list, the dialog says
+"no plugin in that slot" above `nothing deleted`, and nothing changes.
+
+Both go through the upload service `4a729af2-063c-451a-8c73-60e5fab61ccb`:
+
+| Characteristic | UUID | Access | Content |
+|---|---|---|---|
+| control | `19792d5c-9458-40ba-b233-c82b87d3dd4e` | write, only while Receive is open | `4` and a slot number deletes the plugin in that slot |
+| status | `1236b81e-8a6e-49bf-817a-210b74ac7990` | read, notify | code, slot, 4 bytes received; `3` deleted, `0x86` no plugin in that slot, `0x85` flash failed |
+| select | `8d86b41e-f676-4ba8-896f-0d3baee6bae3` | write, always | one byte: the index of the entry to read |
+| entry | `2e229d9b-b681-4220-85ff-eb82a309ebcf` | read, always | 76 bytes: the entry at the selected index |
+
+To list, write `0` to select, read entry, and go on up to the count the first entry gives. After
+connecting, entry already holds index 0. Multi-byte numbers are little-endian:
+
+| Bytes | Meaning |
+|---|---|
+| 0 | index |
+| 1 | number of plugins in the list |
+| 2 | flags: bit 0 bundled, bit 1 installed (stands on Home) |
+| 3 | slot, `0xff` for a bundled plugin |
+| 4–11 | plugin id, as `teetotum-pack id` prints it |
+| 12–15 | size of the file in bytes |
+| 16–21 | version: major, minor, patch, two bytes each |
+| 22 | length of the name, then the name in 20 bytes |
+| 43 | length of the summary, then the summary in 32 bytes |
+
+An index past the end gives only index and count, and zeros after them. A write to control while
+Receive is closed is refused with the ATT error *write not permitted*.
+
 ### Writing a plugin into a slot over USB
 
 What you need:
@@ -661,7 +697,9 @@ plugin's code**:
 - **Flashing a new firmware keeps the slots.** `cargo run --release` writes the firmware and the
   partition table, not the `plugins` partition. Restoring the factory firmware overwrites them.
 - **Removing a plugin** (Installed: No) takes it off Home and leaves it in its slot. **Emptying
-  the slot** deletes it for good:
+  the slot** deletes it for good, over Bluetooth as in
+  [Listing and deleting plugins over Bluetooth](#listing-and-deleting-plugins-over-bluetooth), or
+  over USB:
 
   ```
   espflash erase-region -B 921600 0x810000 0x10000
