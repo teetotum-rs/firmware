@@ -100,7 +100,7 @@ st77916      = "0.1.1"
 # brings, 10x20, is 2.5 mm tall on this screen and has serifs.
 u8g2-fonts   = "0.8.0"
 static_cell  = "2.1.1"
-trouble-host = { version = "0.6.0", features = ["gatt", "scan"] }
+trouble-host = { version = "0.6.0", features = ["gatt", "scan", "security"] }
 # The plugin runtime. `validate` stays on: it is the switch for modules from strangers, and
 # without it wasmi only offers `unsafe Module::new_unchecked`. `auto-dispatch` falls back to the
 # portable loop on Xtensa, which wasmi's build script lists as having no guaranteed tail calls.

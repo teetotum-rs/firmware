@@ -2231,7 +2231,8 @@ async fn main(spawner: Spawner) -> ! {
     // log says whether it was, since only then does the number differ from boot to boot.
     let mut salt = [0u8; 4];
     let mut secret = [0u8; 6];
-    let source = match esp_hal::rng::Trng::try_new() {
+    let trng = esp_hal::rng::Trng::try_new();
+    let source = match &trng {
         Ok(trng) => {
             trng.read(&mut salt);
             trng.read(&mut secret);
@@ -2275,7 +2276,11 @@ async fn main(spawner: Spawner) -> ! {
     );
     let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> =
         HostResources::new();
-    let stack = trouble_host::new(ble_controller, &mut resources);
+    // Pairing draws its keys from this seed, and `build` panics without one from a true
+    // generator. The radio started above is what enables it.
+    let mut trng = trng.expect("the radio enables the true random number generator");
+    let stack =
+        trouble_host::new(ble_controller, &mut resources).set_random_generator_seed(&mut trng);
     let Host {
         central,
         mut peripheral,

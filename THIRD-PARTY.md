@@ -30,8 +30,10 @@ The plugins in `plugins/` depend only on `teetotum-face` from this repository.
 
 | Crate | Version | Licence | Source |
 |---|---|---|---|
+| `aes` | 0.8.4 | MIT OR Apache-2.0 | https://github.com/RustCrypto/block-ciphers |
 | `allocator-api2` | 0.3.1 | MIT OR Apache-2.0 | https://github.com/zakarumych/allocator-api2 |
 | `az` | 1.2.1 | MIT OR Apache-2.0 | https://gitlab.com/tspiteri/az |
+| `base16ct` | 0.2.0 | Apache-2.0 OR MIT | https://github.com/RustCrypto/formats/tree/master/base16ct |
 | `bitfield` | 0.19.5 | MIT OR Apache-2.0 | https://github.com/dzamlo/rust-bitfield |
 | `bitflags` | 1.3.2 | MIT OR Apache-2.0 | https://github.com/bitflags/bitflags |
 | `bitflags` | 2.13.1 | MIT OR Apache-2.0 | https://github.com/bitflags/bitflags |
@@ -41,15 +43,22 @@ The plugins in `plugins/` depend only on `teetotum-face` from this repository.
 | `bytemuck` | 1.25.2 | Zlib OR Apache-2.0 OR MIT | https://github.com/Lokathor/bytemuck |
 | `byteorder` | 1.5.0 | Unlicense OR MIT | https://github.com/BurntSushi/byteorder |
 | `cfg-if` | 1.0.4 | MIT OR Apache-2.0 | https://github.com/rust-lang/cfg-if |
+| `cipher` | 0.4.4 | MIT OR Apache-2.0 | https://github.com/RustCrypto/traits |
+| `cmac` | 0.7.2 | MIT OR Apache-2.0 | https://github.com/RustCrypto/MACs |
 | `const-default` | 1.0.0 | MIT | https://github.com/AerialX/const-default.rs |
+| `const-oid` | 0.9.6 | Apache-2.0 OR MIT | https://github.com/RustCrypto/formats/tree/master/const-oid |
 | `cordyceps` | 0.3.5 | MIT | https://github.com/hawkw/mycelium |
 | `critical-section` | 1.2.0 | MIT OR Apache-2.0 | https://github.com/rust-embedded/critical-section |
+| `crypto-bigint` | 0.5.5 | Apache-2.0 OR MIT | https://github.com/RustCrypto/crypto-bigint |
 | `crypto-common` | 0.1.7 | MIT OR Apache-2.0 | https://github.com/RustCrypto/traits |
+| `dbl` | 0.3.2 | MIT OR Apache-2.0 | https://github.com/RustCrypto/utils |
+| `der` | 0.7.10 | Apache-2.0 OR MIT | https://github.com/RustCrypto/formats/tree/master/der |
 | `digest` | 0.10.7 | MIT OR Apache-2.0 | https://github.com/RustCrypto/traits |
 | `docsplay` | 0.1.3 | MIT OR Apache-2.0 | https://github.com/bugadani/docsplay |
 | `ed25519-compact` | 2.4.2 | MIT | https://github.com/jedisct1/rust-ed25519-compact |
 | `edge-dhcp` | 0.8.0 | MIT OR Apache-2.0 | https://github.com/sysgrok/edge-net |
 | `edge-raw` | 0.8.0 | MIT OR Apache-2.0 | https://github.com/sysgrok/edge-net |
+| `elliptic-curve` | 0.13.8 | Apache-2.0 OR MIT | https://github.com/RustCrypto/traits/tree/master/elliptic-curve |
 | `embassy-embedded-hal` | 0.6.0 | MIT OR Apache-2.0 | https://github.com/embassy-rs/embassy |
 | `embassy-executor` | 0.10.0 | MIT OR Apache-2.0 | https://github.com/embassy-rs/embassy |
 | `embassy-executor-timer-queue` | 0.1.0 | MIT OR Apache-2.0 | https://github.com/embassy-rs/embassy |
@@ -98,6 +107,7 @@ The plugins in `plugins/` depend only on `teetotum-face` from this repository.
 | `esp-wifi-sys-esp32s3` | 0.2.0 | MIT OR Apache-2.0 | https://github.com/esp-rs/esp-wifi-sys |
 | `esp32s3` | 0.35.2 | MIT OR Apache-2.0 | https://github.com/esp-rs/esp-pacs |
 | `fatfs` | 0.4.0 | MIT | https://github.com/rafalh/rust-fatfs |
+| `ff` | 0.13.1 | MIT OR Apache-2.0 | https://github.com/zkcrypto/ff |
 | `float-cmp` | 0.9.0 | MIT | https://github.com/mikedilger/float-cmp |
 | `fugit` | 0.3.9 | MIT OR Apache-2.0 | https://github.com/korken89/fugit |
 | `futures` | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/futures-rs |
@@ -110,9 +120,13 @@ The plugins in `plugins/` depend only on `teetotum-face` from this repository.
 | `futures-util` | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/futures-rs |
 | `gcd` | 2.3.0 | MIT OR Apache-2.0 | https://github.com/frewsxcv/rust-gcd |
 | `generic-array` | 0.14.7 | MIT | https://github.com/fizyk20/generic-array.git |
+| `group` | 0.13.0 | MIT OR Apache-2.0 | https://github.com/zkcrypto/group |
 | `hash32` | 0.3.1 | MIT OR Apache-2.0 | https://github.com/japaric/hash32 |
 | `heapless` | 0.8.0 | MIT OR Apache-2.0 | https://github.com/rust-embedded/heapless |
 | `heapless` | 0.9.3 | MIT OR Apache-2.0 | https://github.com/rust-embedded/heapless |
+| `hkdf` | 0.12.4 | MIT OR Apache-2.0 | https://github.com/RustCrypto/KDFs/ |
+| `hmac` | 0.12.1 | MIT OR Apache-2.0 | https://github.com/RustCrypto/MACs |
+| `inout` | 0.1.4 | MIT OR Apache-2.0 | https://github.com/RustCrypto/utils |
 | `libm` | 0.2.16 | MIT | https://github.com/rust-lang/compiler-builtins |
 | `linked_list_allocator` | 0.10.6 | Apache-2.0 OR MIT | https://github.com/phil-opp/linked-list-allocator |
 | `lock_api` | 0.4.14 | MIT OR Apache-2.0 | https://github.com/Amanieu/parking_lot |
@@ -123,22 +137,29 @@ The plugins in `plugins/` depend only on `teetotum-face` from this repository.
 | `nb` | 1.1.0 | MIT OR Apache-2.0 | https://github.com/rust-embedded/nb |
 | `num-traits` | 0.2.19 | MIT OR Apache-2.0 | https://github.com/rust-num/num-traits |
 | `num_enum` | 0.7.6 | BSD-3-Clause OR MIT OR Apache-2.0 | https://github.com/illicitonion/num_enum |
+| `p256` | 0.13.2 | Apache-2.0 OR MIT | https://github.com/RustCrypto/elliptic-curves/tree/master/p256 |
 | `pin-project-lite` | 0.2.17 | Apache-2.0 OR MIT | https://github.com/taiki-e/pin-project-lite |
 | `portable-atomic` | 1.15.0 | Apache-2.0 OR MIT | https://github.com/taiki-e/portable-atomic |
 | `portable_atomic_enum` | 0.3.1 | MIT | https://github.com/bugadani/portable_atomic_enum |
+| `ppv-lite86` | 0.2.21 | MIT OR Apache-2.0 | https://github.com/cryptocorrosion/cryptocorrosion |
+| `primeorder` | 0.13.6 | Apache-2.0 OR MIT | https://github.com/RustCrypto/elliptic-curves/tree/master/primeorder |
 | `qrcodegen-no-heap` | 1.8.1 | MIT | https://github.com/nayuki/QR-Code-generator |
 | `ral-registers` | 0.1.3 | MIT OR Apache-2.0 | https://github.com/adamgreig/ral-registers |
+| `rand` | 0.8.8 | MIT OR Apache-2.0 | https://github.com/rust-random/rand |
+| `rand_chacha` | 0.3.1 | MIT OR Apache-2.0 | https://github.com/rust-random/rand |
 | `rand_core` | 0.10.1 | MIT OR Apache-2.0 | https://github.com/rust-random/rand_core |
 | `rand_core` | 0.6.4 | MIT OR Apache-2.0 | https://github.com/rust-random/rand |
 | `rand_core` | 0.9.5 | MIT OR Apache-2.0 | https://github.com/rust-random/rand |
 | `rlsf` | 0.2.3 | MIT OR Apache-2.0 | https://github.com/yvt/rlsf |
 | `scopeguard` | 1.2.0 | MIT OR Apache-2.0 | https://github.com/bluss/scopeguard |
+| `sec1` | 0.7.3 | Apache-2.0 OR MIT | https://github.com/RustCrypto/formats/tree/master/sec1 |
 | `smoltcp` | 0.13.1 | 0BSD | https://github.com/smoltcp-rs/smoltcp.git |
 | `spin` | 0.9.9 | MIT | https://github.com/mvdnes/spin-rs.git |
 | `st77916` | 0.1.1 | MIT OR Apache-2.0 | https://github.com/goyox86/st77916 |
 | `stable_deref_trait` | 1.2.1 | MIT OR Apache-2.0 | https://github.com/storyyeller/stable_deref_trait |
 | `static_cell` | 2.1.1 | MIT OR Apache-2.0 | https://github.com/embassy-rs/static-cell |
 | `strum` | 0.27.2 | MIT | https://github.com/Peternator7/strum |
+| `subtle` | 2.6.1 | BSD-3-Clause | https://github.com/dalek-cryptography/subtle |
 | `trouble-host` | 0.6.0 | Apache-2.0 OR MIT | https://github.com/embassy-rs/trouble |
 | `typenum` | 1.20.1 | MIT OR Apache-2.0 | https://github.com/paholg/typenum |
 | `u8g2-fonts` | 0.8.0 | MIT OR Apache-2.0 (code); fonts: see [`teetotum/LICENSE-FONTS`](teetotum/LICENSE-FONTS) | https://github.com/Finomnis/u8g2-fonts |
@@ -155,5 +176,6 @@ The plugins in `plugins/` depend only on `teetotum-face` from this repository.
 | `xtensa-lx` | 0.13.0 | MIT OR Apache-2.0 | https://github.com/esp-rs/esp-hal |
 | `xtensa-lx-rt` | 0.22.0 | MIT OR Apache-2.0 | https://github.com/esp-rs/esp-hal |
 | `zerocopy` | 0.8.56 | BSD-2-Clause OR Apache-2.0 OR MIT | https://github.com/google/zerocopy |
+| `zeroize` | 1.9.0 | Apache-2.0 OR MIT | https://github.com/RustCrypto/utils |
 | `zune-core` | 0.5.3 | MIT OR Apache-2.0 OR Zlib | https://github.com/etemesi254/zune-image |
 | `zune-jpeg` | 0.5.15 | MIT OR Apache-2.0 OR Zlib | https://github.com/etemesi254/zune-image/tree/dev/crates/zune-jpeg |
