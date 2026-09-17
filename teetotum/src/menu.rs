@@ -1027,6 +1027,9 @@ pub enum Buttons {
     OkCancel,
     /// Something that is only shown, like About. Cancel would have nothing to undo.
     Ok,
+    /// Something that waits or runs until it is left, like receiving a plugin. It closes as
+    /// [`Buttons::Ok`] does, but a check would confirm what is only ended, so it shows a cross.
+    Close,
     /// Something that fills the disc and is only looked at, like a QR code. A tap on it is the
     /// owner's to answer, usually with [`Navigator::dismiss`].
     None,
@@ -1381,6 +1384,7 @@ struct Open {
 enum Button {
     Ok,
     Cancel,
+    Close,
 }
 
 /// The bits [`Navigator::hide`] never takes: the top segment of every page, which carries About
@@ -1405,6 +1409,7 @@ static NO_BUTTONS: [(Button, Point); 0] = [];
 const MENU_OK: Point = Point::new(0, 62);
 static MENU_BUTTONS: [(Button, Point); 1] = [(Button::Ok, MENU_OK)];
 static OK_BUTTONS: [(Button, Point); 1] = [(Button::Ok, Point::new(0, 68))];
+static CLOSE_BUTTONS: [(Button, Point); 1] = [(Button::Close, Point::new(0, 68))];
 static OK_CANCEL_BUTTONS: [(Button, Point); 2] = [
     (Button::Cancel, Point::new(-50, 68)),
     (Button::Ok, Point::new(50, 68)),
@@ -1666,7 +1671,7 @@ impl Navigator {
 
     fn press(&mut self, button: Button) -> Outcome {
         match (self.open.take(), button) {
-            (Some(open), Button::Ok) => Outcome::Ok {
+            (Some(open), Button::Ok | Button::Close) => Outcome::Ok {
                 id: open.id,
                 owner: open.owner,
             },
@@ -1702,6 +1707,10 @@ impl Navigator {
                 buttons: Buttons::Ok,
                 ..
             }) => &OK_BUTTONS,
+            Some(Open {
+                buttons: Buttons::Close,
+                ..
+            }) => &CLOSE_BUTTONS,
             Some(Open {
                 buttons: Buttons::OkCancel,
                 ..
@@ -1855,6 +1864,7 @@ impl Navigator {
             let (icon, fill) = match button {
                 Button::Ok => (&icons::CHECK, palette.selected),
                 Button::Cancel => (&icons::CROSS, palette.ring),
+                Button::Close => (&icons::CROSS, palette.selected),
             };
             draw_key(
                 target,

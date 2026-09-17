@@ -2863,7 +2863,7 @@ async fn main(spawner: Spawner) -> ! {
             if at == page {
                 menu = menu.with(
                     slot,
-                    Entry::setting("Receive", &icons::PLUGIN, SETTING_RECEIVE, Buttons::Ok),
+                    Entry::setting("Receive", &icons::PLUGIN, SETTING_RECEIVE, Buttons::Close),
                 );
             }
             if let Some(next) = settings_next {
