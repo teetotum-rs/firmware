@@ -13,6 +13,10 @@ of `teetotum-face`.
 - Bluetooth: the knob's status service reports the card's size, 0 without a card.
 - `teetotum-pack`: `slot::Digest` and `Header::matches_digest`, for a module that arrives in pieces.
 
+### Changed
+
+- The card's size, on the share entry and the share page, is in decimal gigabytes as cards are sold, to three significant digits (`0.401 GB`, `15.9 GB`, `128 GB`). It was in binary units labelled GB, to one decimal.
+
 ### Fixed
 
 - Bluetooth: uptime and Wi-Fi networks read 0 when a peer read them within a second of connecting.

@@ -762,10 +762,7 @@ async fn listing(
     }
     info!("Share: listed {title}, {count} entries");
     write_all(socket, b"</table></div>").await?;
-    let capacity = card_bytes(card).await.map(|bytes| {
-        let tenths = (bytes * 10) >> 30;
-        format!("{}.{} GB card", tenths / 10, tenths % 10)
-    });
+    let capacity = card_bytes(card).await.map(|bytes| format!("{} card", card_size_text(bytes)));
     let footer = format!(
         "<footer>TeeToTum {VERSION} &middot; {} &middot; {count} {}</footer>",
         capacity.as_deref().unwrap_or("no card"),
@@ -861,6 +858,18 @@ async fn next_entry(
                 return Err(());
             }
         }
+    }
+}
+
+/// A card's size in decimal gigabytes, as cards are sold, to three significant digits and cut
+/// rather than rounded: `0.401 GB`, `7.95 GB`, `15.9 GB`, `128 GB`. The app shows the same.
+pub fn card_size_text(bytes: u64) -> String {
+    let mb = bytes / 1_000_000;
+    match mb {
+        0..1_000 => format!("0.{mb:03} GB"),
+        1_000..10_000 => format!("{}.{:02} GB", mb / 1_000, mb / 10 % 100),
+        10_000..100_000 => format!("{}.{} GB", mb / 1_000, mb / 100 % 10),
+        _ => format!("{} GB", mb / 1_000),
     }
 }
 
