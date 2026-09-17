@@ -762,7 +762,9 @@ async fn listing(
     }
     info!("Share: listed {title}, {count} entries");
     write_all(socket, b"</table></div>").await?;
-    let capacity = card_bytes(card).await.map(|bytes| format!("{} card", card_size_text(bytes)));
+    let capacity = card_bytes(card)
+        .await
+        .map(|bytes| format!("{} card", card_size_text(bytes)));
     let footer = format!(
         "<footer>TeeToTum {VERSION} &middot; {} &middot; {count} {}</footer>",
         capacity.as_deref().unwrap_or("no card"),

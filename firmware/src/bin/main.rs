@@ -2114,7 +2114,9 @@ async fn main(spawner: Spawner) -> ! {
 
     // What the share entry says about the card, worked out while the volume is still at hand.
     let card_bytes = volume.as_ref().map_or(0, |volume| volume.layout().bytes());
-    let card_size = volume.as_ref().map(|_| format!("{} card", share::card_size_text(card_bytes)));
+    let card_size = volume
+        .as_ref()
+        .map(|_| format!("{} card", share::card_size_text(card_bytes)));
 
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     let sw_interrupt =
