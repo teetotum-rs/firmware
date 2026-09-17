@@ -15,6 +15,7 @@ of `teetotum-face`.
 - Bluetooth: a program reads the list of plugins at any time, and deletes a plugin installed
   from a slot while Settings > Receive is open.
 - `teetotum-pack`: `listing`, the bytes of one entry of that list.
+- Bluetooth: the knob pairs without a passkey and keeps a bond with one device across reboots; a new pairing replaces it. It advertises from a fixed address derived from the board's MAC.
 
 ### Changed
 

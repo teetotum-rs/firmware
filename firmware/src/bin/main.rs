@@ -81,7 +81,7 @@ use teetotum_firmware::nearby::{self, Heard};
 use teetotum_firmware::plugin::{self, Page, Plugin, PluginId};
 use teetotum_firmware::qr::{self, LINKS};
 use teetotum_firmware::settings::{
-    self, Brightness, CloudShape, CoverStyle, Haptics, Motion, Part, Settings, Theme,
+    self, Bond, Brightness, CloudShape, CoverStyle, Haptics, Motion, Part, Settings, Theme,
 };
 use teetotum_firmware::share;
 use teetotum_firmware::shot;
@@ -2279,14 +2279,28 @@ async fn main(spawner: Spawner) -> ! {
     // Pairing draws its keys from this seed, and `build` panics without one from a true
     // generator. The radio started above is what enables it.
     let mut trng = trng.expect("the radio enables the true random number generator");
-    let stack =
-        trouble_host::new(ble_controller, &mut resources).set_random_generator_seed(&mut trng);
+    // A bond is tied to this address, so it stays the same across boots: the board's MAC, least
+    // significant byte first, with the top two bits that mark a static random address.
+    let mut identity = [0u8; 6];
+    identity.copy_from_slice(esp_hal::efuse::base_mac_address().as_bytes());
+    identity.reverse();
+    identity[5] |= 0xC0;
+    info!("BLE: identity address {}", AddressText(&identity));
+    let stack = trouble_host::new(ble_controller, &mut resources)
+        .set_random_address(Address::random(identity))
+        .set_random_generator_seed(&mut trng);
     let Host {
         central,
         mut peripheral,
         mut runner,
         ..
     } = stack.build();
+    if let Some(bond) = stored.bond {
+        match stack.add_bond_information(bond_information(&bond)) {
+            Ok(()) => info!("BLE: bonded with {}", AddressText(&bond.address)),
+            Err(err) => error!("BLE: the stored bond was not taken -- {err:?}"),
+        }
+    }
 
     let scan_log = BleScanLog::new();
 
@@ -2388,6 +2402,8 @@ async fn main(spawner: Spawner) -> ! {
     // flash, and its status comes back.
     let uploads: Channel<NoopRawMutex, Command, 2> = Channel::new();
     let upload_status: Signal<NoopRawMutex, [u8; upload::STATUS_LEN]> = Signal::new();
+    // A new bond goes the same way, to be kept in the settings.
+    let bonds: Signal<NoopRawMutex, Bond> = Signal::new();
 
     let advertising = async {
         // Flags, appearance and the name come to 17 of the 31 bytes; the 128-bit service UUID
@@ -2454,12 +2470,16 @@ async fn main(spawner: Spawner) -> ! {
                 }
             };
 
+            if let Err(err) = connection.raw().set_bondable(true) {
+                warn!("BLE: the connection will not bond -- {err:?}");
+            }
             PEER_CONNECTED.store(true, Ordering::Relaxed);
             // A peer may read before the first refresh, or before it selects an entry.
             publish();
             let first = critical_section::with(|cs| PLUGIN_LIST.borrow_ref(cs).entry(0));
             let _ = server.set(&server.upload.entry, &first);
             let since = Instant::now();
+            let mut security = SecurityLevel::NoEncryption;
             info!("BLE: a device connected");
 
             loop {
@@ -2528,13 +2548,45 @@ async fn main(spawner: Spawner) -> ! {
                             Err(err) => error!("BLE could not answer a GATT request: {err:?}"),
                         }
                     }
+                    Either3::First(GattConnectionEvent::PairingComplete {
+                        security_level,
+                        bond,
+                    }) => {
+                        info!("BLE: paired, {security_level:?}");
+                        if let Some(info) = bond {
+                            // One bond is kept, so one is known: the others go now rather than
+                            // at the next boot.
+                            for other in stack.get_bond_information() {
+                                if other.identity != info.identity {
+                                    let _ = stack.remove_bond_information(other.identity);
+                                }
+                            }
+                            info!(
+                                "BLE: bonded with {}",
+                                AddressText(&address_bytes(info.identity.bd_addr))
+                            );
+                            bonds.signal(stored_bond(&info));
+                        }
+                    }
+                    Either3::First(GattConnectionEvent::PairingFailed(err)) => {
+                        warn!("BLE: pairing failed -- {err:?}");
+                    }
                     Either3::First(_) => {}
                     Either3::Third(status) => {
                         if let Err(err) = server.upload.status.notify(&connection, &status).await {
                             warn!("BLE: upload status not sent -- {err:?}");
                         }
                     }
-                    Either3::Second(()) => publish(),
+                    Either3::Second(()) => {
+                        publish();
+                        // A known peer encrypts without pairing, and nothing reports that.
+                        if let Ok(level) = connection.raw().security_level()
+                            && level != security
+                        {
+                            info!("BLE: security {level:?}");
+                            security = level;
+                        }
+                    }
                 }
             }
 
@@ -3668,6 +3720,16 @@ async fn main(spawner: Spawner) -> ! {
                 });
                 listed = Some(kept);
             }
+            // Encrypting with a known bond reports it again; only a new one is written.
+            if let Some(bond) = bonds.try_take()
+                && stored.bond != Some(bond)
+            {
+                stored.bond = Some(bond);
+                settings.bond = Some(bond);
+                if let Some(store) = store.as_mut() {
+                    save_settings(store, &stored);
+                }
+            }
             while let Ok(command) = uploads.try_receive() {
                 if !receiving {
                     continue;
@@ -4376,6 +4438,57 @@ fn save_settings<F: NorFlash>(store: &mut Store<F>, wanted: &Settings) {
     match store.save(&out[..len]) {
         Ok(()) => info!("Settings: written to slot {:?}", store.slot()),
         Err(e) => error!("Settings: could not be written: {e:?}"),
+    }
+}
+
+/// A bond from the settings, as the Bluetooth host takes it.
+fn bond_information(bond: &Bond) -> BondInformation {
+    BondInformation::new(
+        Identity {
+            bd_addr: BdAddr::new(bond.address),
+            irk: bond
+                .irk
+                .map(|irk| IdentityResolvingKey::new(u128::from_le_bytes(irk))),
+        },
+        LongTermKey::from_le_bytes(bond.ltk),
+        match bond.level {
+            2 => SecurityLevel::EncryptedAuthenticated,
+            _ => SecurityLevel::Encrypted,
+        },
+        true,
+    )
+}
+
+/// A bond from the Bluetooth host, as the settings keep it.
+fn stored_bond(info: &BondInformation) -> Bond {
+    Bond {
+        address: address_bytes(info.identity.bd_addr),
+        ltk: info.ltk.to_le_bytes(),
+        irk: info.identity.irk.map(|irk| irk.0.to_le_bytes()),
+        level: match info.security_level {
+            SecurityLevel::EncryptedAuthenticated => 2,
+            _ => 1,
+        },
+    }
+}
+
+/// The six bytes of an address, least significant first.
+fn address_bytes(address: BdAddr) -> [u8; 6] {
+    <[u8; 6]>::try_from(address.raw()).unwrap_or_default()
+}
+
+/// A Bluetooth address, least significant byte first, written the usual way round.
+struct AddressText<'a>(&'a [u8; 6]);
+
+impl core::fmt::Display for AddressText<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        for (n, byte) in self.0.iter().rev().enumerate() {
+            if n > 0 {
+                f.write_str(":")?;
+            }
+            write!(f, "{byte:02X}")?;
+        }
+        Ok(())
     }
 }
 

@@ -29,6 +29,9 @@
 //! 16  the cloud's points in the icon colour, percent    since version 9
 //! 17  how many bundled plugins were removed, 0 to 16   since version 11
 //! 18  their ids, eight bytes each                      since version 11
+//! ..  the bonded peer, [`BOND_LEN`] bytes after the ids  since version 13:
+//!     0 whether one is bonded, 1-6 its identity address, 7-22 the long term key,
+//!     23 whether an identity resolving key follows, 24-39 that key, 40 the security level
 //! ```
 
 use teetotum::haptic::Calibration;
@@ -71,10 +74,19 @@ use crate::plugin::PluginId;
 ///
 /// **From 11 to 12 the orientation counts quarter turns** instead of twelfths of a turn, the
 /// only turns the panel controller makes. An older orientation is rounded to the nearest quarter.
-const VERSION: u8 = 12;
+///
+/// **From 12 to 13 the bonded peer was appended** after the removed plugins' ids. A version 12
+/// record is read as one with no bond, which is what it was.
+const VERSION: u8 = 13;
 
-/// How many bytes an encoded record takes.
-pub const LEN: usize = LEN_10 + Settings::PLUGINS_MAX * PluginId::LEN;
+/// How many bytes an encoded record takes at most.
+pub const LEN: usize = LEN_12 + BOND_LEN;
+
+/// How many bytes the bonded peer takes, bonded or not.
+pub const BOND_LEN: usize = 41;
+
+const VERSION_12: u8 = 12;
+const LEN_12: usize = LEN_10 + Settings::PLUGINS_MAX * PluginId::LEN;
 
 const VERSION_11: u8 = 11;
 const VERSION_10: u8 = 10;
@@ -133,6 +145,61 @@ pub struct Settings {
     pub motion: Motion,
     /// How the cloud looks.
     pub shape: CloudShape,
+    /// The one peer paired with a bond. A second one replaces it.
+    pub bond: Option<Bond>,
+}
+
+/// A bond as the Bluetooth host hands it over, in bytes, so that this record does not depend on
+/// the host's types.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Bond {
+    /// The peer's identity address, least significant byte first.
+    pub address: [u8; 6],
+    /// The long term key, little-endian.
+    pub ltk: [u8; 16],
+    /// The peer's identity resolving key, little-endian, when it sent one.
+    pub irk: Option<[u8; 16]>,
+    /// 1 encrypted, 2 encrypted and authenticated.
+    pub level: u8,
+}
+
+impl Bond {
+    fn encode(bond: Option<&Self>, buf: &mut [u8]) {
+        buf[..BOND_LEN].fill(0);
+        if let Some(bond) = bond {
+            buf[0] = 1;
+            buf[1..7].copy_from_slice(&bond.address);
+            buf[7..23].copy_from_slice(&bond.ltk);
+            if let Some(irk) = bond.irk {
+                buf[23] = 1;
+                buf[24..40].copy_from_slice(&irk);
+            }
+            buf[40] = bond.level;
+        }
+    }
+
+    /// A block that is short, empty or has a level of no encryption holds no bond.
+    fn decode(bytes: &[u8]) -> Option<Self> {
+        let bytes = bytes.get(..BOND_LEN)?;
+        if bytes[0] != 1 || !matches!(bytes[40], 1 | 2) {
+            return None;
+        }
+        let mut address = [0; 6];
+        address.copy_from_slice(&bytes[1..7]);
+        let mut ltk = [0; 16];
+        ltk.copy_from_slice(&bytes[7..23]);
+        let irk = (bytes[23] == 1).then(|| {
+            let mut irk = [0; 16];
+            irk.copy_from_slice(&bytes[24..40]);
+            irk
+        });
+        Some(Self {
+            address,
+            ltk,
+            irk,
+            level: bytes[40],
+        })
+    }
 }
 
 /// Ids of removed plugins, sorted, so that two records removing the same plugins compare equal.
@@ -651,7 +718,9 @@ impl Settings {
         {
             out.copy_from_slice(&id.bytes());
         }
-        LEN_10 + ids.len() * PluginId::LEN
+        let bond = LEN_10 + ids.len() * PluginId::LEN;
+        Bond::encode(self.bond.as_ref(), &mut buf[bond..]);
+        bond + BOND_LEN
     }
 
     /// Read a record back, or fall back to the defaults when it is not one this build knows.
@@ -662,8 +731,8 @@ impl Settings {
     pub fn decode(bytes: &[u8], bundled: &[Option<PluginId>]) -> Self {
         // Byte 7 of version 4 was the face, which the home menu chooses now.
         let (theme, bits, brightness, haptics) = match bytes.first() {
-            Some(&VERSION) | Some(&VERSION_11) | Some(&VERSION_10) | Some(&VERSION_9)
-            | Some(&VERSION_8) | Some(&VERSION_7) | Some(&VERSION_6)
+            Some(&VERSION) | Some(&VERSION_12) | Some(&VERSION_11) | Some(&VERSION_10)
+            | Some(&VERSION_9) | Some(&VERSION_8) | Some(&VERSION_7) | Some(&VERSION_6)
                 if bytes.len() >= LEN_6 =>
             {
                 (
@@ -705,8 +774,8 @@ impl Settings {
         };
         // Written before the cover's size could be chosen, so it stood as it does by default.
         let cover = match bytes.first() {
-            Some(&VERSION) | Some(&VERSION_11) | Some(&VERSION_10) | Some(&VERSION_9)
-            | Some(&VERSION_8) | Some(&VERSION_7)
+            Some(&VERSION) | Some(&VERSION_12) | Some(&VERSION_11) | Some(&VERSION_10)
+            | Some(&VERSION_9) | Some(&VERSION_8) | Some(&VERSION_7)
                 if bytes.len() >= LEN_7 =>
             {
                 CoverStyle::from_byte(bytes[11])
@@ -715,8 +784,8 @@ impl Settings {
         };
         // Written before the cloud could move, so it stood still.
         let motion = match bytes.first() {
-            Some(&VERSION) | Some(&VERSION_11) | Some(&VERSION_10) | Some(&VERSION_9)
-            | Some(&VERSION_8)
+            Some(&VERSION) | Some(&VERSION_12) | Some(&VERSION_11) | Some(&VERSION_10)
+            | Some(&VERSION_9) | Some(&VERSION_8)
                 if bytes.len() >= LEN_8 =>
             {
                 Motion::from_byte(bytes[12])
@@ -725,7 +794,8 @@ impl Settings {
         };
         // Written before the cloud could be shaped, so it had the shape it was chosen with.
         let shape = match bytes.first() {
-            Some(&VERSION) | Some(&VERSION_11) | Some(&VERSION_10) | Some(&VERSION_9)
+            Some(&VERSION) | Some(&VERSION_12) | Some(&VERSION_11) | Some(&VERSION_10)
+            | Some(&VERSION_9)
                 if bytes.len() >= LEN_9 =>
             {
                 CloudShape::from_bytes(&bytes[13..17])
@@ -735,13 +805,20 @@ impl Settings {
         // Version 9 was written before a ring could page, and so before there could be more
         // than eight bundled plugins: the ones above the eighth were all installed.
         let removed = match bytes.first() {
-            Some(&VERSION) | Some(&VERSION_11) if bytes.len() >= LEN_10 => {
+            Some(&VERSION) | Some(&VERSION_12) | Some(&VERSION_11) if bytes.len() >= LEN_10 => {
                 Removed::read(&bytes[LEN_10..], bytes[17], bundled)
             }
             Some(&VERSION_10) if bytes.len() >= LEN_10 => {
                 Removed::from_bits(bits | u16::from(bytes[17]) << 8, bundled)
             }
             _ => Removed::from_bits(bits, bundled),
+        };
+        let bond = match bytes.first() {
+            Some(&VERSION) if bytes.len() >= LEN_10 => {
+                let count = usize::from(bytes[17]).min(Self::PLUGINS_MAX);
+                Bond::decode(&bytes[LEN_10 + count * PluginId::LEN..])
+            }
+            _ => None,
         };
         Self {
             haptic: (bytes[1] == 1).then_some(StoredCalibration {
@@ -752,9 +829,11 @@ impl Settings {
             // A stored value outside the dial is not an error worth a variant: the honest
             // reading of one is that the picture stands where it started.
             orientation: match (bytes[0], bytes[5]) {
-                (VERSION, quarters) if usize::from(quarters) < ORIENTATIONS => quarters,
+                (VERSION | VERSION_12, quarters) if usize::from(quarters) < ORIENTATIONS => {
+                    quarters
+                }
                 // Twelfths of a turn, rounded to the nearest quarter; 330 degrees is upright.
-                (version, step) if version != VERSION && step < 12 => (step + 1) / 3 % 4,
+                (version, step) if version < VERSION_12 && step < 12 => (step + 1) / 3 % 4,
                 _ => 0,
             },
             theme,
@@ -764,6 +843,7 @@ impl Settings {
             cover,
             motion,
             shape,
+            bond,
         }
     }
 }
