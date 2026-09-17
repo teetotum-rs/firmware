@@ -9,7 +9,12 @@ of `teetotum-face`.
 
 ### Added
 
+- Bluetooth: the knob's status service also reports the firmware version.
 - `teetotum-pack`: `slot::Digest` and `Header::matches_digest`, for a module that arrives in pieces.
+
+### Fixed
+
+- Bluetooth: uptime and Wi-Fi networks read 0 when a peer read them within a second of connecting.
 
 ## [0.3.3] - 2026-09-16
 

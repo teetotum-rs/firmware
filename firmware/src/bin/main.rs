@@ -1526,6 +1526,9 @@ mod gatt {
         /// Wi-Fi networks found in the most recent scan.
         #[characteristic(uuid = "4ea309d6-ee6a-4be8-b753-1925723a2e15", read, notify)]
         pub(super) networks: u8,
+        /// The firmware's version, as [`VERSION`] spells it.
+        #[characteristic(uuid = "3a298945-67fa-444e-9739-e0698bc95ca9", read)]
+        pub(super) version: HeaplessString<32>,
     }
 }
 
@@ -2270,6 +2273,18 @@ async fn main(spawner: Spawner) -> ! {
         appearance: &KNOB_APPEARANCE,
     }))
     .expect("the GATT server does not fit its attribute table");
+    let mut version = HeaplessString::<32>::new();
+    let _ = version.push_str(VERSION);
+    let _ = server.set(&server.knob.version, &version);
+
+    // Keeps the published values current for whoever is reading them.
+    let publish = || {
+        let _ = server.set(&server.knob.uptime, &(Instant::now().as_secs() as u32));
+        let _ = server.set(
+            &server.knob.networks,
+            &WIFI_NETWORKS.load(Ordering::Relaxed),
+        );
+    };
 
     // An upload's commands go from the advertising loop to the device loop, which holds the
     // flash, and its status comes back.
@@ -2342,6 +2357,8 @@ async fn main(spawner: Spawner) -> ! {
             };
 
             PEER_CONNECTED.store(true, Ordering::Relaxed);
+            // A peer may read before the first refresh.
+            publish();
             let since = Instant::now();
             info!("BLE: a device connected");
 
@@ -2399,15 +2416,7 @@ async fn main(spawner: Spawner) -> ! {
                             warn!("BLE: upload status not sent -- {err:?}");
                         }
                     }
-                    Either3::Second(()) => {
-                        // Keep the published values current for whoever is reading them.
-                        let uptime = Instant::now().as_secs() as u32;
-                        let _ = server.set(&server.knob.uptime, &uptime);
-                        let _ = server.set(
-                            &server.knob.networks,
-                            &WIFI_NETWORKS.load(Ordering::Relaxed),
-                        );
-                    }
+                    Either3::Second(()) => publish(),
                 }
             }
 
