@@ -115,6 +115,11 @@ impl Layout {
         self.sectors_per_cluster * SECTOR as u32
     }
 
+    /// The bytes the data area holds, which is the size a card is sold as, less the tables.
+    pub fn bytes(&self) -> u64 {
+        u64::from(self.clusters) * u64::from(self.cluster_bytes())
+    }
+
     /// Where a cluster's first sector is.
     fn cluster_lba(&self, cluster: u32) -> u32 {
         self.data_start + (cluster - 2) * self.sectors_per_cluster

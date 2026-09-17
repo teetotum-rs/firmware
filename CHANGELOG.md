@@ -10,6 +10,7 @@ of `teetotum-face`.
 ### Added
 
 - Bluetooth: the knob's status service also reports the firmware version.
+- Bluetooth: the knob's status service reports the card's size, 0 without a card.
 - `teetotum-pack`: `slot::Digest` and `Header::matches_digest`, for a module that arrives in pieces.
 
 ### Fixed

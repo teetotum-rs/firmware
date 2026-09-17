@@ -1529,6 +1529,9 @@ mod gatt {
         /// The firmware's version, as [`VERSION`] spells it.
         #[characteristic(uuid = "3a298945-67fa-444e-9739-e0698bc95ca9", read)]
         pub(super) version: HeaplessString<32>,
+        /// The card's size in bytes, or zero without a card.
+        #[characteristic(uuid = "5bd092f3-61c8-4fc5-b755-f19328dd0172", read)]
+        pub(super) card_bytes: u64,
     }
 }
 
@@ -2110,9 +2113,9 @@ async fn main(spawner: Spawner) -> ! {
     };
 
     // What the share entry says about the card, worked out while the volume is still at hand.
-    let card_size = volume.as_ref().map(|volume| {
-        let layout = volume.layout();
-        let tenths = (u64::from(layout.clusters) * u64::from(layout.cluster_bytes()) * 10) >> 30;
+    let card_bytes = volume.as_ref().map_or(0, |volume| volume.layout().bytes());
+    let card_size = volume.as_ref().map(|_| {
+        let tenths = (card_bytes * 10) >> 30;
         format!("{}.{} GB card", tenths / 10, tenths % 10)
     });
 
@@ -2276,6 +2279,7 @@ async fn main(spawner: Spawner) -> ! {
     let mut version = HeaplessString::<32>::new();
     let _ = version.push_str(VERSION);
     let _ = server.set(&server.knob.version, &version);
+    let _ = server.set(&server.knob.card_bytes, &card_bytes);
 
     // Keeps the published values current for whoever is reading them.
     let publish = || {

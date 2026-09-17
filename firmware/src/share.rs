@@ -866,11 +866,8 @@ async fn next_entry(
 
 /// The card's size in bytes, if there is a card.
 async fn card_bytes(card: &Card<'_>) -> Option<u64> {
-    let mut guard = card.lock().await;
-    guard.as_mut().map(|volume| {
-        let layout = volume.layout();
-        u64::from(layout.clusters) * u64::from(layout.cluster_bytes())
-    })
+    let guard = card.lock().await;
+    guard.as_ref().map(|volume| volume.layout().bytes())
 }
 
 /// The project's mark, served to the page's title line and to the browser's tab. It is the
