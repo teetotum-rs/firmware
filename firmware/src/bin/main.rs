@@ -394,6 +394,7 @@ const SETTINGS: Menu = Menu::new(
     ),
 )
 .with(5, Entry::menu("Background", &icons::CLOUD, &BACKGROUND))
+.with(6, Entry::menu("App", &icons::APP, &APP))
 .with(
     SETTINGS_PLAYER_SLOT,
     Entry::menu("Music Player", &icons::MUSIC, &PLAYER),
@@ -401,6 +402,25 @@ const SETTINGS: Menu = Menu::new(
 .with(
     SETTINGS_SHARE_SLOT,
     Entry::setting(SHARE_NAME, &icons::CARD_WIFI, SETTING_SHARE, Buttons::None),
+);
+
+/// The phone app's settings: which phone the knob is paired with, and forgetting it. An ordinary
+/// submenu, like the player's.
+///
+/// **Forgetting is done by hand, here and not from the app.** A phone that could unpair itself
+/// could also be one that should not have paired in the first place.
+const APP: Menu = Menu::new(
+    "App",
+    Entry::setting("About", &icons::ABOUT, SETTING_APP_ABOUT, Buttons::Ok),
+)
+.with(
+    1,
+    Entry::setting(
+        "Forget phone",
+        &icons::FORGET,
+        SETTING_FORGET,
+        Buttons::OkCancel,
+    ),
 );
 
 /// The player's settings, left of About in the firmware's ring.
@@ -488,6 +508,10 @@ const SETTING_RECEIVE: Id = Id(SETTING_INSTALL.0 + 1);
 const SHARE_NAME: &str = "Card over Wi-Fi";
 /// The card over Wi-Fi: while it is open, the card can be read over the knob's access point.
 const SETTING_SHARE: Id = Id(SETTING_RECEIVE.0 + 1);
+/// The app's About: the bonded phone and whether it is connected.
+const SETTING_APP_ABOUT: Id = Id(SETTING_SHARE.0 + 1);
+/// Forgetting the bonded phone, on OK.
+const SETTING_FORGET: Id = Id(SETTING_SHARE.0 + 2);
 
 /// Where the install dialog stands: a menu of one entry, left by its buttons or a long press.
 static INSTALL_MENU: Menu = Menu::new(
@@ -568,7 +592,7 @@ const HOME_TITLE: &str = "TeeToTum";
 ///
 /// **A plugin's settings do not start it.** Which face is on the screen is chosen at home, and
 /// the Face setting that once chose it here is gone.
-const PLUGIN_SLOT: usize = 6;
+const PLUGIN_SLOT: usize = 7;
 
 /// Where the faces of the bundled plugins stand in the home menu: right of Home, the first one
 /// next to it.
@@ -1087,6 +1111,8 @@ mod overview {
         pub(super) networks: u8,
         /// Whether a BLE peer is connected right now.
         pub(super) peer: bool,
+        /// The identity address of the one bonded peer, as the settings keep it.
+        pub(super) bonded: Option<[u8; 6]>,
         /// Detents counted since boot, signed -- clockwise is positive.
         pub(super) detents: i32,
         /// How many quarter turns clockwise the picture stands at.
@@ -2405,8 +2431,9 @@ async fn main(spawner: Spawner) -> ! {
     // flash, and its status comes back.
     let uploads: Channel<NoopRawMutex, Command, 2> = Channel::new();
     let upload_status: Signal<NoopRawMutex, [u8; upload::STATUS_LEN]> = Signal::new();
-    // A new bond goes the same way, to be kept in the settings.
+    // A new bond goes the same way, to be kept in the settings, and forgetting it the other way.
     let bonds: Signal<NoopRawMutex, Bond> = Signal::new();
+    let forget: Signal<NoopRawMutex, ()> = Signal::new();
 
     let advertising = async {
         // Flags, appearance and the name come to 17 of the 31 bytes; the 128-bit service UUID
@@ -2473,6 +2500,10 @@ async fn main(spawner: Spawner) -> ! {
                 }
             };
 
+            // Forgotten while nobody was connected: the bond goes before the peer can encrypt.
+            if forget.try_take().is_some() {
+                forget_bonds(&stack);
+            }
             if let Err(err) = connection.raw().set_bondable(true) {
                 warn!("BLE: the connection will not bond -- {err:?}");
             }
@@ -2581,6 +2612,12 @@ async fn main(spawner: Spawner) -> ! {
                         }
                     }
                     Either3::Second(()) => {
+                        // A link that was encrypted with the forgotten bond stays encrypted until
+                        // it ends, so it is ended.
+                        if forget.try_take().is_some() {
+                            forget_bonds(&stack);
+                            connection.raw().disconnect();
+                        }
                         publish();
                         // A known peer encrypts without pairing, and nothing reports that.
                         if let Ok(level) = connection.raw().security_level()
@@ -2728,6 +2765,7 @@ async fn main(spawner: Spawner) -> ! {
             free_slots,
             card: card_size.clone(),
             share_text: false,
+            bonded: settings.bond.map(|bond| bond.address),
             plugins: core::array::from_fn(|n| {
                 manifests[n].zip(ids[n]).map(|(manifest, id)| PluginView {
                     id,
@@ -3402,6 +3440,21 @@ async fn main(spawner: Spawner) -> ! {
                                             settings_menu,
                                         );
                                     }
+                                    Outcome::Ok {
+                                        id: SETTING_FORGET,
+                                        owner: Owner::Firmware,
+                                    } => {
+                                        settings.bond = None;
+                                        if settings != stored {
+                                            if let Some(store) = store.as_mut() {
+                                                save_settings(store, &settings);
+                                            }
+                                            stored = settings;
+                                        }
+                                        state.bonded = None;
+                                        forget.signal(());
+                                        info!("BLE: the bonded phone is forgotten");
+                                    }
                                     Outcome::Ok { id, .. } => {
                                         // Installing and removing happen here and nowhere
                                         // earlier, so Cancel has nothing to undo. The rings are
@@ -3729,6 +3782,7 @@ async fn main(spawner: Spawner) -> ! {
             {
                 stored.bond = Some(bond);
                 settings.bond = Some(bond);
+                state.bonded = Some(bond.address);
                 if let Some(store) = store.as_mut() {
                     save_settings(store, &stored);
                 }
@@ -4444,6 +4498,23 @@ fn save_settings<F: NorFlash>(store: &mut Store<F>, wanted: &Settings) {
     }
 }
 
+/// Removes every bond the Bluetooth host holds; the settings are the caller's.
+#[expect(
+    clippy::large_stack_frames,
+    reason = "the host hands its bonds over as a copy of its whole table, once, when a hand says so"
+)]
+fn forget_bonds<C, P>(stack: &Stack<'_, C, P>)
+where
+    C: Controller,
+    P: PacketPool,
+{
+    for bond in stack.get_bond_information() {
+        if let Err(err) = stack.remove_bond_information(bond.identity) {
+            warn!("BLE: a bond was not removed -- {err:?}");
+        }
+    }
+}
+
 /// A bond from the settings, as the Bluetooth host takes it.
 fn bond_information(bond: &Bond) -> BondInformation {
     BondInformation::new(
@@ -4822,6 +4893,11 @@ fn settings_screen(
             "No"
         }
     };
+    let paired = if state.bonded.is_some() {
+        "paired"
+    } else {
+        "no phone"
+    };
     // An id means something only together with its owner: a plugin's About is `Id(0)` too.
     let value = match (nav.owner(), nav.selected().and_then(Entry::id)) {
         (Owner::Firmware, Some(SETTING_ABOUT)) => Some(VERSION),
@@ -4833,6 +4909,7 @@ fn settings_screen(
         (Owner::Firmware, Some(SETTING_MOTION)) => Some(state.motion.name()),
         (Owner::Firmware, Some(SETTING_RECEIVE)) => free.as_deref(),
         (Owner::Firmware, Some(SETTING_SHARE)) => Some(state.card.as_deref().unwrap_or("no card")),
+        (Owner::Firmware, Some(SETTING_FORGET)) => Some(paired),
         (Owner::Plugin, Some(id)) => match PluginSetting::of(id) {
             Some((n, PluginSetting::Installed)) => Some(installed(n)),
             _ => None,
@@ -4855,6 +4932,7 @@ fn settings_screen(
                 CoverStyle::Sharp => "sharp",
                 CoverStyle::Full => "full screen",
             }),
+            Kind::Menu(_) if entry.name == APP.title => Some(paired),
             Kind::Menu(_) if entry.name == BACKGROUND.title => Some(match state.motion {
                 Motion::Still => "still",
                 Motion::Moving => "moving",
@@ -4926,6 +5004,31 @@ fn settings_screen(
                 ),
                 detail,
             );
+        }
+        // The address is the phone's identity, which is what its own Bluetooth settings show.
+        Some((SETTING_APP_ABOUT, Owner::Firmware)) => {
+            let bonded = match &state.bonded {
+                Some(address) => format!("paired {}", AddressText(address)),
+                None => String::from("no phone paired"),
+            };
+            let link = if state.peer {
+                "connected"
+            } else {
+                "not connected"
+            };
+            line(-38, "App", (&fonts::BODY, palette.name));
+            line(-18, "over Bluetooth LE", quiet);
+            line(0, &bonded, detail);
+            line(16, link, detail);
+        }
+        Some((SETTING_FORGET, Owner::Firmware)) => {
+            let bonded = state.bonded.as_ref().map_or_else(
+                || String::from("no phone"),
+                |address| format!("{}", AddressText(address)),
+            );
+            line(-14, &bonded, (&fonts::BODY, palette.value));
+            line(16, "OK forgets it", quiet);
+            line(34, "the app pairs anew", quiet);
         }
         // The player's state is the other chip's: the cover it fetched, the volume it holds, and
         // the two bits it sets itself -- whether music streams here, and whether a phone is
