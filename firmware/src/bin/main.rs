@@ -86,6 +86,7 @@ use teetotum_firmware::settings::{
 use teetotum_firmware::share;
 use teetotum_firmware::shot;
 use teetotum_firmware::slots::{self, Slots, Upload};
+use teetotum_firmware::update::{self, Update};
 use teetotum_firmware::upload::{self, Command, Status as UploadStatus};
 use trouble_host::connection::ScanConfig as BleScanConfig;
 use trouble_host::prelude::*;
@@ -184,6 +185,10 @@ const GATT_REFRESH: Duration = Duration::from_secs(1);
 /// How long the knob waits after an upload or a delete before it restarts: long enough for the
 /// status to reach the sender.
 const UPLOAD_RESTART: Duration = Duration::from_millis(500);
+
+/// How many bytes of a firmware image arrive between two updates of the progress shown and
+/// notified.
+const UPDATE_PROGRESS_STEP: usize = 32 * 1024;
 
 /// How long the loop sleeps before coming round again.
 ///
@@ -1497,8 +1502,110 @@ fn receive(
             }
             Received::default()
         }
-        // Deleting changes the settings, which the device loop holds; see [`delete_slot`].
-        Command::Delete(_) => failed(UploadStatus::Refused),
+        // Deleting changes the settings, which the device loop holds; see [`delete_slot`]. An
+        // update is taken by [`update_firmware`] before.
+        Command::Delete(_) | Command::Update { .. } => failed(UploadStatus::Refused),
+    }
+}
+
+/// Takes one command of a firmware update over BLE, like [`receive`] for a plugin.
+#[expect(
+    clippy::large_stack_frames,
+    reason = "the update under way holds the signature check's state; the main stack has room, see the note at the top"
+)]
+fn update_firmware(
+    store: Option<&mut Store<Region<'_, '_>>>,
+    table: &mut [u8; TABLE_SCRATCH],
+    update: &mut Option<Update>,
+    upload: &mut Option<Upload>,
+    command: Command,
+) -> Received {
+    let failed = |status| Received {
+        status,
+        ..Received::default()
+    };
+    let of = |status, update: &Update| Received {
+        status,
+        slot: usize::from(update.target()),
+        received: update.received(),
+        total: update.total(),
+    };
+    let status = |e: update::Error| match e {
+        update::Error::Length | update::Error::Image(_) => UploadStatus::Mismatch,
+        _ => UploadStatus::Flash,
+    };
+    let Some(store) = store else {
+        error!("Firmware: update refused, no flash to write to");
+        return failed(UploadStatus::Flash);
+    };
+    let flash = store.flash_mut().storage();
+    match command {
+        Command::Update { len, signature } => {
+            *upload = None;
+            *update = None;
+            match Update::begin(flash, table, len, &signature) {
+                Ok(begun) => {
+                    info!(
+                        "Firmware: receiving {len} bytes into ota_{}",
+                        begun.target()
+                    );
+                    let received = of(UploadStatus::Ready, &begun);
+                    *update = Some(begun);
+                    received
+                }
+                Err(e) => {
+                    warn!("Firmware: update refused -- {e:?}");
+                    failed(status(e))
+                }
+            }
+        }
+        Command::Piece { offset, len, bytes } => {
+            let Some(current) = update.as_mut() else {
+                return failed(UploadStatus::Refused);
+            };
+            if offset != current.received() {
+                warn!(
+                    "Firmware: piece at {offset} refused, {} bytes received",
+                    current.received()
+                );
+                return of(UploadStatus::OutOfOrder, current);
+            }
+            match current.feed(flash, table, &bytes[..len]) {
+                Ok(()) => of(UploadStatus::Ready, current),
+                Err(e) => {
+                    error!("Firmware: update failed at {offset} -- {e:?}");
+                    let received = of(status(e), current);
+                    *update = None;
+                    received
+                }
+            }
+        }
+        Command::Commit => {
+            let Some(done) = update.take() else {
+                return failed(UploadStatus::Refused);
+            };
+            let last = of(UploadStatus::Written, &done);
+            match done.finish(flash, table) {
+                Ok(target) => {
+                    info!("Firmware: ota_{target} selected, {} bytes", last.total);
+                    last
+                }
+                Err(e) => {
+                    warn!("Firmware: not selected -- {e:?}");
+                    Received {
+                        status: status(e),
+                        ..last
+                    }
+                }
+            }
+        }
+        Command::Abort => {
+            if update.take().is_some() {
+                info!("Firmware: update aborted");
+            }
+            Received::default()
+        }
+        _ => failed(UploadStatus::Refused),
     }
 }
 
@@ -1987,6 +2094,17 @@ async fn main(spawner: Spawner) -> ! {
             .ok(),
         screen.as_mut().and_then(Screen::take_spare),
     );
+
+    // An image that got this far starts, so a bootloader with rollback keeps it.
+    let running = update::running(flash, table);
+    match update::confirm(flash, table) {
+        Ok((state, marked)) => info!(
+            "Firmware: running from ota_{running:?} at {:#x?}, {state:?}{}",
+            update::running_address(),
+            if marked { ", marked valid" } else { "" }
+        ),
+        Err(e) => warn!("Firmware: running from ota_{running:?}, otadata not read -- {e:?}"),
+    }
 
     let mut store = {
         flash::nvs(flash, table)
@@ -2832,6 +2950,7 @@ async fn main(spawner: Spawner) -> ! {
         let mut cover_waiting = false;
         // The upload under way over BLE, and when the knob restarts after one was written.
         let mut upload: Option<Upload> = None;
+        let mut update: Option<Update> = None;
         let mut restart_at: Option<Instant> = None;
         // Which plugins were installed when the list for BLE was last filled, one bit each.
         let mut listed: Option<u16> = None;
@@ -3852,7 +3971,7 @@ async fn main(spawner: Spawner) -> ! {
                 if !receiving {
                     continue;
                 }
-                state.received = match command {
+                let received = match command {
                     // Kept as removed in the settings, so a bundled plugin the slot had replaced
                     // comes back off home.
                     Command::Delete(slot) => {
@@ -3879,8 +3998,42 @@ async fn main(spawner: Spawner) -> ! {
                             },
                         }
                     }
-                    command => receive(store.as_mut(), table, &mut upload, command),
+                    command => {
+                        let firmware = match command {
+                            Command::Update { .. } => true,
+                            Command::Piece { .. } | Command::Commit | Command::Abort => {
+                                update.is_some()
+                            }
+                            Command::Begin(_) => {
+                                update = None;
+                                false
+                            }
+                            Command::Delete(_) => false,
+                        };
+                        if firmware {
+                            update_firmware(
+                                store.as_mut(),
+                                table,
+                                &mut update,
+                                &mut upload,
+                                command,
+                            )
+                        } else {
+                            receive(store.as_mut(), table, &mut upload, command)
+                        }
+                    }
                 };
+                // Every change of the progress redraws the dialog, which took the pace of a
+                // firmware image down to that of the screen; a step of it is enough to show.
+                let step = |received: &Received| received.received / UPDATE_PROGRESS_STEP;
+                if update.is_some()
+                    && received.status == UploadStatus::Ready
+                    && state.received.status == UploadStatus::Ready
+                    && step(&received) == step(&state.received)
+                {
+                    continue;
+                }
+                state.received = received;
                 upload_status.signal(
                     state
                         .received
@@ -3895,7 +4048,7 @@ async fn main(spawner: Spawner) -> ! {
                 }
             }
             if restart_at.is_some_and(|at| Instant::now() >= at) {
-                info!("Plugin: slots changed -- restarting");
+                info!("Upload: flash changed -- restarting");
                 software_reset();
             }
 

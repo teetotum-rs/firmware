@@ -21,7 +21,10 @@ pub const TABLE_SCRATCH: usize = partitions::PARTITION_TABLE_MAX_LEN;
 /// The label of the partition that holds installed plugins.
 pub const PLUGINS: &str = "plugins";
 
+const APP: u8 = 0x00;
+const OTA_0: u8 = 0x10;
 const DATA: u8 = 0x01;
+const OTA_DATA: u8 = 0x00;
 const NVS: u8 = 0x02;
 const UNDEFINED: u8 = 0x06;
 
@@ -54,6 +57,32 @@ pub fn plugins<'a, 'd>(
     })
 }
 
+/// Find the application partition `ota_<n>`; see [`nvs`].
+pub fn app<'a, 'd>(
+    flash: &'a mut FlashStorage<'d>,
+    scratch: &mut [u8; TABLE_SCRATCH],
+    n: u8,
+) -> Result<Region<'a, 'd>, NoPartition> {
+    find(flash, scratch, |entry| {
+        entry.raw_type() == APP && entry.raw_subtype() == OTA_0 + n
+    })
+}
+
+/// The `otadata` partition, which says the bootloader what to start, as the bootloader crate's
+/// [`Ota`](esp_bootloader_esp_idf::ota::Ota) takes it. Writes go through `Storage`, which never
+/// meets the refused erase.
+pub fn ota_data<'a, 'd>(
+    flash: &'a mut FlashStorage<'d>,
+    scratch: &'a mut [u8; TABLE_SCRATCH],
+) -> Result<partitions::FlashRegion<'a, FlashStorage<'d>>, NoPartition> {
+    let table = partitions::read_partition_table(flash, scratch).map_err(|_| NoPartition)?;
+    let entry = table
+        .iter()
+        .find(|entry| entry.raw_type() == DATA && entry.raw_subtype() == OTA_DATA)
+        .ok_or(NoPartition)?;
+    Ok(entry.as_embedded_storage(flash))
+}
+
 fn find<'a, 'd>(
     flash: &'a mut FlashStorage<'d>,
     scratch: &mut [u8; TABLE_SCRATCH],
@@ -78,6 +107,13 @@ pub struct Region<'a, 'd> {
 impl<'d> Region<'_, 'd> {
     pub fn partition_size(&self) -> usize {
         self.size as usize
+    }
+
+    /// Whether the absolute flash address `address` lies inside the partition.
+    pub fn contains(&self, address: u32) -> bool {
+        address
+            .checked_sub(self.offset)
+            .is_some_and(|at| at < self.size)
     }
 
     /// The flash under this region, to find another partition while this one is held.

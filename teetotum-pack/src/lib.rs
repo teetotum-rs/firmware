@@ -11,6 +11,7 @@ use core::fmt;
 use ed25519_compact::{PublicKey, Signature, sha512};
 pub use teetotum_face::manifest::{self, Manifest, Signed};
 
+pub mod firmware;
 pub mod listing;
 pub mod settings;
 pub mod slot;

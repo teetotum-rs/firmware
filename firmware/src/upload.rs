@@ -13,6 +13,8 @@
 //! Writes to control and data are taken only while the receive dialog is open on the screen;
 //! the list can be read at any time.
 
+use teetotum_pack::firmware;
+
 use crate::slots::{HEADER, Header};
 pub use teetotum_pack::listing::{self, ENTRY};
 
@@ -24,9 +26,18 @@ pub const COMMIT: u8 = 2;
 pub const ABORT: u8 = 3;
 /// Control: the slot in the next byte is erased, with the plugin it holds.
 pub const DELETE: u8 = 4;
+/// Control: a firmware image follows, its length (little-endian) and signature after this byte;
+/// see [`crate::update`].
+pub const UPDATE: u8 = 5;
 
-/// The longest control write: a command and a header.
-pub const CONTROL_MAX: usize = 1 + HEADER;
+/// Bytes after [`UPDATE`].
+const UPDATE_ARGS: usize = 4 + firmware::SIGNATURE;
+/// The longest control write: an update's arguments, longer than a slot header.
+pub const CONTROL_MAX: usize = 1 + if UPDATE_ARGS > HEADER {
+    UPDATE_ARGS
+} else {
+    HEADER
+};
 /// Bytes in front of a piece: where it goes in the module, little-endian.
 pub const OFFSET: usize = 4;
 /// The longest data write. The packet pool's 251 bytes leave an ATT MTU of 247, and a write
@@ -48,6 +59,10 @@ pub enum Command {
     Commit,
     Abort,
     Delete(u8),
+    Update {
+        len: usize,
+        signature: [u8; firmware::SIGNATURE],
+    },
 }
 
 impl Command {
@@ -61,6 +76,14 @@ impl Command {
             [COMMIT] => Some(Self::Commit),
             [ABORT] => Some(Self::Abort),
             [DELETE, slot] => Some(Self::Delete(*slot)),
+            [UPDATE, rest @ ..] => {
+                let raw: &[u8; UPDATE_ARGS] = rest.try_into().ok()?;
+                let (len, signature) = raw.split_at(4);
+                Some(Self::Update {
+                    len: u32::from_le_bytes(len.try_into().ok()?) as usize,
+                    signature: signature.try_into().ok()?,
+                })
+            }
             _ => None,
         }
     }

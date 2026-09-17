@@ -5,12 +5,17 @@
 //! teetotum-pack sign [--key <pem>] <wasm>...  # sign in place, replacing any signature
 //! teetotum-pack id <wasm>                     # the eight bytes the settings record knows the face by
 //! teetotum-pack pack <wasm> --slot <n> [--write] [--partitions <csv>]
+//! teetotum-pack firmware [--key <pem>] <image> [<signed>]  # sign an image for an update over BLE
 //! ```
 //!
 //! The key is `--key`, else `$TEETOTUM_KEY`, else `~/.config/teetotum/face-key.pem`, an Ed25519
 //! private key in PEM, as `openssl genpkey -algorithm ed25519` writes it. It is created on first
 //! use. Keep it: key and name are a face's identity, and an update signed with another key is
 //! another face.
+//!
+//! `firmware` signs with a key of its own: `--key`, else `$TEETOTUM_FIRMWARE_KEY`, else
+//! `~/.config/teetotum/firmware-key.pem`. It writes `<image>.tfw` unless told where, and prints
+//! the public key the firmware has to hold.
 //!
 //! `pack` writes `<wasm>.slot` next to the module, the slot header and then the module, and with
 //! `--write` hands it to `espflash write-bin` at the slot's address in the partition table:
@@ -38,7 +43,8 @@ use teetotum_pack::{Error, Manifest, PluginId, Signed, slot, verify};
 const USAGE: &str = "usage: teetotum-pack check <wasm>...
        teetotum-pack sign [--key <pem>] <wasm>...
        teetotum-pack id <wasm>
-       teetotum-pack pack <wasm> --slot <n> [--write] [--partitions <csv>]";
+       teetotum-pack pack <wasm> --slot <n> [--write] [--partitions <csv>]
+       teetotum-pack firmware [--key <pem>] <image> [<signed>]";
 
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();
@@ -60,6 +66,20 @@ fn main() -> ExitCode {
                 return ExitCode::from(2);
             }
             sign(key, modules)
+        }
+        Some((command, rest)) if command == "firmware" => {
+            let (key, files) = match rest {
+                [flag, key, files @ ..] if flag == "--key" => (Some(key.as_str()), files),
+                _ => (None, rest),
+            };
+            match files {
+                [image] => firmware(key, Path::new(image), None),
+                [image, signed] => firmware(key, Path::new(image), Some(Path::new(signed))),
+                _ => {
+                    eprintln!("{USAGE}");
+                    ExitCode::from(2)
+                }
+            }
         }
         Some((command, [module])) if command == "id" => id(Path::new(module)),
         Some((command, rest)) if command == "pack" => match Pack::parse(rest) {
@@ -103,7 +123,7 @@ fn describe(wasm: &[u8]) -> Result<String, Error> {
 }
 
 fn sign(key: Option<&str>, modules: &[String]) -> ExitCode {
-    let key = match key_path(key).and_then(|path| load_key(&path)) {
+    let key = match key_path(key, FACE_KEY).and_then(|path| load_key(&path, &FACE_KEY)) {
         Ok(key) => key,
         Err(e) => {
             eprintln!("teetotum-pack: {e}");
@@ -136,31 +156,83 @@ fn sign(key: Option<&str>, modules: &[String]) -> ExitCode {
     exit(passed)
 }
 
-fn key_path(given: Option<&str>) -> Result<PathBuf, String> {
+/// Where a kind of key is looked for: its variable, and its file under `~/.config/teetotum`.
+struct KeyKind {
+    var: &'static str,
+    file: &'static str,
+    identity: &'static str,
+}
+
+const FACE_KEY: KeyKind = KeyKind {
+    var: "TEETOTUM_KEY",
+    file: "face-key.pem",
+    identity: "the faces' identity",
+};
+
+const FIRMWARE_KEY: KeyKind = KeyKind {
+    var: "TEETOTUM_FIRMWARE_KEY",
+    file: "firmware-key.pem",
+    identity: "what the firmware trusts",
+};
+
+fn firmware(key: Option<&str>, image: &Path, signed: Option<&Path>) -> ExitCode {
+    let key = match key_path(key, FIRMWARE_KEY).and_then(|path| load_key(&path, &FIRMWARE_KEY)) {
+        Ok(key) => key,
+        Err(e) => {
+            eprintln!("teetotum-pack: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let out = signed.map_or_else(|| image.with_extension("tfw"), Path::to_path_buf);
+    let result = fs::read(image)
+        .map_err(|e| e.to_string())
+        .and_then(|bytes| teetotum_pack::firmware::sign(&bytes, &key).map_err(|e| format!("{e:?}")))
+        .and_then(|bytes| {
+            fs::write(&out, &bytes)
+                .map(|()| bytes.len())
+                .map_err(|e| e.to_string())
+        });
+    match result {
+        Ok(len) => {
+            println!(
+                "{}: {len} bytes, signed by {}",
+                out.display(),
+                hex(&key.pk[..])
+            );
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("{}: {e}", image.display());
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn key_path(given: Option<&str>, kind: KeyKind) -> Result<PathBuf, String> {
     if let Some(path) = given {
         return Ok(path.into());
     }
-    if let Some(path) = env::var_os("TEETOTUM_KEY").filter(|p| !p.is_empty()) {
+    if let Some(path) = env::var_os(kind.var).filter(|p| !p.is_empty()) {
         return Ok(path.into());
     }
     let home = env::var_os("HOME")
         .or_else(|| env::var_os("USERPROFILE"))
-        .ok_or("no --key, no $TEETOTUM_KEY and no home directory")?;
-    Ok(Path::new(&home).join(".config/teetotum/face-key.pem"))
+        .ok_or_else(|| format!("no --key, no ${} and no home directory", kind.var))?;
+    Ok(Path::new(&home).join(".config/teetotum").join(kind.file))
 }
 
-fn load_key(path: &Path) -> Result<KeyPair, String> {
+fn load_key(path: &Path, kind: &KeyKind) -> Result<KeyPair, String> {
     match fs::read_to_string(path) {
         Ok(pem) => KeyPair::from_pem(&pem)
             .map_err(|_| format!("{}: not an Ed25519 private key in PEM", path.display())),
-        Err(e) if e.kind() == ErrorKind::NotFound => create_key(path),
+        Err(e) if e.kind() == ErrorKind::NotFound => create_key(path, kind),
         Err(e) => Err(format!("{}: {e}", path.display())),
     }
 }
 
 /// A new key from the system's randomness, never over another file. On Unix only its owner may
 /// read it; elsewhere it takes the permissions of the directory it lands in.
-fn create_key(path: &Path) -> Result<KeyPair, String> {
+fn create_key(path: &Path, kind: &KeyKind) -> Result<KeyPair, String> {
     let key = KeyPair::generate();
     let failed = |e: std::io::Error| format!("{}: {e}", path.display());
     if let Some(dir) = path.parent().filter(|dir| !dir.as_os_str().is_empty()) {
@@ -179,8 +251,9 @@ fn create_key(path: &Path) -> Result<KeyPair, String> {
         .and_then(|mut file| file.write_all(key.sk.to_pem().as_bytes()))
         .map_err(failed)?;
     eprintln!(
-        "created a new signing key at {} -- back it up, it is the faces' identity",
-        path.display()
+        "created a new signing key at {} -- back it up, it is {}",
+        path.display(),
+        kind.identity
     );
     Ok(key)
 }
