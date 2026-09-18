@@ -306,12 +306,12 @@ settings clockwise:
 
 ```
                          12  About
-            11  Music Player            1  Orientation
-       10  (empty)                           2  Theme
-       9   (empty)                             3  Brightness
-       8   Nearby                            4  Haptics
-            7  Teetotum             5  Background
-                          6  HID remote
+            11  Card over Wi-Fi         1  Orientation
+       10  Music Player                      2  Theme
+       9   Nearby                              3  Brightness
+       8   Teetotum                          4  Haptics
+            7  HID remote           5  Background
+                          6  App
 ```
 
 Opening a plugin's menu does **not** start the plugin; plugins are started only from Home. A
@@ -508,8 +508,8 @@ What this means for you:
   are using is loaded.
 - **The number of plugins is limited by places, and the places run on to a second page.** Home
   has eight places for plugin faces on its first page (one to eight o'clock), the Settings ring
-  four (six to nine o'clock), shared with `Receive` after the last plugin. A fourth plugin puts
-  the Settings on two pages, a ninth Home as well;
+  three (seven to nine o'clock), and `Receive` follows the last plugin, so with the three bundled
+  plugins the Settings already take two pages; a ninth plugin puts Home on two pages as well;
   a row of dots under the top segment says which page you are on, and the knob turns from the last entry
   of one page to the first of the next; on a second page the plugins fill the ring from one
   o'clock round to eleven, because nothing else stands there. See "How the menus work" in the

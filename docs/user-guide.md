@@ -163,7 +163,7 @@ and values are read; how it looks is set under [Background](#background).
 **When a ring is full: pages.** A ring has twelve segments and some of them are taken by the
 firmware -- the top one, the Music Player and Card over Wi-Fi, at Home the gear and in the
 Settings the firmware's own settings. What is left over is where plugins go: eight segments at
-Home, four in the Settings, where `Receive` takes the one after the last plugin. A menu with more entries than that
+Home, three in the Settings, where `Receive` takes the one after the last plugin. A menu with more entries than that
 **runs on to a second page**, where every segment but the top one is free and the plugins fill
 them from one o'clock round to eleven, and a **row of dots** appears just inside the ring under the top segment, one dot per
 page, the page you are on lit:
@@ -189,7 +189,8 @@ page, the page you are on lit:
   needed: the knob walks through all of them, and a long press still goes to Home, which is the
   first entry of the first page.
 - **How many pages there can be.** The menus allow five. TeeToTum keeps at most sixteen plugins
-  apart, though, and sixteen fit on two pages, so two is the most there can be today.
+  apart, though: sixteen fit on two pages at Home, and in the Settings, with `Receive` after
+  them, on three, so three is the most there can be today.
 
 **Buttons** are icons: a **tick** means OK, a **cross** means Cancel.
 
@@ -482,18 +483,20 @@ is `Settings`.
                            12
   Card over Wi-Fi  11           1  Orientation
      Music Player  10                 2  Theme
-       Receive  9                     3  Brightness
-         Nearby  8                  4  Haptics
-        Teetotum  7             5  Background
+         Nearby  9                     3  Brightness
+       Teetotum  8                  4  Haptics
+     HID remote  7             5  Background
                            6
-                       HID remote
+                          App
 ```
 
-The firmware's own settings are About and the five entries clockwise from it; the fifth,
-Background, is a menu of its own. [Card over Wi-Fi](#6-card-over-wi-fi) stands left of About,
+The firmware's own settings are About and the six entries clockwise from it; the fifth,
+Background, and the sixth, App, are menus of their own. [Card over Wi-Fi](#6-card-over-wi-fi) stands left of About,
 the Music Player's menu left of that. The bundled
-plugins' settings follow Background clockwise, one segment each, from six o'clock on. After the
-last of them stands `Receive`, which takes a plugin over Bluetooth.
+plugins' settings follow App clockwise, one segment each, from seven o'clock on. After the
+last of them stands `Receive`, which takes a plugin or firmware over Bluetooth; with the three
+bundled plugins the first page is full at nine o'clock, so `Receive` stands at one o'clock of a
+second page. Two dots under About count the pages, and turning on past Card over Wi-Fi leads there.
 
 While an entry is selected in the ring, its **current value** stands under its name, so you can
 read every setting without opening it. An entry that leads to a menu shows where that menu
@@ -647,6 +650,16 @@ With `Moving`, Home adds `moving` to the Settings' state line.
 | `centre ... px, ... % icon colour` | Dark centre and Icon colour. |
 | `still` / `moving`, `ground ... ms` | Motion, and how long drawing the last background took, in milliseconds. |
 
+### App
+
+`App` at six o'clock is about the phone that talks to the Knob over Bluetooth LE, such as the
+TeeToTum app. The Knob keeps a pairing with one device; a new pairing replaces it.
+
+- **About** shows `paired` and the device's address, or `no phone paired`, and whether it is
+  `connected`.
+- **Forget phone** shows the paired address and `OK forgets it`. The tick removes the pairing and
+  ends the connection; the app pairs anew the next time it connects.
+
 ### Music Player menu
 
 The entry at ten o'clock opens a menu of its own, titled `Music Player`, with the About at the
@@ -680,7 +693,7 @@ the last cover is drawn again at the new size straight away, without waiting for
 ### Plugin entries
 
 Each bundled plugin has an entry in the Settings ring (`HID remote`, `Teetotum` and `Nearby` at
-six, seven and eight o'clock). It opens the **plugin's menu**, titled with the plugin's name:
+seven, eight and nine o'clock). It opens the **plugin's menu**, titled with the plugin's name:
 
 ```
                   About
@@ -702,7 +715,7 @@ What the rights mean, and what a plugin does when it is stopped, is explained in
 
 ### Receive
 
-`Receive` stands after the last plugin's entry, at nine o'clock with the three bundled plugins. It
+`Receive` stands after the last plugin's entry, at one o'clock of the second page with the three bundled plugins. It
 opens a dialog that takes one plugin or firmware file over Bluetooth: `plugin or firmware`, then
 `waiting for a sender` and `visible as TeeToTum`, the name the Knob announces over Bluetooth. When a sender connects, the
 dialog says `connected`, then `a plugin over BLE` with how much has arrived and into which slot. At `written` the
