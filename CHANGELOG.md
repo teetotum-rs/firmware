@@ -9,6 +9,8 @@ of `teetotum-face`.
 
 ### Added
 
+- The ring of QR codes: `App` at seven o'clock leads to the latest release of the TeeToTum app;
+  `Author's blog` moves to six.
 - `teetotum-pack`: `slot::Digest` and `Header::matches_digest`, for a module that arrives in pieces.
 - `teetotum-pack`: `listing`, the bytes of one entry of the knob's plugin list.
 - `teetotum-pack firmware` signs a firmware image for an update over Bluetooth.
