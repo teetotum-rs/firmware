@@ -708,7 +708,8 @@ opens a dialog that takes one plugin over Bluetooth: `a plugin over BLE`, then
 dialog says `connected`, then shows how much has arrived and into which slot. At `written` the
 Knob restarts and asks in the install dialog whether to install the plugin.
 A program can also delete an installed plugin while the dialog is open: it says `deleted`, and
-the Knob restarts without it.
+the Knob restarts without it. The dialog takes a signed firmware file the same way; see
+[Updating over Bluetooth](#updating-over-bluetooth).
 
 The Knob accepts a plugin only while this dialog is open. The tick closes it. How to send a
 plugin, and what an orange message in the dialog means, is in
@@ -821,6 +822,17 @@ the device database: the list shows only `ttyACM0`, and the install stops with
 ```
 flatpak override --user --filesystem=/run/udev:ro com.google.Chrome
 ```
+
+### Updating over Bluetooth
+
+Firmware newer than 0.3.3 also updates without a cable. Each
+[release](https://github.com/teetotum-rs/firmware/releases) carries a signed file,
+`teetotum-v<version>.tfw`, with the same firmware the web installer writes. The
+[TeeToTum app](https://github.com/teetotum-rs/app) for Android sends it: choose **Firmware over
+Bluetooth**, pick the file, open Settings > Receive on the Knob and tap **Send to Knob**. The Knob
+writes the file beside the firmware it runs, checks the signature, switches and restarts; a transfer
+that breaks off, or a file not signed with the project's key, changes nothing. Settings and plugins
+are kept. Sending takes about two to three minutes.
 
 ### What you need
 

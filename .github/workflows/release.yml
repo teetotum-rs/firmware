@@ -63,6 +63,9 @@ jobs:
 
           Install them from the browser at https://teetotum-rs.github.io/firmware/, or write the four
           parts at the offsets listed in `manifest.json`. Settings and plugin slots are kept.
+
+          The `.tfw` file is the same firmware, signed, for an update over Bluetooth from the
+          TeeToTum app. It is signed outside CI and attached a little after the other files.
           EOF
       - name: Publish
         env:

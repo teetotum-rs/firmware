@@ -1,0 +1,22 @@
+#!/bin/sh
+# Signs the app image a release carries and attaches it as the file for an update over Bluetooth:
+#   tools/release-tfw <tag>
+# Run after the release workflow, where the firmware key is; CI never holds it. The signed bytes are
+# the ones the web installer writes. A rerun of the workflow replaces SHA256SUMS, so run this again.
+set -eu
+
+tag=$1
+repo=$(cd "$(dirname "$0")/.." && pwd)
+name=teetotum-$tag
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+cd "$repo"
+gh release download "$tag" --dir "$work" --pattern "$name-app.bin" --pattern SHA256SUMS
+(cd "$work" && sha256sum --check --ignore-missing SHA256SUMS)
+
+"$repo/tools/teetotum-pack" firmware "$work/$name-app.bin" "$work/$name.tfw"
+
+(cd "$work" && grep -v " $name.tfw\$" SHA256SUMS > sums; sha256sum "$name.tfw" >> sums; mv sums SHA256SUMS)
+gh release upload "$tag" "$work/$name.tfw" "$work/SHA256SUMS" --clobber
+gh release view "$tag" --json assets --jq '.assets[].name'

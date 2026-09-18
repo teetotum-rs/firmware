@@ -17,6 +17,10 @@ of `teetotum-face`.
 - `teetotum-pack`: `listing`, the bytes of one entry of that list.
 - Bluetooth: the knob pairs without a passkey and keeps a bond with one device across reboots; a new pairing replaces it. It advertises from a fixed address derived from the board's MAC.
 - Bluetooth: uploading and deleting plugins needs an encrypted link, so a program pairs first; reading the status and the plugin list does not.
+- Firmware update over Bluetooth while Settings > Receive is open: the knob writes a signed image
+  beside the running one, checks the signature, switches and restarts; a broken transfer or a wrong
+  signature changes nothing. Each release carries the signed file, `teetotum-v<version>.tfw`, for the
+  TeeToTum app; `teetotum-pack firmware` signs one.
 
 ### Changed
 
