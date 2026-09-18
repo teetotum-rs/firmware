@@ -9,21 +9,35 @@ of `teetotum-face`.
 
 ### Added
 
-- Bluetooth: the knob's status service also reports the firmware version.
-- Bluetooth: the knob's status service reports the card's size, 0 without a card.
 - `teetotum-pack`: `slot::Digest` and `Header::matches_digest`, for a module that arrives in pieces.
-- Bluetooth: a program reads the list of plugins at any time, and deletes a plugin installed
-  from a slot while Settings > Receive is open.
-- `teetotum-pack`: `listing`, the bytes of one entry of that list.
-- Bluetooth: the knob pairs without a passkey and keeps a bond with one device across reboots; a new pairing replaces it. It advertises from a fixed address derived from the board's MAC.
-- Bluetooth: uploading and deleting plugins needs an encrypted link, so a program pairs first; reading the status and the plugin list does not.
+- `teetotum-pack`: `listing`, the bytes of one entry of the knob's plugin list.
+- `teetotum-pack firmware` signs a firmware image for an update over Bluetooth.
+
+## [0.4.0] - 2026-09-18
+
+A firmware release; `teetotum-face` and `teetotum-pack` stay at 0.1.0.
+
+### Added
+
 - Firmware update over Bluetooth while Settings > Receive is open: the knob writes a signed image
   beside the running one, checks the signature, switches and restarts; a broken transfer or a wrong
   signature changes nothing. Each release carries the signed file, `teetotum-v<version>.tfw`, for the
-  TeeToTum app; `teetotum-pack firmware` signs one.
+  TeeToTum app.
+- Bluetooth: the knob pairs without a passkey and keeps a bond with one device across reboots; a new pairing replaces it. It advertises from a fixed address derived from the board's MAC.
+- Bluetooth: uploading and deleting plugins needs an encrypted link, so a program pairs first; reading the status and the plugin list does not.
+- Bluetooth: a program reads the list of plugins at any time, and deletes a plugin installed
+  from a slot while Settings > Receive is open.
+- Bluetooth: a program reads and changes the theme, brightness, clicks and orientation; a change
+  needs the bonded device's encrypted link and is kept like OK in the settings ring.
+- Settings > App shows the paired phone and whether it is connected; `Forget phone` removes the bond.
+- Bluetooth: the knob's status service also reports the firmware version.
+- Bluetooth: the knob's status service reports the card's size, 0 without a card.
 
 ### Changed
 
+- The receive dialog shows a cross instead of a tick, since closing it only ends the waiting, and names
+  what comes in: `a plugin over BLE` into a slot, or `firmware over BLE` into an OTA partition.
+- The background holds still while a plugin or firmware comes in over Bluetooth, which speeds the transfer up.
 - The card's size, on the share entry and the share page, is in decimal gigabytes as cards are sold, to three significant digits (`0.401 GB`, `15.9 GB`, `128 GB`). It was in binary units labelled GB, to one decimal.
 
 ### Fixed
@@ -152,7 +166,8 @@ The first release.
 - `teetotum-pack` 0.1.0, which checks, signs and packs plugins, as a library and a command-line
   tool for Linux, macOS and Windows.
 
-[Unreleased]: https://github.com/teetotum-rs/firmware/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/teetotum-rs/firmware/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/teetotum-rs/firmware/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/teetotum-rs/firmware/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/teetotum-rs/firmware/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/teetotum-rs/firmware/compare/v0.3.0...v0.3.1
