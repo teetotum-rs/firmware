@@ -1188,6 +1188,8 @@ use overview::Overview;
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 struct Received {
     status: UploadStatus,
+    /// A firmware image, whose `slot` is the OTA partition, instead of a plugin.
+    firmware: bool,
     slot: usize,
     received: usize,
     total: usize,
@@ -1197,6 +1199,7 @@ impl Received {
     fn of(status: UploadStatus, upload: &Upload) -> Self {
         Self {
             status,
+            firmware: false,
             slot: upload.slot(),
             received: upload.received(),
             total: upload.total(),
@@ -1522,10 +1525,12 @@ fn update_firmware(
 ) -> Received {
     let failed = |status| Received {
         status,
+        firmware: true,
         ..Received::default()
     };
     let of = |status, update: &Update| Received {
         status,
+        firmware: true,
         slot: usize::from(update.target()),
         received: update.received(),
         total: update.total(),
@@ -5380,7 +5385,12 @@ fn settings_screen(
         // what tells a stranger's plugin from the project's.
         Some((SETTING_RECEIVE, Owner::Firmware)) => {
             let received = &state.received;
-            line(-42, "a plugin over BLE", quiet);
+            let title = match received.status {
+                UploadStatus::Idle => "plugin or firmware",
+                _ if received.firmware => "firmware over BLE",
+                _ => "a plugin over BLE",
+            };
+            line(-42, title, quiet);
             match received.status {
                 UploadStatus::Idle if state.peer => line(-4, "connected", detail),
                 UploadStatus::Idle => {
@@ -5395,7 +5405,12 @@ fn settings_screen(
                         &format!("{} of {} bytes", received.received, received.total),
                         detail,
                     );
-                    line(34, &format!("into slot {}", received.slot), quiet);
+                    let target = if received.firmware {
+                        format!("into ota_{}", received.slot)
+                    } else {
+                        format!("into slot {}", received.slot)
+                    };
+                    line(34, &target, quiet);
                 }
                 UploadStatus::Written => {
                     line(-14, "written", reading);
