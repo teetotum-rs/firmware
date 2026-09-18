@@ -130,7 +130,7 @@ def main() -> int:
     try:
         asyncio.run(upload(args.wasm, args.address, args.timeout))
     except (UploadError, BleakError, TimeoutError, subprocess.CalledProcessError) as e:
-        print(f"ble-upload: {e or type(e).__name__}", file=sys.stderr)
+        print(f"ble-upload: {str(e) or type(e).__name__}", file=sys.stderr)
         return 1
     return 0
 

@@ -703,15 +703,15 @@ What the rights mean, and what a plugin does when it is stopped, is explained in
 ### Receive
 
 `Receive` stands after the last plugin's entry, at nine o'clock with the three bundled plugins. It
-opens a dialog that takes one plugin over Bluetooth: `a plugin over BLE`, then
+opens a dialog that takes one plugin or firmware file over Bluetooth: `plugin or firmware`, then
 `waiting for a sender` and `visible as TeeToTum`, the name the Knob announces over Bluetooth. When a sender connects, the
-dialog says `connected`, then shows how much has arrived and into which slot. At `written` the
+dialog says `connected`, then `a plugin over BLE` with how much has arrived and into which slot. At `written` the
 Knob restarts and asks in the install dialog whether to install the plugin.
 A program can also delete an installed plugin while the dialog is open: it says `deleted`, and
 the Knob restarts without it. The dialog takes a signed firmware file the same way; see
 [Updating over Bluetooth](#updating-over-bluetooth).
 
-The Knob accepts a plugin only while this dialog is open. The tick closes it. How to send a
+The Knob accepts a plugin only while this dialog is open. The cross closes it. How to send a
 plugin, and what an orange message in the dialog means, is in
 [Using plugins](plugins.md#sending-a-plugin-over-bluetooth).
 
@@ -829,8 +829,9 @@ Firmware newer than 0.3.3 also updates without a cable. Each
 [release](https://github.com/teetotum-rs/firmware/releases) carries a signed file,
 `teetotum-v<version>.tfw`, with the same firmware the web installer writes. The
 [TeeToTum app](https://github.com/teetotum-rs/app) for Android sends it: choose **Firmware over
-Bluetooth**, pick the file, open Settings > Receive on the Knob and tap **Send to Knob**. The Knob
-writes the file beside the firmware it runs, checks the signature, switches and restarts; a transfer
+Bluetooth**, pick the file, open Settings > Receive on the Knob and tap **Send to Knob**. The dialog
+then says `firmware over BLE` and names the half of the flash it writes, `into ota_0` or
+`into ota_1`. The Knob writes the file beside the firmware it runs, checks the signature, switches and restarts; a transfer
 that breaks off, or a file not signed with the project's key, changes nothing. Settings and plugins
 are kept. Sending takes about two to three minutes.
 

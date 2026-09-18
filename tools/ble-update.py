@@ -99,7 +99,7 @@ async def update(
             except (BleakError, TimeoutError) as e:
                 if time.monotonic() >= deadline:
                     raise UpdateError(
-                        f"{e or type(e).__name__} -- is Settings > Receive plugin open on the knob?"
+                        f"{str(e) or type(e).__name__} -- is Settings > Receive open on the knob?"
                     ) from e
                 print("waiting for the receive dialog", flush=True)
         print(f"{device.name}: ota_{status[1]}, {len(image)} bytes in pieces of {piece}")
@@ -156,7 +156,7 @@ def main() -> int:
             update(args.signed, args.address, args.timeout, args.wait, args.stop_at, args.sync)
         )
     except (UpdateError, BleakError, TimeoutError) as e:
-        print(f"ble-update: {e or type(e).__name__}", file=sys.stderr)
+        print(f"ble-update: {str(e) or type(e).__name__}", file=sys.stderr)
         return 1
     return 0
 
