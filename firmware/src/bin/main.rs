@@ -1960,9 +1960,21 @@ async fn wifi_scan(mut controller: WifiController<'static>, access_point: Access
     }
 }
 
-// This creates a default app-descriptor required by the esp-idf bootloader.
-// For more information see: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>
-esp_bootloader_esp_idf::esp_app_desc!();
+// The app descriptor the esp-idf bootloader requires, see
+// <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>.
+// Its version is [`VERSION`], the text the knob reports over BLE, so a sender can tell from the
+// file which firmware the knob runs after an update.
+esp_bootloader_esp_idf::esp_app_desc!(
+    VERSION,
+    env!("CARGO_PKG_NAME"),
+    esp_bootloader_esp_idf::BUILD_TIME,
+    esp_bootloader_esp_idf::BUILD_DATE,
+    esp_bootloader_esp_idf::ESP_IDF_COMPATIBLE_VERSION,
+    esp_bootloader_esp_idf::MMU_PAGE_SIZE,
+    0,
+    u16::MAX,
+    esp_bootloader_esp_idf::SECURE_VERSION
+);
 
 #[allow(
     clippy::large_stack_frames,
