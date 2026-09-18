@@ -70,6 +70,22 @@ pub fn running(flash: &mut FlashStorage<'_>, table: &mut [u8; TABLE_SCRATCH]) ->
         .find(|&n| flash::app(flash, table, n).is_ok_and(|region| region.contains(address)))
 }
 
+/// Where the firmware runs from, for the log: `ota_1 at 0x51b2e8`.
+pub struct Running(pub Option<u8>, pub Option<u32>);
+
+impl core::fmt::Display for Running {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self.0 {
+            Some(n) => write!(f, "ota_{n}")?,
+            None => f.write_str("no known partition")?,
+        }
+        match self.1 {
+            Some(address) => write!(f, " at {address:#x}"),
+            None => Ok(()),
+        }
+    }
+}
+
 impl Update {
     /// Starts an update of `len` bytes into the partition that is not running.
     pub fn begin(

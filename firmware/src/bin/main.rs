@@ -2097,14 +2097,13 @@ async fn main(spawner: Spawner) -> ! {
     );
 
     // An image that got this far starts, so a bootloader with rollback keeps it.
-    let running = update::running(flash, table);
+    let running = update::Running(update::running(flash, table), update::running_address());
     match update::confirm(flash, table) {
         Ok((state, marked)) => info!(
-            "Firmware: running from ota_{running:?} at {:#x?}, {state:?}{}",
-            update::running_address(),
+            "Firmware: running from {running}, {state:?}{}",
             if marked { ", marked valid" } else { "" }
         ),
-        Err(e) => warn!("Firmware: running from ota_{running:?}, otadata not read -- {e:?}"),
+        Err(e) => warn!("Firmware: running from {running}, otadata not read -- {e:?}"),
     }
 
     let mut store = {
