@@ -277,8 +277,6 @@ camera, which is quicker than spelling out a web address.
      Plugin guide  8                   4  wasmi
 
                   App  7           5  esp-rs
-                             6
-                       Author's blog
 ```
 
 | Segment | Leads to |
@@ -289,7 +287,6 @@ camera, which is quicker than spelling out a web address.
 | `Espressif` | the maker of both chips on the board, `espressif.com` |
 | `wasmi` | the WebAssembly runtime the plugins run in, `github.com/wasmi-labs/wasmi` |
 | `esp-rs` | the Rust projects for Espressif's chips that the firmware is built on, `github.com/esp-rs` |
-| `Author's blog` | the author's blog, `stefangruehn.github.io` |
 | `App` | the latest release of the TeeToTum app for Android, which reads the card over Wi-Fi and talks to the Knob over Bluetooth, `github.com/teetotum-rs/app/releases/latest` |
 | `Plugin guide` | the guide to writing a plugin, in this firmware's repository, `github.com/teetotum-rs/firmware/blob/main/docs/plugin-development.md` |
 | `Code quality` | the checks a change must pass, in this firmware's repository, `github.com/teetotum-rs/firmware/blob/main/docs/code-quality.md` |

@@ -547,7 +547,6 @@ const QR_ICONS: [&Icon; LINKS.len()] = [
     &qr::icons::TERMINAL,
     &qr::icons::KNOB,
     &qr::icons::CHIP,
-    &qr::icons::PAGE,
     &qr::icons::WASM,
     &qr::icons::BOOK,
     &qr::icons::CRAB,
